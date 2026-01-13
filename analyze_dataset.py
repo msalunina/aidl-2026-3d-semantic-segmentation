@@ -108,8 +108,9 @@ def analyze_las_dataset(data_dir):
         print(f"Intensity available in some files (optional: --use_intensity)")
     
     if all(has_rgb_list):
+        input_channels += 3
         print(f"Use RGB: --use_rgb (all files have RGB)")
-        print(f"Input channels with RGB: {input_channels + 3}")
+        print(f"Input channels with RGB: {input_channels}")
     elif any(has_rgb_list):
         print(f"RGB available in some files (optional: --use_rgb)")
     
