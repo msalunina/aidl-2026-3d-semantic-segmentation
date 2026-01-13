@@ -24,7 +24,7 @@ def analyze_las_dataset(data_dir):
     print("=" * 80)
     
     total_points = 0
-    all_classes = []
+    class_point_counts = {}  # Dictionary to store total points per class
     has_rgb_list = []
     has_intensity_list = []
     point_counts = []
@@ -41,11 +41,18 @@ def analyze_las_dataset(data_dir):
         point_counts.append(n_points)
         total_points += n_points
         
-        # Check for classification
+        # Check for classification and count points per class
         if hasattr(las, 'classification'):
-            unique_classes = np.unique(las.classification)
-            all_classes.extend(unique_classes)
+            classification = las.classification
+            unique_classes = np.unique(classification)
             n_classes = len(unique_classes)
+            
+            # Count points per class in this file
+            for cls in unique_classes:
+                cls_count = np.sum(classification == cls)
+                if cls not in class_point_counts:
+                    class_point_counts[cls] = 0
+                class_point_counts[cls] += cls_count
         else:
             n_classes = 0
         
@@ -75,22 +82,21 @@ def analyze_las_dataset(data_dir):
     print(f"Files with Intensity: {sum(has_intensity_list)}/{len(has_intensity_list)}")
     
     # Class distribution
-    if len(all_classes) > 0:
-        unique_classes = sorted(list(set(all_classes)))
-        class_counts = Counter(all_classes)
+    if len(class_point_counts) > 0:
+        unique_classes = sorted(list(class_point_counts.keys()))
         
-        print(f"\nCLASS DISTRIBUTION:")
+        print(f"\nCLASS DISTRIBUTION (Point-based):")
         print("-" * 80)
         print(f"Total unique classes: {len(unique_classes)}")
         print(f"Classes found: {unique_classes}")
         print()
-        print(f"{'Class':<10} {'Occurrences (files)':<25} {'Percentage':<15}")
+        print(f"{'Class':<10} {'Points':<15} {'Percentage':<15}")
         print("-" * 80)
         
         for cls in unique_classes:
-            count = class_counts[cls]
-            percentage = (count / len(all_classes)) * 100
-            print(f"{cls:<10} {count:<25} {percentage:<15.2f}%")
+            count = class_point_counts[cls]
+            percentage = (count / total_points) * 100
+            print(f"{cls:<10} {count:<15,} {percentage:<15.2f}%")
     else:
         print("\nNo classification information found in the files.")
     
