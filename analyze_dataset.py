@@ -7,19 +7,57 @@ import numpy as np
 from pathlib import Path
 import argparse
 from collections import Counter
+import sys
+from datetime import datetime
 
 
-def analyze_las_dataset(data_dir):
+class TeeOutput:
+    """Write to both stdout and a file"""
+    def __init__(self, file_path):
+        self.file = open(file_path, 'w', encoding='utf-8')
+        self.stdout = sys.stdout
+        
+    def write(self, text):
+        self.stdout.write(text)
+        self.file.write(text)
+        
+    def flush(self):
+        self.stdout.flush()
+        self.file.flush()
+        
+    def close(self):
+        self.file.close()
+
+
+def analyze_las_dataset(data_dir, output_file=None):
     """Analyze all LAS files in a directory and provide statistics"""
     
-    data_path = Path(data_dir)
-    las_files = sorted(list(data_path.glob('*.las')))
+    # Setup output redirection if file specified
+    tee = None
+    if output_file:
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        tee = TeeOutput(output_path)
+        sys.stdout = tee
     
-    if len(las_files) == 0:
-        print(f"No .las files found in {data_dir}")
-        return
-    
-    print("=" * 80)
+    try:
+        data_path = Path(data_dir)
+        las_files = sorted(list(data_path.glob('*.las')))
+        
+        if len(las_files) == 0:
+            print(f"No .las files found in {data_dir}")
+            return
+        
+        # Print timestamp
+        print(f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Data Directory: {data_path.absolute()}")
+        if output_file:
+            print(f"Output saved to: {Path(output_file).absolute()}")
+        print()
+        
+        print("=" * 80)
+    except:
+        pass
     print(f"LAS DATASET ANALYSIS: {data_dir}")
     print("=" * 80)
     
@@ -180,15 +218,28 @@ def analyze_las_dataset(data_dir):
     
     print(cmd)
     print()
+    
+    # Restore stdout and close file
+    if tee:
+        sys.stdout = tee.stdout
+        tee.close()
+        print(f"\n✓ Analysis saved to: {Path(output_file).absolute()}")
 
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze LAS dataset and get training recommendations')
     parser.add_argument('--data_dir', type=str, default='data_red',
                         help='Path to directory containing .las files')
+    parser.add_argument('--output', type=str, default=None,
+                        help='Path to save analysis output (default: logs/dataset_analysis_<timestamp>.txt)')
     args = parser.parse_args()
     
-    analyze_las_dataset(args.data_dir)
+    # Generate default output filename with timestamp if not specified
+    if args.output is None:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        args.output = f'logs/dataset_analysis_{timestamp}.txt'
+    
+    analyze_las_dataset(args.data_dir, args.output)
 
 
 if __name__ == '__main__':
