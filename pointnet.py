@@ -51,12 +51,52 @@ class BasePointNet(nn.Module):
 
         return x, feature_transform, tnet_out, ix
 
+class segmentationPointNet(nn.Module):
+
+    def __init__(self, transform_size, feature_size, num_classes):
+    
+        #add one hot vector for class ?¿
+        self.transform_size = transform_size
+        self.feature_size = feature_size
+        self.num_classes = num_classes
+
+        self.conv_1 = nn.Conv1d(transform_size+feature_size, 512, 1)
+        self.conv_2 = nn.Conv1d(512, 256, 1)
+        self.conv_3 = nn.Conv1d(256, 128, 1)
+
+        self.fc_1 = nn.Linear(transform_size*128, 128, 1)
+        self.fc_2 = nn.Linear(128, num_classes, 1)
+
+        self.bn_1 = nn.BatchNorm1d(512)
+        self.bn_2 = nn.BatchNorm1d(256)
+        self.bn_3 = nn.BatchNorm1d(128)
+        self.bn_4 = nn.BatchNorm1d(128)
+
+    
+    def forward(self, transform_out, features_out):
+        #concatenar las entradas
+
+        x = torch.cat(transform_out, features_out)
+
+        x = F.relu(self.bn_1(self.conv_1(x)))
+        x = F.relu(self.bn_2(self.conv_2(x)))
+        x = F.relu(self.bn_3(self.conv_3(x)))
+
+        #here x has the point features
+        point_features = x
+        #apply last 2 mlp
+        #hacerle un flatten a x
+        x = F.relu(self.bn_4(self.fc_1(x)))
+        x = self.fc_2(x)
+        #aplicar softmax para normalizar la salida?
+        return point_features, x
 
 class ClassificationPointNet(nn.Module):
 
     def __init__(self, num_classes, dropout=0.3, point_dimension=3):
         super(ClassificationPointNet, self).__init__()
         self.base_pointnet = BasePointNet(point_dimension=point_dimension)
+        self.segmentation_pointnet = segmentationPointNet(transform_size=)
 
         self.fc_1 = nn.Linear(256, 128)
         self.fc_2 = nn.Linear(128, 64)
@@ -76,6 +116,13 @@ class ClassificationPointNet(nn.Module):
 
         return F.log_softmax(self.fc_3(x), dim=1), feature_transform, tnet_out, ix_maxpool
     
-class segmentationPointNet(nn.Module):
-     def __init__(self, num_classes, dropout=0.3, point_dimension=3):
-         pass
+
+
+
+
+
+
+
+         
+         
+         
