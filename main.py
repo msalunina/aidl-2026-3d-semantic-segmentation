@@ -47,9 +47,9 @@ val_size   = len(full_train_dataset) - train_size
 train_dataset, val_dataset = torch.utils.data.random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(42)) # reproducibility)
 
 # DATALOADERS
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)#, num_workers=4)
-val_loader   = DataLoader(val_dataset, batch_size=32, shuffle=False)#, num_workers=4)
-test_loader  = DataLoader(test_dataset, batch_size=32, shuffle=False)#, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True) #, num_workers=4)
+val_loader   = DataLoader(val_dataset, batch_size=32, shuffle=False)  #, num_workers=4)
+test_loader  = DataLoader(test_dataset, batch_size=32, shuffle=False) #, num_workers=4)
 
 # %% CHECKS: sizez, inspect batch
 print("Train:", len(train_dataset))
@@ -81,6 +81,7 @@ if 0:
     sc = ax.scatter(pos[:,0], pos[:,1], pos[:,2], c=pos[:,0] ,s=80, marker='o', cmap="viridis", alpha=0.7)
     ax.set_zlim3d(-1, 1)
     plt.title(f'Label: {label}')
+    plt.show
 
 # %%
 # ----------------------------------------------------
