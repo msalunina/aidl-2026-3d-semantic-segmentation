@@ -36,11 +36,11 @@ class PointNetSimple(nn.Module):
 # class PointNetClassification(nn.Module):
     
 class TransformationNet(nn.Module):
-    # For each pointset (object), predicts a transformation amtrix 3x3 to make them "canonical"
+    # For each pointset (object), predicts a transformation matrix 3x3 to make them "canonical"
     # input: 3x3 matrix
     # output: 64x64
     def __init__(self, input_dim, output_dim):
-        super(TransformationNet, self).__init__()
+        super().__init__()
         self.output_dim = output_dim
 
         self.conv_1 = nn.Conv1d(input_dim, 64, 1)
