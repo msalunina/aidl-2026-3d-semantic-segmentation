@@ -10,7 +10,7 @@ from torch_geometric.datasets import ModelNet
 from torch_geometric.loader import DataLoader
 from torch_geometric.utils import to_dense_batch
 from torch.utils.data import random_split
-from pointNet import PointNetSimple
+from pointNet import ClassificationPointNet, BasePointNet, TransformationNet
 import random
 import os
 
@@ -208,9 +208,9 @@ if __name__ == "__main__":
               "batch_size": 100}   
 
     # MODEL + OPTIMIZER + LOSS
-    model = PointNetSimple(num_classes=10).to(device)
+    model = ClassificationPointNet(num_classes=10).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config["lr"])
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.NLLLoss()
 
     # TRAINING LOOP
     trained_model = train_model(config, train_loader, val_loader, model, optimizer, criterion)
