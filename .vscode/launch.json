@@ -11,6 +11,13 @@
             "request": "launch",
             "program": "main.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: Shapenet vis",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "utils/shapenet_vis.py",
+            "console": "integratedTerminal"
         }
     ]
 }

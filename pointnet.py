@@ -64,6 +64,7 @@ class segmentationPointNet(nn.Module):
         self.conv_2 = nn.Conv1d(512, 256, 1)
         self.conv_3 = nn.Conv1d(256, 128, 1)
 
+#convolucionales no lineales al final un vector de n clases para cada punto, hacer softmax al vector de cada punto
         self.fc_1 = nn.Linear(transform_size*128, 128, 1)
         self.fc_2 = nn.Linear(128, num_classes, 1)
 
