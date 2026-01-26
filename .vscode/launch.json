@@ -18,6 +18,13 @@
             "request": "launch",
             "program": "utils/shapenet_vis.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Train pointnet classifier",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "train_class_shapenet.py",
+            "console": "integratedTerminal"
         }
     ]
 }

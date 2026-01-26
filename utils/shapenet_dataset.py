@@ -249,8 +249,10 @@ class shapeNetDataset(torch.utils.data.Dataset):
         elif(len(point_cloud) < self._target_points):
             #interpolate
             target_pc, target_labels = self.interpolatePointCloud(point_cloud, labels)        
-         
-        return np.array(target_pc), item["class"], np.array(target_labels), item["seg_class"]      
+        
+        target_pc = np.array(target_pc, dtype=np.float32)
+        target_pc = target_pc.transpose(1, 0) 
+        return target_pc, item["class"], np.array(target_labels), item["seg_class"]      
         
         
 

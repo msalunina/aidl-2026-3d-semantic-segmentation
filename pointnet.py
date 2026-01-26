@@ -97,7 +97,7 @@ class ClassificationPointNet(nn.Module):
     def __init__(self, num_classes, dropout=0.3, point_dimension=3):
         super(ClassificationPointNet, self).__init__()
         self.base_pointnet = BasePointNet(point_dimension=point_dimension)
-        self.segmentation_pointnet = segmentationPointNet(transform_size=)
+        #self.segmentation_pointnet = segmentationPointNet(transform_size=)
 
         self.fc_1 = nn.Linear(256, 128)
         self.fc_2 = nn.Linear(128, 64)
