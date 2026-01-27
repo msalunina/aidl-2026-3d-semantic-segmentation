@@ -1,5 +1,7 @@
 *.las
 
+runs/*
+
 # keep log example file .\logs\dataset_analysis_20260113_185037.txt
 # !logs/dataset_analysis_*.txt
 
