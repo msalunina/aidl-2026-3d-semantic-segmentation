@@ -120,8 +120,9 @@ class shapeNetDataset(torch.utils.data.Dataset):
             return point_cloud, labels
 
         points_to_remove = point_cloud_size - self._target_points
-        removed_pos = []
-
+        removed_pos = random.sample(range(0,point_cloud_size), points_to_remove)
+        
+        """
         while len(removed_pos) < points_to_remove:
             #get a random point    
             index = random.randrange(len(point_cloud))    
@@ -147,7 +148,7 @@ class shapeNetDataset(torch.utils.data.Dataset):
             #if the loop has ended, no neighbors have been detected, the point may be a noise, lone point, remove it
             if(not removed):
                 removed_pos.append(index)
-
+        """
         #remove the positions
         downsampled_pc = [v for i, v in enumerate(point_cloud) if i not in removed_pos]
         downsampled_labels = [v for i,v in enumerate(labels) if i not in removed_pos]
