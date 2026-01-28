@@ -3,3 +3,5 @@ torch_geometric
 matplotlib
 numpy
 pathlib
+keras
+tensorflow

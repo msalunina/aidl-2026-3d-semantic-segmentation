@@ -156,4 +156,45 @@ class PointNetClassification(nn.Module):
         x = F.log_softmax(self.fc_3(x), dim=1)
 
         return feature_transform, x
+    
+
+class PointNetSegmentation(nn.Module):
+    """
+    PointNet for 3D Semantic Segmentation
+    """
+
+    def __init__(self, num_classes, input_channels=3, dropout=0.3):
+        super(PointNetSegmentation, self).__init__()
+        self.num_classes = num_classes
+        self.input_channels = input_channels
+        self.dropout = nn.Dropout(p=dropout)
+
+        # Feature extraction backbone
+        self.backbone = PointNetBackbone(
+            input_channels=input_channels
+        )
+
+        # Segmentation head: MLP(512, 256, 128, num_classes)
+        self.conv_1 = nn.Conv1d(1088, 512, 1)
+        self.conv_2 = nn.Conv1d(512, 256, 1)
+        self.conv_3 = nn.Conv1d(256, 128, 1)
+        self.conv_4 = nn.Conv1d(128, num_classes, 1)
+
+
+    def forward(self, x):
+        feature_transform, point_features, global_feature = self.backbone(x)
+
+        num_points = x.shape[1]
+        global_feature_expanded = global_feature.repeat(1, 1, num_points)
+
+        # Concatenate point features and global feature
+        x = torch.cat([point_features, global_feature_expanded], dim=1)
+
+        x = F.relu(self.conv_1(x))
+        x = F.relu(self.conv_2(x))
+        x = F.relu(self.conv_3(x))
+        x = self.dropout(x)
+        x = F.log_softmax(self.conv_4(x), dim=1)
+
+        return feature_transform, x
 

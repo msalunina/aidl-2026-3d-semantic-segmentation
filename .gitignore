@@ -1,6 +1,20 @@
 *.pth
 *.pt
 *.off
+*.seg
+*.DS_Store
+*.pts
+*.zip
+*.arff
+
+# ignore all png except for those in the 'figs' directory
+*.png
+!figs/*.png
+
+data/modelnet10/raw/README.txt
+data/shapenet/shapenet_extracted/PartAnnotation/metadata.json
+data/shapenet/shapenet_extracted/PartAnnotation/README.txt
+data/shapenet/shapenet_extracted/PartAnnotation/synsetoffset2category.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
