@@ -1,6 +1,7 @@
+python==3.11
 laspy
 pytorch
 torchvision
 torchaudio
 numpy
-python==3.11
+tensorboard
