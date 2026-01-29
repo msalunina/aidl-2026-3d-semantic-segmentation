@@ -43,18 +43,24 @@ def create_global_label_mapping(metadata):
     for class_idx, class_name in enumerate(sorted(metadata.keys())):
         part_names = metadata[class_name]["lables"]  # Note: typo in metadata
         
+        # Add "unlabeled" as the first part (index -1 maps to this)
+        class_part_to_global[(class_idx, -1)] = global_label
+        global_to_class_part[global_label] = (class_idx, "unlabeled")
+        global_label += 1
+        
         # Map each part index of this class to a global label
         for local_part_idx, part_name in enumerate(part_names):
             class_part_to_global[(class_idx, local_part_idx)] = global_label
             global_to_class_part[global_label] = (class_idx, part_name)
             global_label += 1
     
-    print(f"\nCreated global label mapping with {global_label} total part classes")
+    print(f"\nCreated global label mapping with {global_label} total part classes (including 'unlabeled' for each object class)")
     print("Class-Part to Global Label mapping:")
     for class_idx, class_name in enumerate(sorted(metadata.keys())):
         part_names = metadata[class_name]["lables"]
+        unlabeled_label = class_part_to_global[(class_idx, -1)]
         global_labels = [class_part_to_global[(class_idx, idx)] for idx in range(len(part_names))]
-        print(f"  {class_name}: parts {part_names} -> global labels {global_labels}")
+        print(f"  {class_name}: unlabeled -> {unlabeled_label}, parts {part_names} -> global labels {global_labels}")
     
     return class_part_to_global, global_to_class_part, global_label
 
@@ -120,19 +126,25 @@ def visualize_shapenet_batch(pointcloud, labels, obj_class, output_dir, metadata
             z = pointcloud[i][:, 2].numpy()
         
         # Map labels to colors from metadata
-        # Labels are 1-indexed, so subtract 1 to get the correct index
-        color = [part_colors[int(label)] for label in labels[i]]
+        # Unlabeled points (label == -1) get grey color, others get colors from metadata
+        color = ['#808080' if int(label) == -1 else part_colors[int(label)] for label in labels[i]]
         
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection="3d")
         ax.scatter(x, y, z, c=color, s=1)
         
         # Create legend based on unique labels actually present in this sample
-        # Labels are 1-indexed, so subtract 1 to get metadata index
         legend_elements = []
-        for i, part_name in enumerate(part_labels):
+        # Add unlabeled to legend if present
+        if -1 in [int(label) for label in labels[i]]:
             legend_elements.append(plt.Line2D([0], [0], marker='o', color='w', 
-                                     markerfacecolor=part_colors[i], 
+                                     markerfacecolor='#808080', 
+                                     markersize=8,
+                                     label='unlabeled'))
+        # Add part labels from metadata
+        for j, part_name in enumerate(part_labels):
+            legend_elements.append(plt.Line2D([0], [0], marker='o', color='w', 
+                                     markerfacecolor=part_colors[j], 
                                      markersize=8,
                                      label=part_name))
         ax.legend(handles=legend_elements, loc='upper right', fontsize=8)
@@ -187,8 +199,8 @@ def visualize_shapenet_grid(pointcloud, labels, obj_class, output_path, metadata
             z = pointcloud[i][:, 2].numpy()
         
         # Map labels to colors from metadata
-        # Labels are 1-indexed, so subtract 1 to get the correct index
-        color = [part_colors[int(label)] for label in labels[i]]
+        # Unlabeled points (label == -1) get grey color, others get colors from metadata
+        color = ['#808080' if int(label) == -1 else part_colors[int(label)] for label in labels[i]]
         
         ax = fig.add_subplot(n_rows, n_cols, i + 1, projection='3d')
         ax.scatter(x, y, z, c=color, s=1)

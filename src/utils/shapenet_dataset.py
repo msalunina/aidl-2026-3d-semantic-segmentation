@@ -213,24 +213,24 @@ class shapeNetDataset(torch.utils.data.Dataset):
                 added_labels = []
 
             #get a random point    
-            index = random.randrange(len(point_cloud))    
+            index = random.randrange(len(interpolated_pc))    
 
             #continue if the value has been selected, to interpolate along all the points
             if(index in interpolated_index):
                 continue
             
             #start the interpolation loop
-            for i in range(len(point_cloud)):
+            for i in range(len(interpolated_pc)):
                 #avoid the same point
                 if i == index:
                     continue
                 
-                if(self.nearPoint(point_cloud[index], point_cloud[i], labels[index], labels[i])):
+                if(self.nearPoint(interpolated_pc[index], interpolated_pc[i], interpolated_labels[index], interpolated_labels[i])):
 
                     #this will interpolate in all the nearest points not only one
-                    point = [point_cloud[index][0] + (self._xy_th/2.0), point_cloud[index][1] + (self._xy_th/2.0), point_cloud[index][2] + (self._z_th/2.0)]
+                    point = [interpolated_pc[index][0] + (self._xy_th/2.0), interpolated_pc[index][1] + (self._xy_th/2.0), interpolated_pc[index][2] + (self._z_th/2.0)]
                     interpolated_points.append(point)
-                    added_labels.append(labels[i])
+                    added_labels.append(interpolated_labels[i])
                     added_points += 1
 
                     #adds the index only once, but interpolates for all the closer points
@@ -284,6 +284,9 @@ class shapeNetDataset(torch.utils.data.Dataset):
         target_pc = point_cloud
         target_labels = labels
         
+        # Don't filter out unlabeled points - keep them with label -1
+        # which will map to the "unlabeled" class in the global label mapping
+        
         if(len(point_cloud) > self._target_points):
             #downsample
             target_pc, target_labels = self.downsamplePointCloud(point_cloud, labels)
@@ -292,21 +295,16 @@ class shapeNetDataset(torch.utils.data.Dataset):
             target_pc, target_labels = self.interpolatePointCloud(point_cloud, labels)        
         
         # Convert local part labels to global labels using the mapping
+        # This now includes -1 -> "unlabeled" mapping for each class
         if self._class_part_to_global is not None:
-            global_labels = []
-            for local_label in target_labels:
-                if local_label == -1:
-                    # Keep unlabeled points as -1
-                    global_labels.append(-1)
-                else:
-                    # Map valid labels to global labels
-                    global_labels.append(self._class_part_to_global[(item["class"], local_label)])
+            global_labels = [self._class_part_to_global[(item["class"], local_label)] 
+                           for local_label in target_labels]
         else:
             global_labels = target_labels
         
         target_pc = np.array(target_pc, dtype=np.float32)
         target_pc = target_pc.transpose(1, 0) 
-        return target_pc, item["class"], np.array(target_labels), np.array(global_labels, dtype=np.int64)    
+        return target_pc, item["class"], np.array(target_labels, dtype=np.int64), np.array(global_labels, dtype=np.int64)    
         
         
 

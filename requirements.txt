@@ -1,4 +1,7 @@
+--index-url https://download.pytorch.org/whl/cu118
 torch
+torchvision
+torchaudio
 torch_geometric
 matplotlib
 numpy
