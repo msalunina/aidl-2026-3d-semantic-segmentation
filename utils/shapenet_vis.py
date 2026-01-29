@@ -215,7 +215,6 @@ def showPointCloud(path:str):
         y = [p[1] for p in point_cloud]
         z = [p[2] for p in point_cloud]
         color = [class_color[i] for i in seg_labels]
-        
     
         target_pc = point_cloud
         target_labels = seg_labels
@@ -229,7 +228,6 @@ def showPointCloud(path:str):
             #interpolate
             target_pc, target_labels = interpolatePointcloud(point_cloud, seg_labels, target_points, 0.05, 0.05)
             applied = " - interpolated"
-        
  
         tx = [p[0] for p in target_pc]
         ty = [p[1] for p in target_pc]
@@ -262,9 +260,9 @@ def showBatchPointcloud(pointcloud, labels, obj_class, seg_class):
     
     for i in range(pointcloud.shape[0]):
         print(f"showing {obj_class[i]} with {seg_class[i]} parts")
-        x = pointcloud[i][:,0]
-        y = pointcloud[i][:,1]
-        z = pointcloud[i][:,2]
+        x = pointcloud[i][0,:]
+        y = pointcloud[i][1,:]
+        z = pointcloud[i][2,:]
         color = [class_color[i] for i in labels[i]]
 
         #show a point cloud
