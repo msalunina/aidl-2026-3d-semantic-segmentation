@@ -238,7 +238,7 @@ if __name__ == "__main__":
         "num_channels": 3,
         "dropout": 0.3,
         "learning_rate": 0.001,
-        "num_epochs": 1,
+        "num_epochs": 30,
         "alpha": 0.001,
         "model_save_path": parent_dir / 'model_objects' / 'pointnet_segmentation.pth',
         "logs_path": parent_dir / 'logs' / f'shapenet_training_{timestamp}.log',

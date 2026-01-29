@@ -1,0 +1,210 @@
+============================================================
+DEVICE INFORMATION
+============================================================
+CUDA is available!
+GPU Device: NVIDIA RTX A500 Laptop GPU
+CUDA Version: 11.8
+Number of GPUs: 1
+============================================================
+
+Loading metadata from C:\Users\salunina\GitHub\aidl-2026-3d-semantic-segmentation\data\shapenet\shapenet_extracted\PartAnnotation\metadata.json...
+Found 16 object classes: Airplane, Bag, Cap, Car, Chair, Earphone, Guitar, Knife, Lamp, Laptop, Motorbike, Mug, Pistol, Rocket, Skateboard, Table
+
+Created global label mapping with 58 total part classes (including 'unlabeled' for each object class)
+Class-Part to Global Label mapping:
+  Airplane: unlabeled -> 0, parts ['wing', 'body', 'tail', 'engine'] -> global labels [1, 2, 3, 4]
+  Bag: unlabeled -> 5, parts ['handle', 'body'] -> global labels [6, 7]
+  Cap: unlabeled -> 8, parts ['panels', 'peak'] -> global labels [9, 10]
+  Car: unlabeled -> 11, parts ['wheel', 'hood', 'roof'] -> global labels [12, 13, 14]
+  Chair: unlabeled -> 15, parts ['leg', 'arm', 'back', 'seat'] -> global labels [16, 17, 18, 19]
+  Earphone: unlabeled -> 20, parts ['earphone', 'headband'] -> global labels [21, 22]
+  Guitar: unlabeled -> 23, parts ['head', 'body', 'neck'] -> global labels [24, 25, 26]
+  Knife: unlabeled -> 27, parts ['handle', 'blade'] -> global labels [28, 29]
+  Lamp: unlabeled -> 30, parts ['canopy', 'lampshade', 'base'] -> global labels [31, 32, 33]
+  Laptop: unlabeled -> 34, parts ['keyboard'] -> global labels [35]
+  Motorbike: unlabeled -> 36, parts ['wheel', 'handle', 'gas_tank', 'light', 'seat'] -> global labels [37, 38, 39, 40, 41]
+  Mug: unlabeled -> 42, parts ['handle'] -> global labels [43]
+  Pistol: unlabeled -> 44, parts ['trigger_and_guard', 'handle', 'barrel'] -> global labels [45, 46, 47]
+  Rocket: unlabeled -> 48, parts ['nose', 'body', 'fin'] -> global labels [49, 50, 51]
+  Skateboard: unlabeled -> 52, parts ['wheel', 'deck'] -> global labels [53, 54]
+  Table: unlabeled -> 55, parts ['leg', 'top'] -> global labels [56, 57]
+
+Updated num_classes to 58 (total unique parts across all object classes)
+
+Loading ShapeNet dataset...
+Train samples: 15670
+Validation samples: 4477
+Test samples: 2239
+Train batches: 489
+Validation batches: 139
+
+Generating visualizations...
+Visualizing Car with 4 parts (metadata incomplete: only 3 documented)
+Saved visualization to C:\Users\salunina\GitHub\aidl-2026-3d-semantic-segmentation\figs\shapenet_samples\shapenet_sample_0_Car.png
+Visualizing Chair with 5 parts (metadata incomplete: only 4 documented)
+Saved visualization to C:\Users\salunina\GitHub\aidl-2026-3d-semantic-segmentation\figs\shapenet_samples\shapenet_sample_1_Chair.png
+Visualizing Pistol with 3 parts
+Saved visualization to C:\Users\salunina\GitHub\aidl-2026-3d-semantic-segmentation\figs\shapenet_samples\shapenet_sample_2_Pistol.png
+Visualizing Airplane with 4 parts
+Saved visualization to C:\Users\salunina\GitHub\aidl-2026-3d-semantic-segmentation\figs\shapenet_samples\shapenet_sample_3_Airplane.png
+Saved grid visualization to C:\Users\salunina\GitHub\aidl-2026-3d-semantic-segmentation\figs\shapenet_grid.png
+
+============================================================
+TRAINING SEGMENTATION MODEL
+============================================================
+Training segmentation model...
+Using device: cuda
+GPU: NVIDIA RTX A500 Laptop GPU
+
+Epoch: 001, Train Loss: 1.3188, Val Loss: 0.9128
+Train Acc: 0.6005, Val Acc: 0.6798
+Train IoU: 0.1196, Val IoU: 0.1953
+Model saved with Val IoU: 0.1953
+
+Epoch: 002, Train Loss: 0.8987, Val Loss: 0.7345
+Train Acc: 0.6926, Val Acc: 0.7404
+Train IoU: 0.2159, Val IoU: 0.2819
+Model saved with Val IoU: 0.2819
+
+Epoch: 003, Train Loss: 0.7562, Val Loss: 0.6488
+Train Acc: 0.7496, Val Acc: 0.7744
+Train IoU: 0.2773, Val IoU: 0.3232
+Model saved with Val IoU: 0.3232
+
+Epoch: 004, Train Loss: 0.6803, Val Loss: 0.5938
+Train Acc: 0.7718, Val Acc: 0.7915
+Train IoU: 0.3183, Val IoU: 0.3533
+Model saved with Val IoU: 0.3533
+
+Epoch: 005, Train Loss: 0.6476, Val Loss: 0.6132
+Train Acc: 0.7836, Val Acc: 0.7879
+Train IoU: 0.3479, Val IoU: 0.3667
+Model saved with Val IoU: 0.3667
+
+Epoch: 006, Train Loss: 0.6116, Val Loss: 0.5587
+Train Acc: 0.7958, Val Acc: 0.8046
+Train IoU: 0.3710, Val IoU: 0.4019
+Model saved with Val IoU: 0.4019
+
+Epoch: 007, Train Loss: 0.5661, Val Loss: 0.5086
+Train Acc: 0.8085, Val Acc: 0.8227
+Train IoU: 0.4075, Val IoU: 0.4284
+Model saved with Val IoU: 0.4284
+
+Epoch: 008, Train Loss: 0.5508, Val Loss: 0.4933
+Train Acc: 0.8138, Val Acc: 0.8300
+Train IoU: 0.4215, Val IoU: 0.4495
+Model saved with Val IoU: 0.4495
+
+Epoch: 009, Train Loss: 0.5344, Val Loss: 0.4805
+Train Acc: 0.8183, Val Acc: 0.8305
+Train IoU: 0.4323, Val IoU: 0.4559
+Model saved with Val IoU: 0.4559
+
+Epoch: 010, Train Loss: 0.5117, Val Loss: 0.4678
+Train Acc: 0.8245, Val Acc: 0.8337
+Train IoU: 0.4523, Val IoU: 0.4793
+Model saved with Val IoU: 0.4793
+
+Epoch: 011, Train Loss: 0.5024, Val Loss: 0.4613
+Train Acc: 0.8289, Val Acc: 0.8425
+Train IoU: 0.4562, Val IoU: 0.4789
+
+Epoch: 012, Train Loss: 0.4863, Val Loss: 0.4426
+Train Acc: 0.8338, Val Acc: 0.8462
+Train IoU: 0.4750, Val IoU: 0.4924
+Model saved with Val IoU: 0.4924
+
+Epoch: 013, Train Loss: 0.4723, Val Loss: 0.4740
+Train Acc: 0.8376, Val Acc: 0.8380
+Train IoU: 0.4802, Val IoU: 0.4943
+Model saved with Val IoU: 0.4943
+
+Epoch: 014, Train Loss: 0.4761, Val Loss: 0.4699
+Train Acc: 0.8360, Val Acc: 0.8323
+Train IoU: 0.4777, Val IoU: 0.4884
+
+Epoch: 015, Train Loss: 0.4697, Val Loss: 0.4378
+Train Acc: 0.8383, Val Acc: 0.8493
+Train IoU: 0.4882, Val IoU: 0.5247
+Model saved with Val IoU: 0.5247
+
+Epoch: 016, Train Loss: 0.4464, Val Loss: 0.4476
+Train Acc: 0.8450, Val Acc: 0.8486
+Train IoU: 0.5051, Val IoU: 0.4909
+
+Epoch: 017, Train Loss: 0.4545, Val Loss: 0.5035
+Train Acc: 0.8429, Val Acc: 0.8251
+Train IoU: 0.4980, Val IoU: 0.4723
+
+Epoch: 018, Train Loss: 0.4444, Val Loss: 0.4124
+Train Acc: 0.8442, Val Acc: 0.8539
+Train IoU: 0.5091, Val IoU: 0.5418
+Model saved with Val IoU: 0.5418
+
+Epoch: 019, Train Loss: 0.4344, Val Loss: 0.4206
+Train Acc: 0.8484, Val Acc: 0.8532
+Train IoU: 0.5184, Val IoU: 0.5130
+
+Epoch: 020, Train Loss: 0.4298, Val Loss: 0.4230
+Train Acc: 0.8489, Val Acc: 0.8519
+Train IoU: 0.5150, Val IoU: 0.5213
+
+Epoch: 021, Train Loss: 0.4250, Val Loss: 0.4236
+Train Acc: 0.8503, Val Acc: 0.8537
+Train IoU: 0.5227, Val IoU: 0.5364
+
+Epoch: 022, Train Loss: 0.4210, Val Loss: 0.4234
+Train Acc: 0.8520, Val Acc: 0.8514
+Train IoU: 0.5275, Val IoU: 0.5381
+
+Epoch: 023, Train Loss: 0.4298, Val Loss: 0.4416
+Train Acc: 0.8505, Val Acc: 0.8479
+Train IoU: 0.5143, Val IoU: 0.5040
+
+Epoch: 024, Train Loss: 0.4108, Val Loss: 0.4333
+Train Acc: 0.8554, Val Acc: 0.8533
+Train IoU: 0.5354, Val IoU: 0.5383
+
+Epoch: 025, Train Loss: 0.4039, Val Loss: 0.4115
+Train Acc: 0.8565, Val Acc: 0.8609
+Train IoU: 0.5363, Val IoU: 0.5438
+Model saved with Val IoU: 0.5438
+
+Epoch: 026, Train Loss: 0.3968, Val Loss: 0.3990
+Train Acc: 0.8589, Val Acc: 0.8588
+Train IoU: 0.5501, Val IoU: 0.5431
+
+Epoch: 027, Train Loss: 0.3954, Val Loss: 0.4063
+Train Acc: 0.8595, Val Acc: 0.8600
+Train IoU: 0.5541, Val IoU: 0.5423
+
+Epoch: 028, Train Loss: 0.4059, Val Loss: 0.4312
+Train Acc: 0.8563, Val Acc: 0.8517
+Train IoU: 0.5350, Val IoU: 0.5185
+
+Epoch: 029, Train Loss: 0.3979, Val Loss: 0.4268
+Train Acc: 0.8585, Val Acc: 0.8533
+Train IoU: 0.5461, Val IoU: 0.5267
+
+Epoch: 030, Train Loss: 0.3908, Val Loss: 0.4044
+Train Acc: 0.8608, Val Acc: 0.8593
+Train IoU: 0.5565, Val IoU: 0.5655
+Model saved with Val IoU: 0.5655
+Training complete.
+
+============================================================
+EVALUATING ON TEST SET
+============================================================
+
+Test Accuracy: 0.8534
+Test Mean IoU: 0.5742
+
+Visualizations saved to C:\Users\salunina\GitHub\aidl-2026-3d-semantic-segmentation\figs
+
+============================================================
+EXECUTION TIME SUMMARY
+============================================================
+Training time: 6431.25 seconds (107.19 minutes)
+Total execution time: 6528.66 seconds (108.81 minutes)
+============================================================
