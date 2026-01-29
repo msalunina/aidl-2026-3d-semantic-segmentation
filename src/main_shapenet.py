@@ -1,15 +1,62 @@
-import torch
-from torch.utils.data import DataLoader
-from utils.shapenet_dataset import shapeNetDataset
-import torch.nn as nn
-import torch.nn.functional as F
-import keras
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import json
+import os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-from pathlib import Path
+from test import evaluate_segmentation
+from train import (
+    train_segmentation_model,
+    plot_losses,
+    plot_accuracies,
+    plot_ious
+)
+from models.pointnet import PointNetSegmentation
 import time
+from pathlib import Path
+from datetime import datetime
+import sys
+import json
+import matplotlib.pyplot as plt
+import keras
+import torch
+import torch.optim as optim
+from utils.utils import TeeOutput
+from utils.shapenet_dataset import shapeNetDataset
+from torch.utils.data import DataLoader, random_split
+
+
+def create_global_label_mapping(metadata):
+    """
+    Create a mapping from (object_class_idx, local_part_idx) to global label.
+    
+    Args:
+        metadata: Dictionary containing class metadata with part labels
+    
+    Returns:
+        class_part_to_global: Dictionary mapping (class_idx, local_part_idx) to global_label
+        global_to_class_part: Dictionary mapping global_label to (class_idx, part_name)
+        num_global_classes: Total number of global part classes
+    """
+    class_part_to_global = {}
+    global_to_class_part = {}
+    global_label = 0
+    
+    # Iterate through classes in sorted order for consistency
+    for class_idx, class_name in enumerate(sorted(metadata.keys())):
+        part_names = metadata[class_name]["lables"]  # Note: typo in metadata
+        
+        # Map each part index of this class to a global label
+        for local_part_idx, part_name in enumerate(part_names):
+            class_part_to_global[(class_idx, local_part_idx)] = global_label
+            global_to_class_part[global_label] = (class_idx, part_name)
+            global_label += 1
+    
+    print(f"\nCreated global label mapping with {global_label} total part classes")
+    print("Class-Part to Global Label mapping:")
+    for class_idx, class_name in enumerate(sorted(metadata.keys())):
+        part_names = metadata[class_name]["lables"]
+        global_labels = [class_part_to_global[(class_idx, idx)] for idx in range(len(part_names))]
+        print(f"  {class_name}: parts {part_names} -> global labels {global_labels}")
+    
+    return class_part_to_global, global_to_class_part, global_label
 
 
 def download_shapenet_dataset():
@@ -26,7 +73,7 @@ def download_shapenet_dataset():
     )
 
 
-def visualize_shapenet_batch(pointcloud, labels, obj_class, seg_class, output_dir, metadata, class_idx_to_name, num_samples=4):
+def visualize_shapenet_batch(pointcloud, labels, obj_class, output_dir, metadata, class_idx_to_name, num_samples=4):
     """
     Visualize a batch of ShapeNet point clouds and save to files.
     
@@ -74,7 +121,7 @@ def visualize_shapenet_batch(pointcloud, labels, obj_class, seg_class, output_di
         
         # Map labels to colors from metadata
         # Labels are 1-indexed, so subtract 1 to get the correct index
-        color = [part_colors[(int(label)-1) % len(part_colors)] for label in labels[i]]
+        color = [part_colors[int(label)] for label in labels[i]]
         
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection="3d")
@@ -102,7 +149,7 @@ def visualize_shapenet_batch(pointcloud, labels, obj_class, seg_class, output_di
         print(f"Saved visualization to {output_path}")
 
 
-def visualize_shapenet_grid(pointcloud, labels, obj_class, seg_class, output_path, metadata, class_idx_to_name, max_samples=8):
+def visualize_shapenet_grid(pointcloud, labels, obj_class, output_path, metadata, class_idx_to_name, max_samples=8):
     """
     Visualize multiple ShapeNet point clouds in a grid layout.
     
@@ -141,7 +188,7 @@ def visualize_shapenet_grid(pointcloud, labels, obj_class, seg_class, output_pat
         
         # Map labels to colors from metadata
         # Labels are 1-indexed, so subtract 1 to get the correct index
-        color = [part_colors[(int(label) - 1) % len(part_colors)] for label in labels[i]]
+        color = [part_colors[int(label)] for label in labels[i]]
         
         ax = fig.add_subplot(n_rows, n_cols, i + 1, projection='3d')
         ax.scatter(x, y, z, c=color, s=1)
@@ -164,40 +211,120 @@ if __name__ == "__main__":
     start_time = time.time()
 
     parent_dir = Path(__file__).resolve().parent.parent
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     config = {
         "download_shapenet": False,
         "data_path": parent_dir / 'data' / 'shapenet' / 'shapenet_extracted' / 'PartAnnotation',
         "num_points": 1024,
         "batch_size": 32,
+        "validation_split": 0.2,
+        "test_split": 0.1,
         "vis_output_dir": parent_dir / 'figs' / 'shapenet_samples',
         "vis_grid_path": parent_dir / 'figs' / 'shapenet_grid.png',
+        "num_classes": 42,  # Total number of part classes across all object categories
+        "num_channels": 3,
+        "dropout": 0.3,
+        "learning_rate": 0.001,
+        "num_epochs": 1,
+        "alpha": 0.001,
+        "model_save_path": parent_dir / 'model_objects' / 'pointnet_segmentation.pth',
+        "logs_path": parent_dir / 'logs' / f'shapenet_training_{timestamp}.log',
     }
-    
+
+    tee = None
+    if config["logs_path"]:
+        output_path = Path(config["logs_path"])
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        tee = TeeOutput(output_path)
+        sys.stdout = tee
+
+    # Check GPU availability
+    print("="*60)
+    print("DEVICE INFORMATION")
+    print("="*60)
+    if torch.cuda.is_available():
+        print(f"CUDA is available!")
+        print(f"GPU Device: {torch.cuda.get_device_name(0)}")
+        print(f"CUDA Version: {torch.version.cuda}")
+        print(f"Number of GPUs: {torch.cuda.device_count()}")
+    else:
+        print("WARNING: CUDA is not available. Training will be VERY slow on CPU!")
+    print("="*60)
+
     if config["download_shapenet"]:
         download_shapenet_dataset()
 
     # Load metadata
     metadata_path = config["data_path"] / "metadata.json"
-    print(f"Loading metadata from {metadata_path}...")
+    print(f"\nLoading metadata from {metadata_path}...")
     with open(metadata_path, 'r') as f:
         metadata = json.load(f)
     print(f"Found {len(metadata)} object classes: {', '.join(metadata.keys())}")
+
+    # Create index to class name mapping (sorted for consistency)
+    class_idx_to_name = {i: name for i, name in enumerate(sorted(metadata.keys()))}
     
-    # Create index to class name mapping
-    class_idx_to_name = {i: name for i, name in enumerate(metadata.keys())}
+    # Create global label mapping from (class, part) to unique global labels
+    class_part_to_global, global_to_class_part, num_global_classes = create_global_label_mapping(metadata)
+    
+    # Update config with actual number of global classes
+    config["num_classes"] = num_global_classes
+    print(f"\nUpdated num_classes to {num_global_classes} (total unique parts across all object classes)")
 
     print("\nLoading ShapeNet dataset...")
-    dataset = shapeNetDataset(config["data_path"], config["num_points"], mode=0, class_name="")
-    loader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True, drop_last=True)
+    dataset_full = shapeNetDataset(
+        config["data_path"], config["num_points"], mode=0, class_name="", 
+        class_part_to_global=class_part_to_global)
+
+    # Split into train, val and test sets
+    l_data = len(dataset_full)
+    train_dataset, val_dataset, test_dataset = random_split(
+        dataset_full,
+        [round((1 - config["validation_split"] - config["test_split"]) * l_data),
+         round(config["validation_split"] * l_data),
+         round(config["test_split"] * l_data)],
+        generator=torch.Generator().manual_seed(1)
+    )
+
+    num_workers = 4 if torch.cuda.is_available() else 0
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config["batch_size"],
+        shuffle=True,
+        drop_last=True,
+        num_workers=num_workers,
+        pin_memory=True if torch.cuda.is_available() else False
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False,
+        drop_last=True,
+        num_workers=num_workers,
+        pin_memory=True if torch.cuda.is_available() else False
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=config["batch_size"],
+        shuffle=False,
+        drop_last=False,
+        num_workers=num_workers,
+        pin_memory=True if torch.cuda.is_available() else False
+    )
+
+    print(f"Train samples: {len(train_dataset)}")
+    print(f"Validation samples: {len(val_dataset)}")
+    print(f"Test samples: {len(test_dataset)}")
+    print(f"Train batches: {len(train_loader)}")
+    print(f"Validation batches: {len(val_loader)}")
 
     print("\nGenerating visualizations...")
-    for pointcloud, pc_class, label, seg_class in loader:
+    for pointcloud, pc_class, label, seg_class in train_loader:
         visualize_shapenet_batch(
-            pointcloud, 
-            label, 
-            pc_class, 
-            seg_class, 
+            pointcloud,
+            label,
+            pc_class,
             config["vis_output_dir"],
             metadata,
             class_idx_to_name,
@@ -207,22 +334,83 @@ if __name__ == "__main__":
             pointcloud,
             label,
             pc_class,
-            seg_class,
             config["vis_grid_path"],
             metadata,
             class_idx_to_name,
             max_samples=8
         )
-        
+
         # Only visualize the first batch
         break
 
+    # Model training
+    print("\n" + "="*60)
+    print("TRAINING SEGMENTATION MODEL")
+    print("="*60)
+
+    model = PointNetSegmentation(
+        num_classes=config["num_classes"],
+        input_channels=config["num_channels"],
+        dropout=config["dropout"]
+    )
+    optimizer = optim.Adam(model.parameters(), lr=config["learning_rate"])
+
+    training_start_time = time.time()
+    train_loss_history, val_loss_history, train_acc_history, val_acc_history, train_iou_history, val_iou_history = train_segmentation_model(
+        model=model,
+        optimizer=optimizer,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        config=config,
+        model_save_path=config["model_save_path"]
+    )
+    training_time = time.time() - training_start_time
+
+    # Plot training metrics
+    plot_losses(
+        train_loss_history,
+        val_loss_history,
+        save_to_file=parent_dir / 'figs' / 'shapenet_training_validation_loss.png'
+    )
+    plot_accuracies(
+        train_acc_history,
+        val_acc_history,
+        save_to_file=parent_dir / 'figs' / 'shapenet_training_validation_accuracy.png'
+    )
+    plot_ious(
+        train_iou_history,
+        val_iou_history,
+        save_to_file=parent_dir / 'figs' / 'shapenet_training_validation_iou.png'
+    )
+
+    # Test set evaluation
+    print("\n" + "="*60)
+    print("EVALUATING ON TEST SET")
+    print("="*60)
+
+    # Load best model
+    model.load_state_dict(torch.load(config["model_save_path"]))
+
+    test_accuracy, test_iou = evaluate_segmentation(
+        model, test_loader, config["num_classes"])
+    print(f"\nTest Accuracy: {test_accuracy:.4f}")
+    print(f"Test Mean IoU: {test_iou:.4f}")
+
     total_time = time.time() - start_time
-    
+
     print(f"\nVisualizations saved to {parent_dir / 'figs'}")
     print("\n" + "="*60)
     print("EXECUTION TIME SUMMARY")
     print("="*60)
-    # print(f"Training time: {training_time:.2f} seconds ({training_time/60:.2f} minutes)")
-    print(f"Total execution time: {total_time:.2f} seconds ({total_time/60:.2f} minutes)")
+    print(
+        f"Training time: {training_time:.2f} seconds ({training_time/60:.2f} minutes)")
+    print(
+        f"Total execution time: {total_time:.2f} seconds ({total_time/60:.2f} minutes)")
     print("="*60)
+
+    # Restore stdout and close file
+    if tee:
+        sys.stdout = tee.stdout
+        tee.close()
+        print(
+            f"\nTraining log saved to: {Path(config['logs_path']).absolute()}")

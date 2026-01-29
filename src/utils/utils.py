@@ -1,7 +1,25 @@
-
 import torch
 import torch.nn.functional as F
 import numpy as np
+import sys
+
+
+class TeeOutput:
+    """Write to both stdout and a file"""
+    def __init__(self, file_path):
+        self.file = open(file_path, 'w', encoding='utf-8')
+        self.stdout = sys.stdout
+        
+    def write(self, text):
+        self.stdout.write(text)
+        self.file.write(text)
+        
+    def flush(self):
+        self.stdout.flush()
+        self.file.flush()
+        
+    def close(self):
+        self.file.close()
 
 
 def sample_point_cloud(point_cloud, num_points):
@@ -86,7 +104,8 @@ def preprocess_dataset(dataset, num_points):
 
 def loss_function(predictions, targets, feature_transform, alpha=0.001):
     # Classification loss (NLL loss expects log probabilities from log_softmax)
-    classification_loss = F.nll_loss(predictions, targets)
+    # Use ignore_index=-1 to ignore unlabeled points
+    classification_loss = F.nll_loss(predictions, targets, ignore_index=-1)
     
     # Regularization loss for feature transform orthogonality
     # feature_transform is [batch_size, 64, 64]

@@ -10,6 +10,7 @@
 # ignore all png except for those in the 'figs' directory
 *.png
 !figs/*.png
+!figs/shapenet_samples/*.png
 
 data/modelnet10/raw/README.txt
 data/shapenet/shapenet_extracted/PartAnnotation/metadata.json
