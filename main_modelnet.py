@@ -46,6 +46,7 @@ def info_dataset_batch(dataset, data_loader, name_classes):
     plt.title(f'Label: {label} = {name_classes[label]}')
     plt.show()
 
+
 # RUN ONLY IF EXECUTED AS MAIN
 if __name__ == "__main__":
 
@@ -134,14 +135,3 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
     # plt.savefig("learning_curves.png")  # if server or remote instead of plt.show()
-
-    # LATER
-    # network = ClassificationPointNet(num_classes=10).to(device)
-    # network.load_state_dict(torch.load(save_path, map_location=device))
-    # network.eval()
-
-    # FINAL TEST
-#    test_loss, test_acc = eval_single_epoch(test_loader, trained_model, criterion)
-#    print(f"Final test: loss={test_loss:.4f}, acc={test_acc:.2f}")
-
-# %%

@@ -1,0 +1,134 @@
+# %%
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+import torch_geometric.transforms as T
+from torch_geometric.datasets import ModelNet
+from torch.utils.data import DataLoader   # <-- instead of torch_geometric.loader
+# from torch_geometric.loader import DataLoader
+from torch_geometric.utils import to_dense_batch
+from torch.utils.data import random_split
+import random
+import os
+from PointNet import SegmentationPointNet, ClassificationPointNet
+from training_utils import train_model
+import time
+from utils.shapenet_dataset_ebp import shapeNetDataset
+
+
+
+# RUN ONLY IF EXECUTED AS MAIN
+if __name__ == "__main__":
+
+    save_path = "checkpoints/SegmentationPointnet_10epochs_1024.pt"
+    data_path = "data/ShapeNet/PartAnnotation"
+    config = {"epochs": 10,
+              "lr": 0.001,
+              "batch_size": 32,
+              "nPoints": 1024}   
+    
+    # Cuda agnostic thingy
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+    # SEEDS i histories varies
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    # Importing ShapeNet DATASET
+    data_path = "data/ShapeNet/PartAnnotation"
+    train_dataset = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=0, class_name="")
+    val_dataset = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=1, class_name="")
+    test_dataset = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=2, class_name="")
+
+    # INSPECT DATASET
+    print(f"Training size: {len(train_dataset)}")
+    print(f"Validation size: {len(val_dataset)}")
+    print(f"Test size: {len(test_dataset)}\n")
+    
+    sample = 0
+    points, object_class, seg_class, num_seg_classes = train_dataset[sample]
+    print(f"Points shape: {points.shape}")
+    print(f"Object class: {object_class}")
+    print(f"Part class: {seg_class.shape}")
+    print(f"Unique part labels: {np.unique(seg_class)}")
+    print(f"Num parts: {num_seg_classes}\n")
+
+    # MAPPING FROM INTEGERS TO OBJECT CLASSES
+    id_to_class = {v: k for k, v in train_dataset._object_classes.items()}
+    print(f"Num classes: {len(id_to_class)}")
+    # print(id_to_class)
+    # OBJECT NAMES AND PARTS
+    class_name = id_to_class[object_class]
+    part_names = train_dataset._metadata[class_name]["lables"]
+    print(f"Object name: {class_name}")
+    print(f"Part names: {part_names}")
+    
+    # MAPPING PART COLORS
+    seg_class_color = ["red", "blue", "green", "black", "orange"]
+    points_color = [seg_class_color[i] for i in seg_class]
+
+    points = points.T
+
+    fig = plt.figure()
+    
+    ax1 = fig.add_subplot(121, projection="3d")
+    ax1.scatter(points[:,0], points[:,1], points[:,2], s=2)
+    ax1.set_title(f"Object class: {object_class} / Num parts: {num_seg_classes}")
+    ax1.set_box_aspect([1,1,1])
+   
+    ax2 = fig.add_subplot(122, projection="3d")
+    ax2.scatter(points[:,0], points[:,1], points[:,2], c=points_color)
+    ax2.set_title(f"Object parts colored\n{seg_class_color[0:num_seg_classes]}\n{part_names}")
+    ax2.set_box_aspect([1,1,1])
+    plt.show()
+
+
+    # DATALOADERS
+    train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], shuffle=True) 
+    val_loader   = DataLoader(val_dataset, batch_size=config["batch_size"], shuffle=False)  
+    test_loader  = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=False)
+
+    # info item from a batch
+    batch = next(iter(train_loader))
+
+
+    
+    # # MODEL + OPTIMIZER + LOSS
+    network = ClassificationPointNet(num_classes=16).to(device)
+    optimizer = optim.Adam(network.parameters(), lr=config["lr"])
+    criterion = nn.NLLLoss()
+
+    # # TRAINING LOOP
+    # time_start_traning = time.time()
+    # train_loss, train_acc, val_loss, val_acc = train_model(config, train_loader, val_loader, network, optimizer, criterion, save_path=save_path)
+    # time_training = time.time() - time_start_traning
+    # print(f"Training time: {time_training}")
+
+    # # PLOT TRAINING AND ACCURACY CURVES
+    # plt.figure(figsize=(10, 8))
+    
+    # plt.subplot(2,1,1)
+    # plt.plot(train_loss, label='train')
+    # plt.plot(val_loss, label='validation')
+    # plt.xlabel("Epoch")
+    # plt.ylabel("Loss")
+    # plt.title('Loss: training and validation')
+    # plt.legend()
+
+    # plt.subplot(2,1,2)
+    # plt.plot(train_acc, label='train')
+    # plt.plot(val_acc, label='validation')
+    # plt.xlabel("Epoch")
+    # plt.ylabel("Accuracy")
+    # plt.title('Accuracy: training and validation')
+    # plt.legend()
+    # plt.show()
+    # # plt.savefig("learning_curves.png")  # if server or remote instead of plt.show()
