@@ -91,6 +91,8 @@ class BasePointNet(nn.Module):
         super().__init__()
         self.input_tnet = TransformationNet(input_dim=point_dimension, output_dim=point_dimension)
         self.feature_tnet = TransformationNet(input_dim=64, output_dim=64)
+        # self.input_tnet_function = self.input_tnet
+        # self.feature_tnet_function = self.feature_tnet
 
         # Shared MLP after input_transform (64,64)
         self.conv_1 = nn.Conv1d(point_dimension, 64, 1) # weight matrix: [64,3]    --> output: [64,nPoints] 
@@ -113,23 +115,25 @@ class BasePointNet(nn.Module):
         # INPUT x: [batch, nPoints, 3]
         # self.input_transform is a "function", it depends on x: 
         # - we pass x, we compute its matrix and then multiply (perform the transformation)                             
-        input_tnet_tensor = self.input_tnet(x)        # T-Net tensor:                 [batch, 3, 3]
-        x = torch.bmm(x, input_tnet_tensor)           # Batch matrix-matrix product   [batch, nPoints, 3] POINTS TRANSFORMED
+        input_tnet = self.input_tnet(x)        # T-Net tensor:                 [batch, 3, 3]
+        x = torch.bmm(x, input_tnet)           # Batch matrix-matrix product   [batch, nPoints, 3] POINTS TRANSFORMED
 
         x = x.transpose(2, 1)                                   # bcause nn.Conv1d needs input: [batch, 3, nPoints]                
         x = F.relu(self.bn_1(self.conv_1(x)))                   #                               [batch, 64, nPoints]
         x = F.relu(self.bn_2(self.conv_2(x)))                   #                               [batch, 64, nPoints]
         x = x.transpose(2, 1)                                   # because Tnet needs input:     [batch, nPoints, 64]       
    
-        feature_tnet_tensor= self.feature_tnet(x)    # T-Net tensor                  [batch, 64, 64]
-        x = torch.bmm(x, feature_tnet_tensor)              # Batch matrix-matrix product   [batch, nPoints, 64]
+        feature_tnet= self.feature_tnet(x)    # T-Net tensor                  [batch, 64, 64]
+        x = torch.bmm(x, feature_tnet)              # Batch matrix-matrix product   [batch, nPoints, 64]
         point_features = x
 
         x = x.transpose(2, 1)                                   # bcause nn.Conv1d needs input: [batch, 64, nPoints] 
         x = F.relu(self.bn_3(self.conv_3(x)))                   #                               [batch, 64, nPoints] 
         x = F.relu(self.bn_4(self.conv_4(x)))                   #                               [batch, 128, nPoints] 
         x = F.relu(self.bn_5(self.conv_5(x)))                   #                               [batch, 1024, nPoints] 
-        x, ix = nn.MaxPool1d(num_points, return_indices=True)(x)# max-pooling
+        # max-pooling. It always acts on last dimension, which is nPoints: 
+        # for each feature, which of the points shows a highest value "take the max over all points"
+        x, ix = nn.MaxPool1d(kernel_size=num_points, return_indices=True)(x)
         global_features = x.view(-1, 1024)                      # global feature vector         [batch, 1024]
 
         # global_features     --> global feature vector describing the object
@@ -137,7 +141,7 @@ class BasePointNet(nn.Module):
         # point_features      --> needed for segmentation
         # input_tnet_tensor   --> matrix used to transform points (canonical) transfromed input points nice for visualization
         # feature_tnet_tensor --> matrix needed for loss (regularization)
-        return global_features, ix, point_features, feature_tnet_tensor, input_tnet_tensor
+        return global_features, ix, point_features, feature_tnet, input_tnet
 
 
     
@@ -159,14 +163,14 @@ class ClassificationPointNet(nn.Module):
         self.dropout_1 = nn.Dropout(dropout)
 
     def forward(self, x):
-        global_features, ix_maxpool, point_features, feature_tnet_tensor, input_tnet_tensor = self.base_pointnet(x)
+        global_features, ix_maxpool, point_features, feature_tnet, input_tnet = self.base_pointnet(x)
 
         x = F.relu(self.bn_1(self.fc_1(global_features)))
         x = F.relu(self.bn_2(self.fc_2(x)))
         x = self.dropout_1(x)
         log_probs = F.log_softmax(self.fc_3(x), dim=1)
 
-        return log_probs, ix_maxpool, point_features, feature_tnet_tensor, input_tnet_tensor
+        return log_probs, ix_maxpool, point_features, feature_tnet, input_tnet
 
 
 
@@ -191,7 +195,7 @@ class SegmentationPointNet(nn.Module):
 
 
     def forward(self, x):
-        global_features, ix_maxpool, point_features, feature_tnet_tensor, input_tnet_tensor = self.base_pointnet(x)
+        global_features, ix_maxpool, point_features, feature_tnet, input_tnet = self.base_pointnet(x)
         # [B,1024] global features vector
         # [B,N,64] point features vector
         nPoints = point_features.shape[1]
@@ -208,5 +212,5 @@ class SegmentationPointNet(nn.Module):
         x = self.dropout_1(x)
         log_probs = F.log_softmax(self.conv_5(x), dim=1)
 
-        return log_probs, ix_maxpool, point_features, feature_tnet_tensor, input_tnet_tensor
+        return log_probs, ix_maxpool, point_features, feature_tnet, input_tnet
 

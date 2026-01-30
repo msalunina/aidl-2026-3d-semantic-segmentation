@@ -13,50 +13,43 @@ from torch.utils.data import random_split
 import random
 import os
 from PointNet import ClassificationPointNet, BasePointNet, TransformationNet
-from training_utils import train_single_epoch, eval_single_epoch
+from training_utils import train_model
+import time
 
-# ----------------------------------------------------
-#    TRAINING LOOP (iterate on epochs)
-# ----------------------------------------------------
-def train_model(config, train_loader, val_loader, network, optimizer, criterion):
 
-    train_loss=[]
-    train_acc=[]
-    val_loss=[]
-    val_acc=[]
+def info_dataset_batch(dataset, data_loader, name_classes):
+    # There are 32 objects per batch, and each object has 1024 points. 
+    # But it does not separate objects....all 32x1024 points are stacked together.
+    # batch is a Data object (like a struct in matlab), with attributes. The atributes are:
+    # batch.pos   --> llista de punts per batch ([32x1024,3])
+    # batch.batch --> integer telling each point to which object it belongs to.
+    # batch.y     --> labels, one label per object (not point!!!)
+    # batch.ptr   --> ni puta idea
+    # They can also be accessed like a dictionary: batch["pos"], batch["y"]...
 
-    for epoch in range(config["epochs"]):
-        train_loss_epoch, train_acc_epoch = train_single_epoch(train_loader, network, optimizer, criterion)
-        val_loss_epoch, val_acc_epoch = eval_single_epoch(val_loader, network, criterion)
-        
-        train_loss.append(train_loss_epoch)
-        train_acc.append(train_acc_epoch)
-        val_loss.append(val_loss_epoch)
-        val_acc.append(val_acc_epoch)
+    # info item from a batch
+    batch = next(iter(data_loader))
+    print(f"BATCH: {batch}")
+    batchItem = 30
+    pointsObjectID = batch.pos[batch.batch==batchItem]
+    print("Item batch shape:", pointsObjectID.shape, "Label:", batch.y[batchItem])
 
-        print(f'Epoch: {epoch+1}/{config["epochs"]} | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f} | acc (train/val) ={train_acc_epoch:.2f}/{val_acc_epoch:.2f}')
-    
-    plt.figure(figsize=(10, 8))
-    plt.subplot(2,1,1)
-    plt.plot(train_loss, label='train')
-    plt.plot(val_loss, label='val')
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.legend()
-    plt.subplot(2,1,2)
-    plt.plot(train_acc, label='train')
-    plt.plot(val_acc, label='val')
-    plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
-    plt.legend()
+    # info item from the original dataset
+    datasetItem = 44
+    pos = dataset[datasetItem].pos.cpu().numpy()
+    label = dataset[datasetItem].y.item()
 
-    # plt.savefig("learning_curves.png")  # if server or remote instead of plt.show()
-
-    return network
-
+    fig = plt.figure(figsize=[7,7])
+    ax = plt.axes(projection='3d')
+    sc = ax.scatter(pos[:,0], pos[:,1], pos[:,2], c=pos[:,0] ,s=80, marker='o', cmap="viridis", alpha=0.7)
+    ax.set_zlim3d(-1, 1)
+    plt.title(f'Label: {label} = {name_classes[label]}')
+    plt.show()
 
 # RUN ONLY IF EXECUTED AS MAIN
 if __name__ == "__main__":
+
+    save_path = "checkpoints/ClassificationPointnet_10epochs_1024.pt"
 
     config = {"epochs": 10,
               "lr": 0.001,
@@ -78,8 +71,6 @@ if __name__ == "__main__":
     # ModelNet dataset (original) stores objects as triangular meshes (.off files).
     # PointNet needs points, not meshes. "SamplePoints" (from torch_geometric) does that: 
     # samples N unifrom points from the object surface and gives you back a tensor
-
-    # TRANSFORMS
     transform = T.Compose([
         T.SamplePoints(config["nPoints"]),      # mesh -> point cloud (pos: [N,3])
         T.NormalizeScale(),                     # center + scale to unit sphere
@@ -100,58 +91,50 @@ if __name__ == "__main__":
     val_loader   = DataLoader(val_dataset, batch_size=config["batch_size"], shuffle=False)  
     test_loader  = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=False)
 
-    # CHECKS: sizes, inspect batch
+    # CHECKS: sizes
     print(f"Train: {len(train_dataset)}, num_classes: {train_dataset.dataset.num_classes}")
     print(f"Val  : {len(val_dataset)}, num_classes: {val_dataset.dataset.num_classes}")
     print(f"Test : {len(test_dataset)}, num_classes: {test_dataset.num_classes}")
-    # classes names
-    folders = sorted(os.listdir("data/ModelNet/raw"))
-    print("Name classes", folders) 
-
-    batch = next(iter(train_loader))
-    print(batch)
-    if 0:
-        # There are 32 objects per batch, and each object has 1024 points. 
-        # But it does not separate objects....all 32x1024 points are stacked together.
-        # batch is a Data object (like a struct in matlab), with attributes. The atributes are:
-        # batch.pos   --> llista de punts per batch ([32x1024,3])
-        # batch.batch --> integer telling each point to which object it belongs to.
-        # batch.y     --> labels, one label per object (not point!!!)
-        # batch.ptr   --> ni puta idea
-        # They can also be accessed like a dictionary: batch["pos"], batch["y"]...
-
-        # info item from a batch
-        batchItem = 30
-        pointsObjectID = batch.pos[batch.batch==batchItem]
-        print("Item batch shape:", pointsObjectID.shape, "Label:", batch.y[batchItem])
-
-        # info item from the original dataset
-        datasetItem = 1000
-        pos = full_train_dataset[datasetItem].pos.cpu().numpy()
-        label = full_train_dataset[datasetItem].y.item()
-        fig = plt.figure(figsize=[7,7])
-        ax = plt.axes(projection='3d')
-        sc = ax.scatter(pos[:,0], pos[:,1], pos[:,2], c=pos[:,0] ,s=80, marker='o', cmap="viridis", alpha=0.7)
-        ax.set_zlim3d(-1, 1)
-        plt.title(f'Label: {label}')
-        plt.show()
-
-
+    # NAME CLASSES
+    # listdir: lists everything inside a directory
+    # isdir: says if it is a directory
+    path_folder = "data/ModelNet/raw"
+    name_classes = sorted( d for d in os.listdir(path_folder) if os.path.isdir(os.path.join(path_folder, d)))
+    print("Name classes", name_classes) 
+    info_dataset_batch(train_dataset, train_loader, name_classes)
+    
     # MODEL + OPTIMIZER + LOSS
     network = ClassificationPointNet(num_classes=10).to(device)
     optimizer = optim.Adam(network.parameters(), lr=config["lr"])
     criterion = nn.NLLLoss()
 
     # TRAINING LOOP
-    trained_network = train_model(config, train_loader, val_loader, network, optimizer, criterion)
+    time_start_traning = time.time()
+    train_loss, train_acc, val_loss, val_acc = train_model(config, train_loader, val_loader, network, optimizer, criterion, save_path=save_path)
+    time_training = time.time() - time_start_traning
+    print(f"Training time: {time_training}")
 
+    # PLOT TRAINING AND ACCURACY CURVES
+    plt.figure(figsize=(10, 8))
+    
+    plt.subplot(2,1,1)
+    plt.plot(train_loss, label='train')
+    plt.plot(val_loss, label='validation')
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title('Loss: training and validation')
+    plt.legend()
+
+    plt.subplot(2,1,2)
+    plt.plot(train_acc, label='train')
+    plt.plot(val_acc, label='validation')
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title('Accuracy: training and validation')
+    plt.legend()
     plt.show()
+    # plt.savefig("learning_curves.png")  # if server or remote instead of plt.show()
 
-    save_path = "checkpoints/ClassificationPointnet_10epochs_1024.pt"
-    torch.save({"model": network.state_dict(),
-                "epochs": config["epochs"], 
-                "nPoints": config["nPoints"]},
-                save_path)
     # LATER
     # network = ClassificationPointNet(num_classes=10).to(device)
     # network.load_state_dict(torch.load(save_path, map_location=device))

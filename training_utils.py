@@ -97,3 +97,33 @@ def eval_single_epoch(data_loader, network, criterion):
     return eval_loss_epoch, eval_acc_epoch
 # ----------------------------------------------------
 
+
+
+# ----------------------------------------------------
+#    TRAINING LOOP (iterate on epochs)
+# ----------------------------------------------------
+def train_model(config, train_loader, val_loader, network, optimizer, criterion, save_path=None):
+
+    train_loss=[]
+    train_acc=[]
+    val_loss=[]
+    val_acc=[]
+
+    for epoch in range(config["epochs"]):
+        train_loss_epoch, train_acc_epoch = train_single_epoch(train_loader, network, optimizer, criterion)
+        val_loss_epoch, val_acc_epoch = eval_single_epoch(val_loader, network, criterion)
+        
+        train_loss.append(train_loss_epoch)
+        train_acc.append(train_acc_epoch)
+        val_loss.append(val_loss_epoch)
+        val_acc.append(val_acc_epoch)
+
+        print(f'Epoch: {epoch+1}/{config["epochs"]} | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f} | acc (train/val) ={train_acc_epoch:.2f}/{val_acc_epoch:.2f}')
+    
+    if save_path:
+        torch.save({"model": network.state_dict(),
+                    "epochs": config["epochs"], 
+                    "nPoints": config["nPoints"]},
+                    save_path)
+
+    return train_loss, train_acc, val_loss, val_acc
