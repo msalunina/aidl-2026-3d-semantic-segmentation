@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from shapenet_dataset import shapeNetDataset
 from torch.utils.data import DataLoader
-
+import time
 
 #this can be generated reading the json
 
@@ -287,18 +287,23 @@ def testDataLoader(config):
     test_loader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
     
     #dummy loop
+    start = time.perf_counter()
+
     for pointcloud, pc_class, label, seg_class in train_loader:
-       
+        end = time.perf_counter()
+        print(f"getting data elapsed time {end-start:6f} seconds")
         showBatchPointcloud(pointcloud, label, pc_class, seg_class)
+        start = time.perf_counter()
 
 if __name__ == "__main__": 
     config = {
-        "dataset_path": "/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation/" ,
+        #"dataset_path": "/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation/" ,
+        "dataset_path": "F:/AIDL_FP/Datasets/PartAnnotation/",
         "point_cloud_size": 1024,
         "epochs": 1,
         "lr": 1e-3,
         "log_interval": 1000,
-        "batch_size": 1
+        "batch_size": 16
     }
 
     #showPointCloud("/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation/")

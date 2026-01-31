@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import random
 import math
+import time
 
 class shapeNetDataset(torch.utils.data.Dataset):
     
@@ -215,14 +216,33 @@ class shapeNetDataset(torch.utils.data.Dataset):
         return interpolated_pc, interpolated_labels
     
     def normalizePointCloud(self, pc):
-        l = pc.shape[0]
+        
+        #Gemini improvement in time, but its taking the same time
+        centroid = np.mean(pc, axis=1, keepdims=True)
+        pc -= centroid
+        pc_min = pc.min(axis=1, keepdims=True)
+        pc_max = pc.max(axis=1, keepdims=True)
+
+        range_val = pc_max - pc_min
+
+        pc -= pc_min
+        pc /= range_val
+        pc *= 2
+        pc -= 1
+
+        #pc = 2 * ((pc - pc_min) / (pc_max - pc_min)) - 1
+        """
+        #1- first remove centroid to center the object at 0,0,0
         centroid = np.zeros(shape=(3,1), dtype=np.float32)
         centroid[0] = np.mean(pc[0])
         centroid[1] = np.mean(pc[1])
         centroid[2] = np.mean(pc[2])
         pc = pc - centroid
-        #m = np.max(np.sqrt(np.sum(pc**2, axis=1)))
-        #pc = pc / m
+        #scale to range -1 1 to be in sphere of radius 1
+        pc[0] = (2*((pc[0] - np.min(pc[0]))/(np.max(pc[0])-np.min(pc[0]))))-1
+        pc[1] = (2*((pc[1] - np.min(pc[1]))/(np.max(pc[1])-np.min(pc[1]))))-1
+        pc[2] = (2*((pc[2] - np.min(pc[2]))/(np.max(pc[2])-np.min(pc[2]))))-1
+        """
         return pc
     
     #reads a single point cloud
@@ -248,7 +268,7 @@ class shapeNetDataset(torch.utils.data.Dataset):
         return len(self._dataset)
     
     def __getitem__(self, index):
-        
+ 
         item = self._dataset[index]
         point_cloud, labels = self.readPointCloud(item["points"], item["labels"])
         
@@ -264,7 +284,8 @@ class shapeNetDataset(torch.utils.data.Dataset):
         
         target_pc = np.array(target_pc, dtype=np.float32)
         target_pc = target_pc.transpose(1, 0) 
-        #target_pc = self.normalizePointCloud(target_pc)
+        target_pc = self.normalizePointCloud(target_pc)
+
         return target_pc, item["class"], np.array(target_labels), item["seg_class"]      
         
         
