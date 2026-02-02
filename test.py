@@ -1,47 +1,92 @@
 import torch
 import torch.nn as nn
-from PointNet import ClassificationPointNet
 import numpy as np
 import random
-import torch_geometric.transforms as T
-from torch_geometric.datasets import ModelNet
-from torch_geometric.loader import DataLoader
 from training_utils import eval_single_epoch
+import os
+
+def load_dataset(config):
+    
+    if config["dataset"] == "ModelNet":    
+        import torch_geometric.transforms as T
+        from torch_geometric.datasets import ModelNet
+        from torch_geometric.loader import DataLoader
+
+        data_path = "data/ModelNet"
+
+        transform = T.Compose([T.SamplePoints(config["nPoints"]),      # mesh -> point cloud (pos: [N,3])
+                               T.NormalizeScale()])                    # center + scale to unit sphere
+        # "pre_transform" is processed only once and saved to processed/*.pt forever (until deleted)
+        # "transform" is processed every time __getitem__ is called, every time an object is called (i.e. it samples it)
+        dataset = ModelNet(root=data_path, name="10", train=False, pre_transform=transform)    
+        loader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)    
+
+        # # GET NAME CLASSES
+        folder_path = os.path.join(data_path, "raw")
+        name_classes = sorted( d for d in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, d)))
 
 
- # SEEDS i histories varies
-seed = 42
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(seed)
+    elif config["dataset"] == "ShapeNet":
+        from utils.shapenet_dataset_ebp import shapeNetDataset
+        from torch.utils.data import DataLoader   # <-- instead of torch_geometric.loader
 
-# FORCE CPU
-device = torch.device("cpu")
+        data_path = "data/ShapeNet/PartAnnotation"
+        dataset = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=2, class_name="")
+        loader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=False)    
+
+        id_to_class = {v: k for k, v in dataset._object_classes.items()}       # CREATES A DICTIONARY
+        name_classes = [id_to_class[i] for i in range(len(id_to_class))]       # CREATES A LIST        
+    
+    else:
+        raise TypeError(f"No idea what is dataset {config['dataset']}")
+    
+    return dataset, loader, name_classes
+
+
+def choose_architecture(config):
+    if config["architecture"] == "PointNet":    
+        from PointNet import ClassificationPointNet
+    elif config["architecture"] == "PointNetSmall": 
+        from PointNetSmall import ClassificationPointNet
+    else:
+        raise TypeError(f"No idea what is architecture {config['architecture']}")
+
+    network = ClassificationPointNet(num_classes=config["nClasses"])
+
+    return network
+   
 
 def main():
-    config = {"epochs": 10,
-                "lr": 0.001,
-                "batch_size": 32,
-                "nPoints": 1024} 
 
-    # TRANSFORMS
-    transform = T.Compose([
-        T.SamplePoints(config["nPoints"]),      # mesh -> point cloud (pos: [N,3])
-        T.NormalizeScale(),                     # center + scale to unit sphere
-    ])
+    # SEEDS i histories varies
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
 
-    # DATASET + DATALOADER
-    # "pre_transform" is processed only once and saved to processed/*.pt forever (until deleted)
-    # "transform" is processed every time __getitem__ is called, every time an object is called (i.e. it samples it)
-    test_dataset  = ModelNet(root="data/ModelNet", name="10", train=False, pre_transform=transform)
-    test_loader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=False) 
+    # FORCE CPU
+    device = torch.device("cpu")
 
-    # LOAD TRAINED NETWORK
-    model_path = "checkpoints/ClassificationPointnet_10epochs_1024.pt"
+    # LOAD TRAINED STATE
+    # model_path = "checkpoints/ClassificationPointNet_ModelNet_10epochs_1024.pt"
+    model_path = "checkpoints/ClassificationPointNet_ModelNet_10epochs_1024.pt"
+    
     checkpoint_state = torch.load(model_path, map_location=device)
-    network_trained = ClassificationPointNet(num_classes=10)
+    # FUTURE: config = checkpoint_state["config"]       
+    config = {"dataset": "ModelNet",
+              "nClasses": 10,
+              "nPoints": 1024,
+              "architecture": "PointNet",
+              "epochs": 10,
+              "lr": 0.001,
+              "batch_size": 32} 
+
+    # LOADING DATASET 
+    test_dataset, test_loader, _ = load_dataset(config)
+
+    # CHOOSE AND UPDATE ARCHITECTURE
+    network_trained = choose_architecture(config)
     network_trained.load_state_dict(checkpoint_state["model"])
     network_trained.eval()      # changes behaviour of some layers (e.g. dropout off), does not strop gradient
 

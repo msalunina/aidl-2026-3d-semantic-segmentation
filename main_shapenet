@@ -1,20 +1,13 @@
-# %%
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
-import torch_geometric.transforms as T
-from torch_geometric.datasets import ModelNet
 from torch.utils.data import DataLoader   # <-- instead of torch_geometric.loader
 # from torch_geometric.loader import DataLoader
-from torch_geometric.utils import to_dense_batch
-from torch.utils.data import random_split
 import random
-import os
-from PointNet import SegmentationPointNet, ClassificationPointNet
+from PointNetSmall import SegmentationPointNet, ClassificationPointNet
 from training_utils import train_model
 import time
 from utils.shapenet_dataset_ebp import shapeNetDataset
@@ -26,10 +19,13 @@ if __name__ == "__main__":
 
     save_path = "checkpoints/SegmentationPointnet_10epochs_1024.pt"
     data_path = "data/ShapeNet/PartAnnotation"
-    config = {"epochs": 10,
+    config = {"dataset": "ShapeNet",
+              "nClasses": 16,
+              "nPoints": 1024,
+              "arcuitecture": "PointNetSmall",
+              "epochs": 10,
               "lr": 0.001,
-              "batch_size": 32,
-              "nPoints": 1024}   
+              "batch_size": 32}   
     
     # Cuda agnostic thingy
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -39,8 +35,7 @@ if __name__ == "__main__":
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
 
     # Importing ShapeNet DATASET
     data_path = "data/ShapeNet/PartAnnotation"
@@ -99,18 +94,17 @@ if __name__ == "__main__":
     # info item from a batch
     batch = next(iter(train_loader))
 
-
     
     # # MODEL + OPTIMIZER + LOSS
     network = ClassificationPointNet(num_classes=16).to(device)
     optimizer = optim.Adam(network.parameters(), lr=config["lr"])
     criterion = nn.NLLLoss()
 
-    # # TRAINING LOOP
-    # time_start_traning = time.time()
-    # train_loss, train_acc, val_loss, val_acc = train_model(config, train_loader, val_loader, network, optimizer, criterion, save_path=save_path)
-    # time_training = time.time() - time_start_traning
-    # print(f"Training time: {time_training}")
+    # TRAINING LOOP
+    time_start_traning = time.time()
+    train_loss, train_acc, val_loss, val_acc = train_model(config, train_loader, val_loader, network, optimizer, criterion, save_path=save_path)
+    time_training = time.time() - time_start_traning
+    print(f"Training time: {time_training}")
 
     # # PLOT TRAINING AND ACCURACY CURVES
     # plt.figure(figsize=(10, 8))

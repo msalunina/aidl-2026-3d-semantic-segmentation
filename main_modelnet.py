@@ -8,11 +8,10 @@ import matplotlib.pyplot as plt
 import torch_geometric.transforms as T
 from torch_geometric.datasets import ModelNet
 from torch_geometric.loader import DataLoader
-from torch_geometric.utils import to_dense_batch
 from torch.utils.data import random_split
 import random
 import os
-from PointNet import ClassificationPointNet, BasePointNet, TransformationNet
+from PointNetSmall import ClassificationPointNet
 from training_utils import train_model
 import time
 
@@ -50,12 +49,15 @@ def info_dataset_batch(dataset, data_loader, name_classes):
 # RUN ONLY IF EXECUTED AS MAIN
 if __name__ == "__main__":
 
-    save_path = "checkpoints/ClassificationPointnet_10epochs_1024.pt"
-
-    config = {"epochs": 10,
+    save_path = "checkpoints/ClassificationPointnet_20epochs_1024.pt"
+    data_path = "data/ModelNet"
+    config = {"dataset": "ModelNet",
+              "nClasses": 10,
+              "nPoints": 1024,
+              "arcuitecture": "PointNet",
+              "epochs": 20,
               "lr": 0.001,
-              "batch_size": 32,
-              "nPoints": 1024}   
+              "batch_size": 32}   
     
     # Cuda agnostic thingy
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -65,27 +67,23 @@ if __name__ == "__main__":
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+    if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
 
     # Importing ModelNet
     # ModelNet dataset (original) stores objects as triangular meshes (.off files).
     # PointNet needs points, not meshes. "SamplePoints" (from torch_geometric) does that: 
     # samples N unifrom points from the object surface and gives you back a tensor
-    transform = T.Compose([
-        T.SamplePoints(config["nPoints"]),      # mesh -> point cloud (pos: [N,3])
-        T.NormalizeScale(),                     # center + scale to unit sphere
-    ])
-
+    transform = T.Compose([T.SamplePoints(config["nPoints"]),      # mesh -> point cloud (pos: [N,3])
+                           T.NormalizeScale()])                    # center + scale to unit sphere
     # DATASET + SPLIT
     # "pre_transform" is processed only once and saved to processed/*.pt forever (until deleted)
     # "transform" is processed every time __getitem__ is called, every time an object is called (i.e. it samples it)
-    full_train_dataset = ModelNet(root="data/ModelNet", name="10", train=True, pre_transform=transform)
-    test_dataset  = ModelNet(root="data/ModelNet", name="10", train=False, pre_transform=transform)
+    full_train_dataset = ModelNet(root=data_path, name="10", train=True, pre_transform=transform)
+    test_dataset  = ModelNet(root=data_path, name="10", train=False, pre_transform=transform)
     # Split train_dataset into train and validation
     train_size = int(0.8 * len(full_train_dataset))
     val_size   = len(full_train_dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(42)) # reproducibility)
+    train_dataset, val_dataset = random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(42)) # reproducibility)
 
     # DATALOADERS
     train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], shuffle=True) 

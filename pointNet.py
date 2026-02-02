@@ -1,9 +1,6 @@
-# %%
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
-import numpy as np
 
 # INCIS:
 # C = input featues (channels)
@@ -14,6 +11,13 @@ import numpy as np
 #   LAYER              INPUT SHAPE   WIGHT SHAPE           BIAS SHAPE    OUTPUT SHAPE
 # nn.Linear(C → F)	     [B, C]	       [F, C]	              [F]	       [B, F]
 # nn.Conv1d(C → F, k=1)	 [B, C, N]	   [F, C, 1] (≡ [F, C])	  [F]	       [B, F, N]
+
+# "PointNet.py" :
+#  Tnet1:             3 --> (64,128,1024) + (512,256,3x3) --> 3 
+#  Shared MLP:        3 --> (64,64)
+#  Tnet2:            64 --> (64,128,1024) + (512,256,64x64) --> 64 
+#  After Tnets:      64 --> (64,128,1024)
+#  Classification: 1024 --> (512,246,classes)
 
 
 class TransformationNet(nn.Module):
@@ -91,8 +95,6 @@ class BasePointNet(nn.Module):
         super().__init__()
         self.input_tnet = TransformationNet(input_dim=point_dimension, output_dim=point_dimension)
         self.feature_tnet = TransformationNet(input_dim=64, output_dim=64)
-        # self.input_tnet_function = self.input_tnet
-        # self.feature_tnet_function = self.feature_tnet
 
         # Shared MLP after input_transform (64,64)
         self.conv_1 = nn.Conv1d(point_dimension, 64, 1) # weight matrix: [64,3]    --> output: [64,nPoints] 

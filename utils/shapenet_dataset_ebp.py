@@ -110,6 +110,50 @@ class shapeNetDataset(torch.utils.data.Dataset):
         nei = ((distxy < self._xy_th) and (distz < self._z_th))
         return nei 
     
+    # #downsample the point cloud to have the target size
+    # def downsamplePointCloud(self, point_cloud:list, labels:list):
+    #     point_cloud_size = len(point_cloud)
+
+    #     #in case the downsample is called wrong, return the same point cloud
+    #     if(self._target_points > point_cloud_size):
+    #         print(f"Error, cannot downsample {point_cloud_size} to {self._target_points}")
+    #         return point_cloud, labels
+
+    #     points_to_remove = point_cloud_size - self._target_points
+    #     removed_pos = random.sample(range(0,point_cloud_size), points_to_remove)
+        
+    #     """
+    #     while len(removed_pos) < points_to_remove:
+    #         #get a random point    
+    #         index = random.randrange(len(point_cloud))    
+    #         #continue if the value has been selected
+    #         if(index in removed_pos):
+    #             continue
+    #         #start the searching loop
+    #         removed = False
+    #         nei = 0
+    #         for i in range(len(point_cloud)):
+    #             #avoid the same point
+    #             if i == index:
+    #                 continue
+                
+    #             if(self.nearPoint(point_cloud[index], point_cloud[i], labels[index], labels[i]) and i not in removed_pos):
+    #                 nei+=1
+    #             #remove the point that has 2 close neighbors
+    #             if(nei >=2):
+    #                 removed_pos.append(index)
+    #                 removed = True
+    #                 break
+                
+    #         #if the loop has ended, no neighbors have been detected, the point may be a noise, lone point, remove it
+    #         if(not removed):
+    #             removed_pos.append(index)
+    #     """
+    #     #remove the positions
+    #     downsampled_pc = [v for i, v in enumerate(point_cloud) if i not in removed_pos]
+    #     downsampled_labels = [v for i,v in enumerate(labels) if i not in removed_pos]
+    #     return downsampled_pc, downsampled_labels
+
     #downsample the point cloud to have the target size
     def downsamplePointCloud(self, point_cloud:list, labels:list):
         point_cloud_size = len(point_cloud)
@@ -119,40 +163,14 @@ class shapeNetDataset(torch.utils.data.Dataset):
             print(f"Error, cannot downsample {point_cloud_size} to {self._target_points}")
             return point_cloud, labels
 
-        points_to_remove = point_cloud_size - self._target_points
-        removed_pos = random.sample(range(0,point_cloud_size), points_to_remove)
-        
-        """
-        while len(removed_pos) < points_to_remove:
-            #get a random point    
-            index = random.randrange(len(point_cloud))    
-            #continue if the value has been selected
-            if(index in removed_pos):
-                continue
-            #start the searching loop
-            removed = False
-            nei = 0
-            for i in range(len(point_cloud)):
-                #avoid the same point
-                if i == index:
-                    continue
-                
-                if(self.nearPoint(point_cloud[index], point_cloud[i], labels[index], labels[i]) and i not in removed_pos):
-                    nei+=1
-                #remove the point that has 2 close neighbors
-                if(nei >=2):
-                    removed_pos.append(index)
-                    removed = True
-                    break
-                
-            #if the loop has ended, no neighbors have been detected, the point may be a noise, lone point, remove it
-            if(not removed):
-                removed_pos.append(index)
-        """
-        #remove the positions
-        downsampled_pc = [v for i, v in enumerate(point_cloud) if i not in removed_pos]
-        downsampled_labels = [v for i,v in enumerate(labels) if i not in removed_pos]
+        # Use simple random sampling for efficiency (much faster than the neighbor-based approach)
+        indices = np.random.choice(point_cloud_size, self._target_points, replace=False)
+        downsampled_pc = [point_cloud[i] for i in indices]
+        downsampled_labels = [labels[i] for i in indices]
         return downsampled_pc, downsampled_labels
+
+
+
     
     #interpolate the point cloud to have the target size
     def interpolatePointCloud(self, point_cloud:list, labels:list):

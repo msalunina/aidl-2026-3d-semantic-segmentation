@@ -1,10 +1,11 @@
 import torch
-from torch_geometric.utils import to_dense_batch
 import numpy as np
+from torch_geometric.utils import to_dense_batch
 
 
 # Cuda agnostic thingy
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
 
 # ----------------------------------------------------
 #    UNPACK BATCH TO REUSE FUNCTIONS
@@ -20,7 +21,6 @@ def unpack_batch(batch):
     """
     # ---------- PyG / ModelNet ----------
     if hasattr(batch, "pos") and hasattr(batch, "y"):
-        labels = batch.y                                                 
         # Pointnet needs: [object, nPoints, coordinades] 
         # i.e. [32 object, 1024 points, 3 coordinates]: [batch_size, nPoints, 3]
         # Since batch.batch is [32x1024, 3] we have to split it into individual object points.
@@ -28,24 +28,29 @@ def unpack_batch(batch):
         # "to_dense_batch" will also add padding if not all objects have same number of points. In our case they have.
         # mask is a [batch_size, nPoints] boolean saying if an entry is actually a real point or padding
         BatchPointsCoords, _ = to_dense_batch(batch.pos, batch.batch)  
-        
+        labels = batch.y                                                 
+    
         return BatchPointsCoords, labels
 
     # ---------- ShapeNet ----------
     elif isinstance(batch, (tuple, list)):
         points, object_class, _, _ = batch
-        
-        # in case points/object_class are numpy or python ints
-        points = torch.as_tensor(points, dtype=torch.float32)          # [B, 3, N] typically
-        labels = torch.as_tensor(object_class, dtype=torch.long)       # [B]
 
-        BatchPointsCoords = points.transpose(1,2)
-        label = object_class
+        # Even though DataLoader will turn into torch tensors, 
+        # I do this to guarantee I can use this function if I bypass DataLoader and use dataset directly
+        points = torch.as_tensor(points, dtype=torch.float32)            
+        labels = torch.as_tensor(object_class, dtype=torch.long)
+        
+        BatchPointsCoords = points.transpose(-2,-1)
 
         return BatchPointsCoords, labels
 
     else:
         raise TypeError(f"Unsupported batch type: {type(batch)}")
+
+
+
+
 
 
 
@@ -64,8 +69,8 @@ def train_single_epoch(train_loader, network, optimizer, criterion):
         
         # Pointnet needs: [object, nPoints, coordinades] 
         points_BNC, labels = unpack_batch(batch)
-        points_BNC.to(device)
-        labels.to(device) 
+        points_BNC = points_BNC.to(device)
+        labels = labels.to(device) 
 
         optimizer.zero_grad()                  # Set network gradients to 0
         log_probs, _, _, feature_tnet_tensor, input_tnet_tensor = network(points_BNC)    # Forward batch through the network  
@@ -86,10 +91,10 @@ def train_single_epoch(train_loader, network, optimizer, criterion):
         nCorrect = nCorrect + batch_correct
         nTotal = nTotal + len(labels)
 
-        if batch_id == 0:
-            with torch.no_grad():
-                svals = torch.linalg.svdvals(input_tnet_tensor)  # [B, 3]
-                print("Input T-Net singular values (batch average) :", svals.mean(dim=0))
+        # if batch_id == 0:
+        #     with torch.no_grad():
+        #         svals = torch.linalg.svdvals(input_tnet_tensor)  # [B, 3]
+        #         print("Input T-Net singular values (batch average) :", svals.mean(dim=0))
 
     # Average across all batches    
     train_loss_epoch = np.mean(loss_history) 
@@ -115,8 +120,8 @@ def eval_single_epoch(data_loader, network, criterion):
         for batch in data_loader:
             # Pointnet needs: [object, nPoints, coordinades] 
             points_BNC, labels = unpack_batch(batch) 
-            points_BNC.to(device)
-            labels.to(device) 
+            points_BNC = points_BNC.to(device)
+            labels = labels.to(device) 
             log_probs, _, _, _, _ = network(points_BNC)  # Forward batch through the network
             loss = criterion(log_probs, labels)                  # Compute loss
             # Compute metrics
@@ -158,8 +163,7 @@ def train_model(config, train_loader, val_loader, network, optimizer, criterion,
     
     if save_path:
         torch.save({"model": network.state_dict(),
-                    "epochs": config["epochs"], 
-                    "nPoints": config["nPoints"]},
-                    save_path)
+                    "config": config, 
+                   }, save_path)
 
     return train_loss, train_acc, val_loss, val_acc

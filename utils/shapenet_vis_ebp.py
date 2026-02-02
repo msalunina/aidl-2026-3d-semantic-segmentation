@@ -5,7 +5,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import json
 import os
 from pathlib import Path
-from shapenet_dataset import shapeNetDataset
+from shapenet_dataset_ebp import shapeNetDataset
 from torch.utils.data import DataLoader
 
 
@@ -293,7 +293,7 @@ def testDataLoader(config):
 
 if __name__ == "__main__": 
     config = {
-        "dataset_path": "/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation/" ,
+        "dataset_path": "data/ShapeNet/PartAnnotation" ,
         "point_cloud_size": 1024,
         "epochs": 1,
         "lr": 1e-3,
