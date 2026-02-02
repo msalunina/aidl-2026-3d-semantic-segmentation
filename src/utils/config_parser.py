@@ -1,3 +1,7 @@
+"""
+Configuration Parser Module
+"""
+
 import yaml
 
 
