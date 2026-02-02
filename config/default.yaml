@@ -1,0 +1,22 @@
+paths:
+  data: ./data/dales_las
+  logs: ./logs
+  figures: ./figs
+  models: ./model_objects
+
+model: 
+  model_name: pointnet
+  num_classes: 5
+  num_channels: 3
+
+training:
+  num_points: 1024
+  batch_size: 32
+  num_epochs: 1
+  learning_rate: 0.001
+  dropout_rate: 0.3
+  optimizer: adam
+
+train_test_split:
+  train_ratio: 0.8
+  test_ratio: 0.2

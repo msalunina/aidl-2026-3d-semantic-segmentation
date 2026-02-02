@@ -1,16 +1,19 @@
+import argparse
+from utils.config_parser import ConfigParser
+
 if __name__ == '__main__':
-    pass
 
     # TODO: initiate logging
 
-    # TODO: define parameters (both options to read from the command line and default values)
-    # we could put a config.yaml file to store default values
-    # e.g.:
-    # parser = argparse.ArgumentParser(description='Train PointNet for 3D Semantic Segmentation')
-    
-    # # Data parameters
-    # parser.add_argument('--data_dir', type=str, default='data',
-    #                     help='Path to data directory')
+    config_parser = ConfigParser(
+        default_config_path="config/default.yaml",
+        parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
+    )
+    config = config_parser.load()
+    config_parser.display()
+
+    # print(config.batch_size)
+
 
     # TODO: set device
 

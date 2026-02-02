@@ -6,6 +6,7 @@
 *.pts
 *.zip
 *.arff
+*.las
 
 # ignore all png except for those in the 'figs' directory
 *.png

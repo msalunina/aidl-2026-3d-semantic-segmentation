@@ -43,3 +43,42 @@ conda create -n aidl-2026-project python=3.10 -y
 conda activate aidl-2026-project
 pip install -r requirements.txt
 ```
+
+## Configuration
+
+The project supports two ways to configure settings:
+
+### Option 1: Modify default configuration file
+Edit the `config/default.yaml` file to change the default values, or create your own configuration file based on this template and update the config path in `main.py`.
+
+### Option 2: Pass arguments via command line
+Override any default setting by passing command-line arguments:
+
+```bash
+python src/main.py --num_epochs 100 --batch_size 16 --learning_rate 0.0005 --dropout_rate 0.5 --num_points 2048
+```
+
+**Available command-line arguments:**
+
+**Paths:**
+- `--data_path`: Path to data directory
+- `--logs_path`: Path to logs directory
+- `--figures_path`: Path to figures directory
+- `--models_path`: Path to saved models directory
+
+**Model:**
+- `--model_name`: Model architecture (choices: pointnet)
+- `--num_classes`: Number of output classes
+- `--num_channels`: Number of input channels
+
+**Training:**
+- `--num_points`: Number of points per sample
+- `--batch_size`: Batch size for training
+- `--num_epochs`: Number of training epochs
+- `--learning_rate`: Learning rate for optimizer
+- `--dropout_rate`: Dropout rate for model
+- `--optimizer`: Optimizer to use (choices: adam)
+
+**Train/Test Split:**
+- `--train_ratio`: Training set ratio
+- `--test_ratio`: Test set ratio
