@@ -12,6 +12,9 @@ import torch.nn.functional as F
 # nn.Linear(C → F)	     [B, C]	       [F, C]	              [F]	       [B, F]
 # nn.Conv1d(C → F, k=1)	 [B, C, N]	   [F, C, 1] (≡ [F, C])	  [F]	       [B, F, N]
 
+# [B, C, N] means: “for each feature, how much each point exhibits it.”
+# [B, N, C] means: “for each point, what features it has.”
+
 # "PointNet.py" :
 #  Tnet1:             3 --> (64,128,1024) + (512,256,3x3) --> 3 
 #  Shared MLP:        3 --> (64,64)
@@ -197,6 +200,24 @@ class SegmentationPointNet(nn.Module):
 
 
     def forward(self, x):
+        """
+        Forward pass for point-wise segmentation.
+
+        Parameters
+        ----------        
+        x: [B, N, C_in]  
+        Input point cloud of shape [B, N, C_in].
+        
+        Returns
+        -------        
+        log_probs: [B, C_out, N]  
+        Per-point log-probabilities with shape [B, C_out, N].
+
+        Note: The output uses a channels-first layout [B, C_out, N] to be compatible
+        with nn.NLLLoss / nn.CrossEntropyLoss, which assume dimension 1 is the
+        class (channel) dimension and all remaining dimensions are spatial.
+        """
+
         global_features, ix_maxpool, point_features, feature_tnet, input_tnet = self.base_pointnet(x)
         # [B,1024] global features vector
         # [B,N,64] point features vector
