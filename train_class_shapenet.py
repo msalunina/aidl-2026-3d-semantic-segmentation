@@ -18,8 +18,12 @@ def train_single_epoch(model, loader, optimizer, config, writer):
     data_size = len(loader)
     batch_size = config["batch_size"]
 
+    #start = time.perf_counter()
     for i, (pointcloud, pc_class, label, seg_class) in enumerate(loader):
-       # start = time.time()
+     
+        #end = time.perf_counter()
+        #print(f"getting data elapsed time {end-start:6f} seconds")
+
         optimizer.zero_grad()
        
         pointcloud, pc_class = pointcloud.to(device), pc_class.to(device)
@@ -46,6 +50,8 @@ def train_single_epoch(model, loader, optimizer, config, writer):
         if(i % config["log_interval"] == 0):
             print(f"train step loss {loss:.5f} acc {accuracy:.5f} total {((i/data_size)*100.0):.2f}%")
         
+        #start = time.perf_counter()
+
     return np.mean(losses), np.mean(accs)
     
     
@@ -78,7 +84,7 @@ def eval_single_epoch(model, loader, config, writer):
 def train_shapenet_dataset(config):
     
     batch_size = config["batch_size"]
-    writer = SummaryWriter(log_dir="./runs/pointnet_class_30ep")
+    writer = SummaryWriter(log_dir="./runs/pointnet_class_norm_25ep")
 
     model = ClassificationPointNet(num_classes=config["classes"],
                                    point_dimension=3)
@@ -158,10 +164,10 @@ def train_shapenet_dataset(config):
 if __name__ == "__main__":
 
     config = {
-        "dataset_path": "/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation",
-        #"dataset_path": "F:/AIDL_FP/Datasets/PartAnnotation",
+        #"dataset_path": "/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation",
+        "dataset_path": "F:/AIDL_FP/Datasets/PartAnnotation",
         "point_cloud_size": 1024,
-        "epochs": 30,
+        "epochs": 25,
         "lr": 1e-3,
         "log_interval": 40,
         "batch_size": 2,
