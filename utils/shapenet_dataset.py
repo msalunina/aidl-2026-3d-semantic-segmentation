@@ -263,7 +263,7 @@ class shapeNetDataset(torch.utils.data.Dataset):
             target_pc, target_labels = self.interpolatePointCloud(point_cloud, labels)        
         
         target_pc = np.array(target_pc, dtype=np.float32)
-        target_pc = target_pc.transpose(1, 0) 
+        #target_pc = target_pc.transpose(1, 0) 
         #target_pc = self.normalizePointCloud(target_pc)
         return target_pc, item["class"], np.array(target_labels), item["seg_class"]      
         

@@ -25,6 +25,13 @@
             "request": "launch",
             "program": "train_class_shapenet.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Train pointnet segmentation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "train_seg_shapenet.py",
+            "console": "integratedTerminal"
         }
     ]
 }

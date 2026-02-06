@@ -181,6 +181,32 @@ def readPointCloud(file_name:str, seg_file:str):
             
     return point_cloud, seg_class
 
+
+def showSinglePointCloud(path:str, labels:str):     
+        
+        point_cloud, seg_labels = readPointCloud(path, labels)
+        
+        print(f"Pointcloud {path} with points {len(point_cloud)}")
+        
+        x = [p[0] for p in point_cloud]
+        y = [p[1] for p in point_cloud]
+        z = [p[2] for p in point_cloud]
+        color = [class_color[i] for i in seg_labels]
+    
+        #show a point cloud
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+        ax.scatter(x, y, z, c=color)
+        ax.set_title("original pointcloud")
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+        
+        plt.tight_layout()
+        plt.show()
+        
+    
+
 def showPointCloud(path:str):
     
     #create color array
@@ -291,6 +317,43 @@ def testDataLoader(config):
        
         showBatchPointcloud(pointcloud, label, pc_class, seg_class)
 
+def countSegmentationLabels(config):
+    metadata_file = os.path.join(config["dataset_path"],"metadata.json")
+    object_classes = {}
+    metadata = {}
+    with open(metadata_file, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+            object_classes = { name: i for i, name in enumerate(metadata)}
+            
+    
+    for class_name in object_classes:
+        
+        #get all the files for each class
+        class_path = metadata[class_name]["directory"]
+
+        #label files
+        label_dir = Path(os.path.join(config["dataset_path"],class_path,"expert_verified","points_label"))
+        label_files = list(label_dir.glob('*.seg'))
+        elabels = len(metadata[class_name]["lables"])
+
+        for file in label_files:
+            maxv = -1
+            minv = 50
+            with open(file, "r", encoding="utf-8") as f:
+                labels = [int(linea.strip()) for linea in f]
+                if(max(labels) > elabels):
+                    print(f"file with mismatching labels {file} in class {class_name}")
+                    pointcloud_f = os.path.join(config["dataset_path"], class_path, "points", file.name.split(".")[0]+".pts")
+                    labels_f = os.path.join(config["dataset_path"],class_path,"expert_verified","points_label", file)
+                    showSinglePointCloud(pointcloud_f, labels_f)
+                
+                if(min(labels) < minv):
+                    minv = min(labels)
+                if(max(labels)>maxv):
+                    maxv = max(labels)
+                    
+        print(f"class {class_name} expected {elabels} labels, got {minv},{maxv} ={maxv} labels")    
+                
 if __name__ == "__main__": 
     config = {
         "dataset_path": "/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation/" ,
@@ -302,4 +365,5 @@ if __name__ == "__main__":
     }
 
     #showPointCloud("/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation/")
-    testDataLoader(config)
+    #testDataLoader(config)
+    countSegmentationLabels(config)

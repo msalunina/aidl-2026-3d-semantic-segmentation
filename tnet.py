@@ -16,7 +16,7 @@ class TransformationNet(nn.Module):
         #column wise convolution [ k1 k2 k3] size 1, for each point in columns, outputs {64} features for each point
         self.conv_1 = nn.Conv1d(input_dim, 64, 1)
         self.conv_2 = nn.Conv1d(64, 128, 1)
-        self.conv_3 = nn.Conv1d(128, 256, 1)
+        self.conv_3 = nn.Conv1d(128, 256, 1) # output to be number of points
 
         self.bn_1 = nn.BatchNorm1d(64)
         self.bn_2 = nn.BatchNorm1d(128)
@@ -33,12 +33,15 @@ class TransformationNet(nn.Module):
         num_points = x.shape[1]
         #changes the input tensor from [B n 3] to [B 3 n]
         x = x.transpose(2, 1) 
-        x = F.relu(self.bn_1(self.conv_1(x)))
+        x = self.conv_1(x)
+        x = self.bn_1(x)
+        x = F.relu(x)
+        #x = F.relu(self.bn_1(self.conv_1(x)))
         x = F.relu(self.bn_2(self.conv_2(x)))
         x = F.relu(self.bn_3(self.conv_3(x)))
 
         x = nn.MaxPool1d(num_points)(x)
-        x = x.view(-1, 256)
+        x = x.view(-1, 256) # con batch 1 
 
         x = F.relu(self.bn_4(self.fc_1(x)))
         x = F.relu(self.bn_5(self.fc_2(x)))
