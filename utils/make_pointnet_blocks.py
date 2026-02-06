@@ -1,6 +1,6 @@
 # ----------------------------------------------------------------
 # Reads .las from our DALES folder
-# Remaps 0–8 labels to your 5 classes
+# Remaps 0–8 labels to our 5 classes
 # Tiles into 50m×50m windows with 25m stride
 # Samples 4096 points
 # Normalizes per block
