@@ -2,7 +2,7 @@ import glob
 import numpy as np
 from collections import Counter
 
-# Path to your PointNet-ready blocks
+# Path to our PointNet-ready blocks
 BLOCK_DIR = r"E:\Dales\pointnet_blocks\train"
 
 # Classes:
