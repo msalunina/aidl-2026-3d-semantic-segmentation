@@ -12,23 +12,18 @@ Simplified 5-class scheme:
 4 -> Utility (power lines + poles + fences)
 """
 
+import argparse
 import numpy as np
+from config_parser import ConfigParser
 
-# DALES LAS labels (as in your files): 0..8
-# 0 = unknown (ignore)
-DALES_TO_SIMPLIFIED = {
-    1: 0,  # ground
-    2: 1,  # vegetation
-    8: 2,  # buildings
-    3: 3,  # cars
-    4: 3,  # trucks
-    5: 4,  # power lines
-    6: 4,  # poles
-    7: 4,  # fences
-}
 
-# Label used to ignore points during training / loss computation
-IGNORE_LABEL = -1
+config_parser = ConfigParser(
+    default_config_path="config/default.yaml",
+    parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
+)
+config = config_parser.load()
+DALES_TO_SIMPLIFIED = config.class_mapping
+IGNORE_LABEL = config.ignore_label
 
 
 def remap_labels(las_labels: np.ndarray) -> np.ndarray:

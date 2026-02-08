@@ -1,26 +1,19 @@
 import glob
+import argparse
 import numpy as np
 from collections import Counter
-
-import argparse
 from utils.config_parser import ConfigParser
 from pathlib import Path
 
-# Path to our PointNet-ready blocks
+
 config_parser = ConfigParser(
     default_config_path="config/default.yaml",
     parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
 )
 config = config_parser.load()
 BLOCK_DIR = Path(config.model_data_path) / "train"
+IGNORE_LABEL = config.ignore_label
 
-# Classes:
-# 0 = Ground
-# 1 = Vegetation
-# 2 = Building
-# 3 = Vehicle
-# 4 = Utility
-IGNORE_LABEL = -1
 
 def main():
     files = glob.glob(f"{BLOCK_DIR}\\*.npz")

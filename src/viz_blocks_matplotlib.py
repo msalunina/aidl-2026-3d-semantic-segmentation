@@ -1,33 +1,23 @@
 import os
 import glob
 import random
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-
-import argparse
 from utils.config_parser import ConfigParser
 from pathlib import Path
 
-# PointNet blocks output folder
+
 config_parser = ConfigParser(
     default_config_path="config/default.yaml",
     parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
 )
 config = config_parser.load()
 BLOCK_DIR = Path(config.model_data_path) / "train"
-N_BLOCKS_TO_VIEW = 3
-MAX_POINTS_TO_SHOW = 4096  # blocks are already 4096, but keep for safety
+N_BLOCKS_TO_VIEW = config.viz_2d['n_blocks_to_view']
+MAX_POINTS_TO_SHOW = config.viz_2d['max_points_to_view']
+COLOR_MAP = config.viz_2d['color_mapping']
 
-# Your 5-class mapping:
-# 0 Ground, 1 Vegetation, 2 Building, 3 Vehicle, 4 Utility, -1 Ignore
-COLOR_MAP = {
-    -1: "gray",
-     0: "blue",
-     1: "green",
-     2: "red",
-     3: "gold",
-     4: "orange",
-}
 
 def main():
     files = glob.glob(os.path.join(BLOCK_DIR, "*.npz"))

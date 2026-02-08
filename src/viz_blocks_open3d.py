@@ -1,32 +1,23 @@
 import glob
 import random
+import argparse
 import numpy as np
 import open3d as o3d
-
-import argparse
+import os
 from utils.config_parser import ConfigParser
 from pathlib import Path
 
-# PointNet blocks output folder
+
 config_parser = ConfigParser(
     default_config_path="config/default.yaml",
     parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
 )
 config = config_parser.load()
 BLOCK_DIR = Path(config.model_data_path) / "train"
-N_BLOCKS_TO_VIEW = 5
-MAX_POINTS_TO_SHOW = 20000  # render faster; blocks are 4096 anyway, so fine
+N_BLOCKS_TO_VIEW = config.viz_3d['n_blocks_to_view']
+MAX_POINTS_TO_SHOW = config.viz_3d['max_points_to_view']
+COLOR_MAP = config.viz_3d['color_mapping']
 
-# Your 5-class mapping:
-# 0 Ground, 1 Vegetation, 2 Building, 3 Vehicle, 4 Utility, -1 Ignore
-COLOR_MAP = {
-    -1: (0.3, 0.3, 0.3),  # gray (ignored/unknown)
-     0: (0.0, 0.0, 1.0),  # blue ground
-     1: (0.0, 0.6, 0.0),  # green vegetation
-     2: (1.0, 0.0, 0.0),  # red building
-     3: (1.0, 0.85, 0.0), # yellow vehicle
-     4: (1.0, 0.5, 0.0),  # orange utility
-}
 
 def load_npz(path):
     d = np.load(path)
@@ -49,7 +40,7 @@ def make_pcd(pts, lbl):
     return pcd
 
 def main():
-    files = glob.glob(BLOCK_DIR + r"\*.npz")
+    files = glob.glob(os.path.join(BLOCK_DIR, "*.npz"))
     if not files:
         raise RuntimeError(f"No .npz files found in: {BLOCK_DIR}")
 

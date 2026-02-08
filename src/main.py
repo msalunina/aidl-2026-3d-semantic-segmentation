@@ -1,6 +1,7 @@
 import argparse
 from utils.config_parser import ConfigParser
 
+
 if __name__ == '__main__':
 
     # TODO: initiate logging
@@ -11,8 +12,6 @@ if __name__ == '__main__':
     )
     config = config_parser.load()
     config_parser.display()
-
-    # print(config.batch_size)
 
 
     # TODO: set device

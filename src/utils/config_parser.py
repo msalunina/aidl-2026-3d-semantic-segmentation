@@ -3,6 +3,7 @@ Configuration Parser Module
 """
 
 import yaml
+from argparse import Namespace
 
 
 class ConfigParser():
@@ -13,100 +14,30 @@ class ConfigParser():
         self.parser = parser
 
     def load(self):
+        # Load default config from YAML
         with open(self.config_path, 'r') as file:
             default_config = yaml.safe_load(file)
 
-        # ---- PATHS ---- 
-        self.parser.add_argument(
-            '--raw_data_path', 
-            type=str, 
-            default=default_config['paths']['raw_data'], 
-            help='Path to raw data directory'
-        )
-        self.parser.add_argument(
-            '--model_data_path', 
-            type=str, 
-            default=default_config['paths']['model_data'], 
-            help='Path to model data directory'
-        )
-        self.parser.add_argument(
-            '--logs_path', 
-            type=str, 
-            default=default_config['paths']['logs'], 
-            help='Path to logs directory'
-        )
-        self.parser.add_argument(
-            '--figures_path', 
-            type=str, 
-            default=default_config['paths']['figures'], 
-            help='Path to figures directory'
-        )
-        self.parser.add_argument(
-            '--models_path', 
-            type=str, 
-            default=default_config['paths']['models'], 
-            help='Path to saved models directory'
-        )
-
-        # ---- DATA PREPROCESSING ---- 
-        self.parser.add_argument(
-            '--block_size', 
-            type=float, 
-            default=default_config['data_preprocessing']['block_size'], 
-            help='Block size in meters'
-        )
-        self.parser.add_argument(
-            '--stride', 
-            type=float, 
-            default=default_config['data_preprocessing']['stride'], 
-            help='Stride in meters'
-        )
-        self.parser.add_argument(
-            '--preprocess_num_points', 
-            type=int, 
-            default=default_config['data_preprocessing']['num_points'], 
-            help='Number of points per block'
-        )
-        self.parser.add_argument(
-            '--min_points_in_block', 
-            type=int, 
-            default=default_config['data_preprocessing']['min_points_in_block'], 
-            help='Minimum number of points in a block'
-        )
-        self.parser.add_argument(
-            '--max_blocks_per_tile', 
-            type=lambda x: None if x.lower() == 'none' else int(x), 
-            default=default_config['data_preprocessing'].get('max_blocks_per_tile'), 
-            help='Maximum number of blocks per tile (use "none" for unlimited)'
-        )
-
-        # ---- MODEL ---- 
+        # ---- COMMAND LINE OVERRIDABLE PARAMETERS ----
+        # All training parameters can be overridden from command line
         self.parser.add_argument(
             '--model_name', 
             type=str, 
-            default=default_config['model']['model_name'], 
+            default=default_config['training']['model_name'], 
             help='Model name to use (options: pointnet, TBD)',
             choices=['pointnet']  # TODO: add more options
         )
         self.parser.add_argument(
-            '--num_classes', 
-            type=int, 
-            default=default_config['model']['num_classes'], 
-            help='Number of output classes'  # TODO: define classes
-        )
-        self.parser.add_argument(
             '--num_channels', 
             type=int, 
-            default=default_config['model']['num_channels'], 
-            help='Number of input channels'  # TODO: define channels
+            default=default_config['training']['num_channels'], 
+            help='Number of input channels (e.g., 3 for XYZ)'
         )
-
-        # ---- TRAINING ---- 
         self.parser.add_argument(
-            '--train_num_points', 
+            '--num_points', 
             type=int, 
             default=default_config['training']['num_points'], 
-            help='Number of points per sample'
+            help='Number of points per sample during training'
         )
         self.parser.add_argument(
             '--batch_size', 
@@ -137,25 +68,79 @@ class ConfigParser():
             type=str, 
             default=default_config['training']['optimizer'], 
             help='Optimizer to use for training',
-            choices=['adam']  # TODO: add more options
+            choices=['adam']  # TODO: add more options as needed
         )
 
-        # ---- TRAIN TEST SPLIT ---- 
-        # self.parser.add_argument(
-        #     '--train_ratio', 
-        #     type=float, 
-        #     default=default_config['train_test_split']['train_ratio'], 
-        #     help='Training set ratio'
-        # )
-        # self.parser.add_argument(
-        #     '--test_ratio', 
-        #     type=float, 
-        #     default=default_config['train_test_split']['test_ratio'], 
-        #     help='Test set ratio'
-        # )
+        # Parse command line arguments
+        cmd_args = self.parser.parse_args()
 
-        self.config = self.parser.parse_args()
+        # ---- CREATE FULL CONFIG ----
+        # Start with default config and merge CLI arguments
+        config_dict = self._flatten_config(default_config)
+        
+        # Infer num_classes from class_mapping if not explicitly set
+        if 'num_classes' not in config_dict and 'class_mapping' in config_dict:
+            config_dict['num_classes'] = len(set(config_dict['class_mapping'].values()))
+        
+        # Convert RGB lists to tuples in 3D visualization color mapping
+        if 'viz_3d' in config_dict and 'color_mapping' in config_dict['viz_3d']:
+            config_dict['viz_3d']['color_mapping'] = {
+                k: tuple(v) if isinstance(v, list) else v 
+                for k, v in config_dict['viz_3d']['color_mapping'].items()
+            }
+        
+        # Override with command line arguments (all training parameters)
+        config_dict['model_name'] = cmd_args.model_name
+        config_dict['num_channels'] = cmd_args.num_channels
+        config_dict['train_num_points'] = cmd_args.num_points
+        config_dict['batch_size'] = cmd_args.batch_size
+        config_dict['num_epochs'] = cmd_args.num_epochs
+        config_dict['learning_rate'] = cmd_args.learning_rate
+        config_dict['dropout_rate'] = cmd_args.dropout_rate
+        config_dict['optimizer'] = cmd_args.optimizer
+
+        # Convert to Namespace for backward compatibility
+        self.config = Namespace(**config_dict)
         return self.config
+
+    def _flatten_config(self, config_dict, parent_key='', sep='_'):
+        """
+        Flatten nested config dictionary into a single-level dict.
+        Example: {'paths': {'raw_data': './data'}} -> {'raw_data_path': './data'}
+        Special handling for visualization settings to keep sub-dictionaries intact.
+        """
+        items = []
+        for key, value in config_dict.items():
+            new_key = f"{parent_key}{sep}{key}" if parent_key else key
+            
+            # Keep certain nested structures intact
+            preserve_nested = key in ['class_mapping', 'color_mapping', '2d', '3d']
+            preserve_parent = parent_key == 'visualization'
+            
+            if isinstance(value, dict) and not preserve_nested and not preserve_parent:
+                # Recursively flatten most dicts
+                items.extend(self._flatten_config(value, new_key, sep=sep).items())
+            else:
+                # Rename for consistency with old naming
+                if parent_key == 'paths':
+                    new_key = f"{key}_path"
+                elif parent_key == 'data_preprocessing':
+                    if key == 'num_points':
+                        new_key = 'preprocess_num_points'
+                    else:
+                        new_key = key
+                elif parent_key == 'training':
+                    if key == 'num_points':
+                        new_key = 'train_num_points'
+                    else:
+                        new_key = key
+                elif parent_key == 'visualization':
+                    # Keep visualization settings as viz_2d and viz_3d
+                    new_key = f"viz_{key}"
+                    
+                items.append((new_key, value))
+        
+        return dict(items)
 
     def display(self):
 

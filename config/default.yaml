@@ -14,18 +14,51 @@ data_preprocessing:
   # Optional: cap blocks per tile for quick experiments (None = keep all)
   max_blocks_per_tile: None
 
-model: 
-  model_name: pointnet
-  num_classes: 5
-  num_channels: 3
+  # 0 = unknown (ignore)
+  class_mapping:
+    1: 0 # ground
+    2: 1 # vegetation
+    8: 2 # buildings
+    3: 3 # cars
+    4: 3 # trucks
+    5: 4 # power lines
+    6: 4 # poles
+    7: 4 # fences
+
+  # Label used to ignore points during training / loss computation
+  ignore_label: -1
 
 training:
-  num_points: 1024 # TODO: do we keep two?
+  model_name: pointnet
+  num_channels: 3
+  num_points: 1024
   batch_size: 32
   num_epochs: 1
   learning_rate: 0.001
   dropout_rate: 0.3
   optimizer: adam
+
+visualization:
+  2d:
+    n_blocks_to_view: 3
+    max_points_to_view: 4096
+    color_mapping:
+      -1: "gray"
+      0: "blue"
+      1: "green"
+      2: "red"
+      3: "gold"
+      4: "orange"
+  3d:
+    n_blocks_to_view: 5
+    max_points_to_view: 20000
+    color_mapping:
+      -1: [0.3, 0.3, 0.3] # gray (ignored/unknown)
+      0: [0.0, 0.0, 1.0]  # blue ground
+      1: [0.0, 0.6, 0.0]  # green vegetation
+      2: [1.0, 0.0, 0.0]  # red building
+      3: [1.0, 0.85, 0.0] # yellow vehicle
+      4: [1.0, 0.5, 0.0]  # orange utility
 
 # train_test_split:
 #   train_ratio: 0.8

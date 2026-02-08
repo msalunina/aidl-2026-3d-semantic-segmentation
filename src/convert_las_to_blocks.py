@@ -9,34 +9,29 @@
 
 import os
 import glob
-import numpy as np
-import laspy
-from tqdm import tqdm
-
 import argparse
+import laspy
+import numpy as np
+from tqdm import tqdm
 from utils.config_parser import ConfigParser
 from utils.dales_label_map import DALES_TO_SIMPLIFIED, IGNORE_LABEL
 from pathlib import Path
 
-# ---- Config ----
+np.random.seed(0)
+
+
 config_parser = ConfigParser(
     default_config_path="config/default.yaml",
     parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
 )
 config = config_parser.load()
-
 IN_ROOT = Path(config.raw_data_path)
 OUT_ROOT = Path(config.model_data_path)
-
 BLOCK_SIZE = config.block_size                    # meters
 STRIDE = config.stride                            # meters (50% overlap)
 N_POINTS = config.preprocess_num_points           # PointNet input size
 MIN_POINTS_IN_BLOCK = config.min_points_in_block  # skip tiny blocks
-
-# Optional: cap blocks per tile for quick experiments (None = keep all)
 MAX_BLOCKS_PER_TILE = config.max_blocks_per_tile
-
-np.random.seed(0)
 
 
 def remap_labels(las_labels: np.ndarray) -> np.ndarray:
