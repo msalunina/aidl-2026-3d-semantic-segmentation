@@ -12,7 +12,7 @@ data_preprocessing:
   min_points_in_block: 1024          # skip tiny blocks
 
   # Optional: cap blocks per tile for quick experiments (None = keep all)
-  max_blocks_per_tile: None
+  max_blocks_per_tile: Null
 
   # 0 = unknown (ignore)
   class_mapping:
