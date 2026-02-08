@@ -3,8 +3,17 @@ import random
 import numpy as np
 import open3d as o3d
 
+import argparse
+from utils.config_parser import ConfigParser
+from pathlib import Path
+
 # PointNet blocks output folder
-BLOCK_DIR = r"E:\Dales\pointnet_blocks\train"  # or ...\test
+config_parser = ConfigParser(
+    default_config_path="config/default.yaml",
+    parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
+)
+config = config_parser.load()
+BLOCK_DIR = Path(config.model_data_path) / "train"
 N_BLOCKS_TO_VIEW = 5
 MAX_POINTS_TO_SHOW = 20000  # render faster; blocks are 4096 anyway, so fine
 

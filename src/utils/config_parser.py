@@ -8,6 +8,8 @@ import yaml
 class ConfigParser():
     def __init__(self, default_config_path="config/default.yaml", parser=None):
         self.config_path = default_config_path
+        if parser is None:
+            raise ValueError("Parser argument is required. Please provide an ArgumentParser instance.")
         self.parser = parser
 
     def load(self):
@@ -73,9 +75,9 @@ class ConfigParser():
         )
         self.parser.add_argument(
             '--max_blocks_per_tile', 
-            type=int, 
-            default=default_config['data_preprocessing']['max_blocks_per_tile'], 
-            help='Maximum number of blocks per tile'
+            type=lambda x: None if x.lower() == 'none' else int(x), 
+            default=default_config['data_preprocessing'].get('max_blocks_per_tile'), 
+            help='Maximum number of blocks per tile (use "none" for unlimited)'
         )
 
         # ---- MODEL ---- 

@@ -24,6 +24,7 @@ config_parser = ConfigParser(
     parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
 )
 config = config_parser.load()
+
 IN_ROOT = Path(config.raw_data_path)
 OUT_ROOT = Path(config.model_data_path)
 

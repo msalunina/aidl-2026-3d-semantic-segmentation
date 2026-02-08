@@ -2,8 +2,17 @@ import glob
 import numpy as np
 from collections import Counter
 
+import argparse
+from utils.config_parser import ConfigParser
+from pathlib import Path
+
 # Path to our PointNet-ready blocks
-BLOCK_DIR = r"E:\Dales\pointnet_blocks\train"
+config_parser = ConfigParser(
+    default_config_path="config/default.yaml",
+    parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
+)
+config = config_parser.load()
+BLOCK_DIR = Path(config.model_data_path) / "train"
 
 # Classes:
 # 0 = Ground

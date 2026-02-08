@@ -6,10 +6,10 @@ paths:
   models: ./model_objects
 
 data_preprocessing:
-  block_size: 50.0     # meters
-  stride: 25.0         # meters (50% overlap)
-  num_points: 4096       # PointNet input size
-  min_points_in_block: 1024  # skip tiny blocks
+  block_size: 50.0                   # meters
+  stride: 25.0                       # meters (50% overlap)
+  num_points: 4096                   # PointNet input size
+  min_points_in_block: 1024          # skip tiny blocks
 
   # Optional: cap blocks per tile for quick experiments (None = keep all)
   max_blocks_per_tile: None
