@@ -1,4 +1,4 @@
---index-url https://download.pytorch.org/whl/cu118
+--extra-index-url https://download.pytorch.org/whl/cu118
 torch
 torchvision
 torchaudio
@@ -9,3 +9,5 @@ pathlib
 keras
 tensorflow
 pyyaml
+laspy
+open3d
