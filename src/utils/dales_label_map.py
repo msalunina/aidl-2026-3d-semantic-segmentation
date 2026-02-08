@@ -14,7 +14,12 @@ Simplified 5-class scheme:
 
 import argparse
 import numpy as np
-from config_parser import ConfigParser
+
+# Support both direct execution and module import
+try:
+    from .config_parser import ConfigParser
+except ImportError:
+    from config_parser import ConfigParser
 
 
 config_parser = ConfigParser(
