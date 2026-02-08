@@ -9,6 +9,7 @@ import time
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.shapenet_dataset import shapeNetDataset
+
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 

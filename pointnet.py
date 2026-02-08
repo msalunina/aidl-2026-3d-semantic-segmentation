@@ -1,6 +1,7 @@
 """
 https://colab.research.google.com/drive/14mmIaefEVs6Ro6_QoeBBFfr1Zpv7RD9M?authuser=2#scrollTo=ycw_6xYaHiyf
 https://arxiv.org/pdf/1612.00593
+https://datascienceub.medium.com/pointnet-implementation-explained-visually-c7e300139698
 """
 import torch
 import torch.nn as nn
