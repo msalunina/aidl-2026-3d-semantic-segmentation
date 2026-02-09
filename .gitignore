@@ -16,6 +16,7 @@
 # ignore this folders on olga
 data/ModelNet/
 data/ShapeNet/
+data/dales_las/directory.txt
 
 
 # Byte-compiled / optimized / DLL files
