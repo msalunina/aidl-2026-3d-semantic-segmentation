@@ -1,3 +1,23 @@
+*.pth
+*.pt
+*.off
+*.seg
+*.DS_Store
+*.pts
+*.zip
+*.arff
+*.las
+*.npz
+
+# ignore png except those in figs
+*.png
+!figs/*.png
+
+# ignore this folders on olga
+data/ModelNet/
+data/ShapeNet/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -205,5 +225,3 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-
-data/
