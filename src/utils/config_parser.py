@@ -134,6 +134,9 @@ class ConfigParser():
                         new_key = 'train_num_points'
                     else:
                         new_key = key
+                elif parent_key == 'dataset':
+                    # Keep dataset settings with dataset_ prefix
+                    new_key = f"dataset_{key}"
                 elif parent_key == 'visualization':
                     # Keep visualization settings as viz_2d and viz_3d
                     new_key = f"viz_{key}"

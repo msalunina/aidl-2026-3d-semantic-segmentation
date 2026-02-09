@@ -1,5 +1,7 @@
 import argparse
 from utils.config_parser import ConfigParser
+from utils.dataset import DALESDataset
+from torch.utils.data import DataLoader
 
 
 if __name__ == '__main__':
@@ -16,7 +18,41 @@ if __name__ == '__main__':
 
     # TODO: set device
 
-    # TODO: load/split data
+    print("\n" + "="*60)
+    print("CREATING DATASETS AND DATALOADERS")
+    print("="*60)
+    # Create datasets
+    train_dataset = DALESDataset(
+        data_dir=f"{config.model_data_path}/train",
+        split='train',
+        num_points=config.train_num_points,
+        normalize=config.dataset_normalize,
+        train_ratio=config.dataset_train_ratio,
+        val_ratio=config.dataset_val_ratio,
+        seed=config.dataset_seed
+    )
+    val_dataset = DALESDataset(
+        data_dir=f"{config.model_data_path}/train",
+        split='val',
+        num_points=config.train_num_points,
+        normalize=config.dataset_normalize,
+        train_ratio=config.dataset_train_ratio,
+        val_ratio=config.dataset_val_ratio,
+        seed=config.dataset_seed
+    )
+    test_dataset = DALESDataset(
+        data_dir=f"{config.model_data_path}/test",
+        split='test',
+        num_points=config.train_num_points,
+        normalize=config.dataset_normalize,
+        use_all_files=config.dataset_test_use_all_files,
+        seed=config.dataset_seed
+    )
+
+    # Create DataLoader
+    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
 
     # TODO: initialize model dependent on the provided input
     # e.g.:

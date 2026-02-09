@@ -28,6 +28,13 @@ data_preprocessing:
   # Label used to ignore points during training / loss computation
   ignore_label: -1
 
+dataset:
+  normalize: false           # Normalize point clouds to unit sphere
+  test_use_all_files: true   # If true, use all files without splitting
+  train_ratio: 0.8           # 80% for training
+  val_ratio: 0.2             # 20% for validation
+  seed: 42                   # Random seed for reproducible splits
+
 training:
   model_name: pointnet
   num_channels: 3
@@ -59,7 +66,3 @@ visualization:
       2: [1.0, 0.0, 0.0]  # red building
       3: [1.0, 0.85, 0.0] # yellow vehicle
       4: [1.0, 0.5, 0.0]  # orange utility
-
-# train_test_split:
-#   train_ratio: 0.8
-#   test_ratio: 0.2
