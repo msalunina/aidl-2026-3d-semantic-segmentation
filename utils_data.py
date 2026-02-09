@@ -3,7 +3,7 @@ from torch_geometric.utils import to_dense_batch
 import numpy as np
 
 # ----------------------------------------------------
-#         LOAD DATASET, LOADER AND NUMA_CLASSES
+#         LOAD DATASET, LOADER AND NUM_CLASSES
 # ----------------------------------------------------
 def load_dataset(config):
     """
@@ -68,26 +68,27 @@ def load_dataset(config):
         from utils.shapenet_dataset_fast import shapeNetDataset
         data_path = "data/ShapeNet/PartAnnotation"
 
-        class_name = config["class_name"]  
-     
+        class_name = config["class_name"]   
         train_dataset = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=0, class_name=class_name)
-        val_dataset = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=1, class_name=class_name)
-        test_dataset = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=2, class_name=class_name)
-        assert class_name == "" or class_name in train_dataset._metadata, f"Unknown ShapeNet class_name: {class_name}"
-
+        val_dataset   = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=1, class_name=class_name)
+        test_dataset  = shapeNetDataset(dataset_path=data_path, point_cloud_size=config["nPoints"], mode=2, class_name=class_name)
+        
         if class_name == "":
-            # Classification or multi-class setup --> return object classes
-            object_classes = train_dataset._object_classes              # DICTIONARY name -> id
-            id_to_name = {v: k for k, v in object_classes.items()}      # CREATES A DICTIONARY id -> name (reverse order)
+            # Classification  --> return object classes
+            object_classes = train_dataset._object_classes                  # DICTIONARY name -> id
+            id_to_name = {v: k for k, v in object_classes.items()}          # CREATES A DICTIONARY id -> name (reverse order)
             name_classes = [id_to_name[i] for i in range(len(id_to_name))]
+            
+            return train_dataset, val_dataset, test_dataset, id_to_name
 
-        else:
+        else:            
             # Segmentation on a single object --> return part names
             name_classes = train_dataset._metadata[class_name]["lables"] 
-            id_to_name = {i: n for i, n in enumerate(name_classes)}                 # CREATES A DICTIONARY
+            id_to_name = {i: n for i, n in enumerate(name_classes)}           # CREATES A DICTIONARY
+
+            return train_dataset, val_dataset, test_dataset, id_to_name,
 
 
-        return train_dataset, val_dataset, test_dataset, id_to_name
     
     else:
         raise TypeError(f"No idea what is dataset {config['dataset']}")
@@ -169,22 +170,20 @@ def info_dataset_batch(dataset_name, dataset, loader, id_to_name=None):
         print(f"\ndataset: {dataset_name}")
         print(id_to_name)
         print(f"\ndataset[i]")
-        sample = 800
-        points, object_class, seg_labels, global_labels = dataset[sample]
+        sample = 0
+        points, object_class, seg_labels, _ = dataset[sample]
         print(f"  Points:               {points.shape}")
         print(f"  Object class:         {object_class}")
         print(f"  Seg labels:           {seg_labels.shape} --> {np.unique(seg_labels)}")
-        print(f"  Global labels:        {global_labels.shape} --> {np.unique(global_labels)}")
 
         # ---- batch info ----
         batch = next(iter(loader))
-        b_points, b_obj, b_seg, b_global = batch
+        b_points, b_obj, b_seg, _ = batch
 
         print("\nbatch (ShapeNet)")
         print(f"  Points batch:            {b_points.shape} ")
         print(f"  Object class batch:      {b_obj.shape}")
         print(f"  Seg labels batch:        {b_seg.shape}")
-        print(f"  Global labels batch:     {b_global.shape}")
 
 
 

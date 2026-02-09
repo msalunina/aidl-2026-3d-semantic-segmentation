@@ -128,8 +128,8 @@ class BasePointNet(nn.Module):
         x = F.relu(self.bn_2(self.conv_2(x)))                   #                               [batch, 64, nPoints]
         x = x.transpose(2, 1)                                   # because Tnet needs input:     [batch, nPoints, 64]       
    
-        feature_tnet= self.feature_tnet(x)    # T-Net tensor                  [batch, 64, 64]
-        x = torch.bmm(x, feature_tnet)              # Batch matrix-matrix product   [batch, nPoints, 64]
+        feature_tnet= self.feature_tnet(x)                      # T-Net tensor                  [batch, 64, 64]
+        x = torch.bmm(x, feature_tnet)                          # Batch matrix-matrix product   [batch, nPoints, 64]
         point_features = x
 
         x = x.transpose(2, 1)                                   # bcause nn.Conv1d needs input: [batch, 64, nPoints] 

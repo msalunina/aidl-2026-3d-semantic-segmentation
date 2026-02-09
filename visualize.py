@@ -2,10 +2,9 @@ import torch
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+from pathlib import Path
 from utils_training import unpack_batch, set_seed
 from utils_data import load_dataset, choose_architecture
-from torch_geometric.loader import DataLoader as DataLoaderGeometric
-from torch.utils.data import DataLoader as DataLoaderTorch   # <-- instead of torch_geometric.loader
 
 def main():
 
@@ -13,11 +12,14 @@ def main():
     device = torch.device("cpu")
     
     # LOAD CHECKPOINT
-    # load_path = "checkpoints/ClassPointNet_ShapeNet_1024pts_1epochs.pt"          # includes config
-    # load_path = "checkpoints/ClassPointNetSmall_ShapeNet_1024pts_1epochs.pt"     # includes config
-    # load_path = "checkpoints/ClassPointNetSmall_ModelNet_1024pts_1epochs.pt"     # includes config
-    load_path = "checkpoints/ClassPointNetSmall_ModelNet_1024pts_30epochs.pt"    # includes config
-    checkpoint_state = torch.load(load_path, map_location=device)
+    # RUN_NAME = "ClassPointNet_ShapeNet_1024pts_1epochs"
+    RUN_NAME = "ClassPointNet_ModelNet_1024pts_10epochs"
+    # RUN_NAME = "ClassPointNetSmall_ShapeNet_1024pts_1epochs"
+    # RUN_NAME = "ClassPointNetSmall_ModelNet_1024pts_30epochs"
+    run_dir = Path("runs") / RUN_NAME
+    checkpoint_path = run_dir / "checkpoint.pt"
+
+    checkpoint_state = torch.load(checkpoint_path, map_location=device, weights_only=False)    # it loads more things that weights
     config = checkpoint_state["config"]  
 
     print(config)
@@ -36,7 +38,7 @@ def main():
     # GET A SAMPLE, SHAPE IT AND MAKE IT THROUGH THE NETWORK
     print(f"Number of test samples: {len(test_dataset)}")
 
-    sample = 0
+    sample = 200
     points, label = unpack_batch(test_dataset[sample])
     if points.dim() == 2:
         points = points.unsqueeze(0)
@@ -73,7 +75,8 @@ def main():
     ax3.scatter(critical_points[:,0], critical_points[:,1], critical_points[:,2], s=2, color="red")
     ax3.set_title(f"Critical points (maximize features)")
     for ax in (ax1, ax2, ax3):
-        ax.set_box_aspect([1,1,1])  
+        ax.set_aspect('equal')
+        # ax.set_box_aspect([1,1,1])  
 
     plt.show()
 

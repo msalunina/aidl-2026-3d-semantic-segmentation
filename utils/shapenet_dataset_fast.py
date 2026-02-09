@@ -255,10 +255,10 @@ class shapeNetDataset(torch.utils.data.Dataset):
                     #         values = line.split(" ")
                     #         point = [float(values[0]), float(values[1]), float(values[2])]
                     #         point_cloud.append(point)
-        point_cloud = np.loadtxt(file_name, dtype=np.float32)   # shape: (N, 3)
+        point_cloud = np.loadtxt(file_name, dtype=np.float32).tolist()   # shape: (N, 3)
 
-        
-        num_points = point_cloud.shape[0]
+        num_points = len(point_cloud)
+        # num_points = point_cloud.shape[0]
         # Initialize labels to -1 (unlabeled)
         seg_class = np.full(num_points, -1, dtype=np.int64)
 
@@ -276,7 +276,7 @@ class shapeNetDataset(torch.utils.data.Dataset):
             mask = np.loadtxt(label_file_path, dtype=np.int64)   # shape: (N,)
             seg_class[mask == 1] = part_idx
         
-        return point_cloud, seg_class
+        return point_cloud, seg_class.tolist()
 
     def __len__(self) ->int:
         return len(self._dataset)

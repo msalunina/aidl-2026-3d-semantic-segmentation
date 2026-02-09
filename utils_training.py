@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import random
 from torch_geometric.utils import to_dense_batch
-import matplotlib.pyplot as plt
 
 
 
@@ -75,7 +74,7 @@ def train_single_epoch(train_loader, network, optimizer, criterion):
     loss_history = []
     nCorrect = 0
     nTotal = 0
-    for batch_id, batch in enumerate(train_loader):
+    for batch in train_loader:
         
         # Pointnet needs: [batch, nPoints, coordinates] 
         points_BNC, labels_B = unpack_batch(batch)
@@ -97,11 +96,6 @@ def train_single_epoch(train_loader, network, optimizer, criterion):
         batch_correct = (predictions == labels_B).sum().item()          # .item() brings one single scalar to CPU
         nCorrect = nCorrect + batch_correct
         nTotal = nTotal + len(labels_B)
-
-        # if batch_id == 0:
-        #     with torch.no_grad():
-        #         svals = torch.linalg.svdvals(input_tnet_tensor)  # [B, 3]
-        #         print("Input T-Net singular values (batch average) :", svals.mean(dim=0))
 
     # Average across all batches    
     train_loss_epoch = np.mean(loss_history) 
@@ -155,23 +149,25 @@ def eval_single_epoch(data_loader, network, criterion):
 # ----------------------------------------------------
 def train_model(hyper, train_loader, val_loader, network, optimizer, criterion):
 
-    train_loss=[]
-    train_acc=[]
-    val_loss=[]
-    val_acc=[]
+    metrics = {"train_loss": [], 
+               "train_acc": [],
+               "val_loss": [],   
+               "val_acc": []}
 
     for epoch in range(hyper["epochs"]):
         train_loss_epoch, train_acc_epoch = train_single_epoch(train_loader, network, optimizer, criterion)
         val_loss_epoch, val_acc_epoch = eval_single_epoch(val_loader, network, criterion)
-        
-        train_loss.append(train_loss_epoch)
-        train_acc.append(train_acc_epoch)
-        val_loss.append(val_loss_epoch)
-        val_acc.append(val_acc_epoch)
 
-        print(f'Epoch: {epoch+1}/{hyper["epochs"]} | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f} | acc (train/val) ={train_acc_epoch:.2f}/{val_acc_epoch:.2f}')
+        metrics["train_loss"].append(train_loss_epoch)
+        metrics["train_acc"].append(train_acc_epoch)
+        metrics["val_loss"].append(val_loss_epoch)
+        metrics["val_acc"].append(val_acc_epoch)
 
-    return train_loss, train_acc, val_loss, val_acc
+        print(f"Epoch: {epoch+1}/{hyper['epochs']}"
+            f" | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f}"
+            f" | acc (train/val) = {train_acc_epoch:.2f}/{val_acc_epoch:.2f}")
+
+    return metrics
 
 
 
@@ -182,7 +178,7 @@ def train_model(hyper, train_loader, val_loader, network, optimizer, criterion):
 #                     SEGMENTATION TRAINING FUNCTIONS
 # //////////////////////////////////////////////////////////////////////////////
 
-def compute_IoU(labels, predictions):
+def compute_iou(labels, predictions):
 
     # IDENTIFY VALID LABELS (-1 is not valid)
     id_valid = labels != -1  
@@ -193,15 +189,11 @@ def compute_IoU(labels, predictions):
     for i in torch.unique(labels):
         intersection = ( (labels == i) & (predictions==i) ).sum().item()    # TOTS DOS SON i
         union = ((labels==i) | (predictions==i)).sum().item()               # O BE UN O BE L'ALTRE SON i
-        
-        # If a part does not appear in the object (e.g. chair without arms),
-        # union = 0 and then there would be a division by zero
-        if union > 0:
-            iou.append(intersection / union)
+        iou.append(intersection / union)
 
-    meanIoU = np.mean(iou)
+    meaniou = sum(iou) / len(iou)
 
-    return meanIoU
+    return meaniou
 
 # ----------------------------------------------------
 #           UNPACK SEGMENTATION BATCH 
@@ -215,22 +207,17 @@ def unpack_segmentation_batch(batch):
       x: [B, N, 3]
       y: [B, N]
     """
-
     # ---------- ShapeNet ----------
-    if isinstance(batch, (tuple, list)):
-        points, object_class, seg_labels, global_labels = batch
+    points, object_class, seg_labels, global_labels = batch
 
-        # Even though DataLoader will turn into torch tensors, 
-        # I do this to guarantee I can use this function if I bypass DataLoader and use dataset directly
-        points_BNC = torch.as_tensor(points, dtype=torch.float32)            
-        labels_BN = torch.as_tensor(seg_labels, dtype=torch.long)
-        
-        points_BNC = points_BNC.transpose(-2,-1)
+    # Even though DataLoader will turn into torch tensors, 
+    # I do this to guarantee I can use this function if I bypass DataLoader and use dataset directly
+    points_BNC = torch.as_tensor(points, dtype=torch.float32)            
+    labels_BN = torch.as_tensor(seg_labels, dtype=torch.long)
+    
+    points_BNC = points_BNC.transpose(-2,-1)
 
-        return points_BNC, labels_BN
-
-    else:
-        raise TypeError(f"Unsupported batch type: {type(batch)}")
+    return points_BNC, labels_BN
 
 
 # ----------------------------------------------------
@@ -242,18 +229,15 @@ def train_single_epoch_segmentation(train_loader, network, optimizer, criterion)
     network.train()                             # Activate the train=True flag inside the model
 
     loss_history = []
+    miou_history = []
     nCorrect = 0
     nTotal = 0
-    for batch_id, batch in enumerate(train_loader):
+    for batch in train_loader:
         
         # Pointnet needs: [batch, nPoints, coordinates] 
         points_BNC, labels_BN = unpack_segmentation_batch(batch)
         points_BNC = points_BNC.to(device)
-        labels_BN = labels_BN.to(device) 
-        # IDENTIFY VALID LABELS (-1 is not valid)
-        id_valid = labels_BN != -1  
-        num_valid = id_valid.sum().item()
-        assert num_valid > 0, "All points in this batch are unlabeled (-1)!"       
+        labels_BN = labels_BN.to(device)      
 
         # forward batch and loss
         optimizer.zero_grad()                  # Set network gradients to 0
@@ -266,22 +250,26 @@ def train_single_epoch_segmentation(train_loader, network, optimizer, criterion)
         loss.backward()                                                 # Compute backpropagation
         optimizer.step()    
         
-        # Compute metrics
+        # COMPUTE METRICS
+        # Identify valid labels (-1 is not valid)
+        id_valid = labels_BN != -1  
+        num_valid = id_valid.sum().item()
+        assert num_valid > 0, "All points in this batch are unlabeled (-1)!"  
+        # Accuracy
         predictions = log_probs.argmax(dim=1)
         batch_correct = (predictions[id_valid] == labels_BN[id_valid]).sum().item()          # .item() brings one single scalar to CPU
         nCorrect = nCorrect + batch_correct
         nTotal = nTotal + num_valid         # segmentation: 1 prediction per point and N points
-
-        # if batch_id == 0:
-        #     with torch.no_grad():
-        #         svals = torch.linalg.svdvals(input_tnet_tensor)  # [B, 3]
-        #         print("Input T-Net singular values (batch average) :", svals.mean(dim=0))
+        # IoU
+        miou = compute_iou(labels_BN, predictions)
+        miou_history.append(miou)
 
     # Average across all batches    
     train_loss_epoch = np.mean(loss_history) 
     train_acc_epoch = nCorrect / nTotal
+    train_miou_epoch = np.mean(miou_history)
     
-    return train_loss_epoch, train_acc_epoch
+    return train_loss_epoch, train_acc_epoch, train_miou_epoch
 # ----------------------------------------------------
 
 
@@ -296,17 +284,14 @@ def eval_single_epoch_segmentation(data_loader, network, criterion):
         network.eval()                      # Dectivate the train=True flag inside the model
 
         loss_history = []
+        miou_history = []
         nCorrect = 0
         nTotal = 0
         for batch in data_loader:
             # Pointnet needs: [batch, nPoints, coordinates] 
             points_BNC, labels_BN = unpack_segmentation_batch(batch) 
             points_BNC = points_BNC.to(device)
-            labels_BN = labels_BN.to(device) 
-            # IDENTIFY VALID LABELS (-1 is not valid)
-            id_valid = labels_BN != -1  
-            num_valid = id_valid.sum().item()
-            assert num_valid > 0, "All points in this batch are unlabeled (-1)!"     
+            labels_BN = labels_BN.to(device)    
 
             # forward batch and loss
             log_probs, _, _, _, _ = network(points_BNC)         # Forward batch through the network
@@ -314,18 +299,26 @@ def eval_single_epoch_segmentation(data_loader, network, criterion):
             loss = criterion(log_probs, labels_BN)                  # Compute loss
             loss_history.append(loss.item())         
             
-            # Compute metrics        
+            # COMPUTE METRICS
+            # Identify valid labels (-1 is not valid)
+            id_valid = labels_BN != -1  
+            num_valid = id_valid.sum().item()
+            assert num_valid > 0, "All points in this batch are unlabeled (-1)!"  
+            # Accuracy
             predictions = log_probs.argmax(dim=1)
             batch_correct = (predictions[id_valid] == labels_BN[id_valid]).sum().item()          # .item() brings one single scalar to CPU
             nCorrect = nCorrect + batch_correct
             nTotal = nTotal + num_valid         # segmentation: 1 prediction per point and N points
-
+            # IoU
+            miou = compute_iou(labels_BN, predictions)
+            miou_history.append(miou)
 
         # Average across all batches 
         eval_loss_epoch = np.mean(loss_history)       
         eval_acc_epoch = nCorrect / nTotal
+        eval_miou_epoch = np.mean(miou_history)
     
-    return eval_loss_epoch, eval_acc_epoch
+    return eval_loss_epoch, eval_acc_epoch, eval_miou_epoch
 # ----------------------------------------------------
 
 
@@ -335,23 +328,30 @@ def eval_single_epoch_segmentation(data_loader, network, criterion):
 # ----------------------------------------------------
 def train_model_segmentation(hyper, train_loader, val_loader, network, optimizer, criterion):
 
-    train_loss=[]
-    train_acc=[]
-    val_loss=[]
-    val_acc=[]
+    metrics = {"train_loss": [],
+               "train_acc": [], 
+               "train_miou": [],
+               "val_loss": [],   
+               "val_acc": [],   
+               "val_miou": []}
 
     for epoch in range(hyper["epochs"]):
-        train_loss_epoch, train_acc_epoch = train_single_epoch_segmentation(train_loader, network, optimizer, criterion)
-        val_loss_epoch, val_acc_epoch = eval_single_epoch_segmentation(val_loader, network, criterion)
+        train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(train_loader, network, optimizer, criterion)
+        val_loss_epoch, val_acc_epoch, val_miou_epoch = eval_single_epoch_segmentation(val_loader, network, criterion)
         
-        train_loss.append(train_loss_epoch)
-        train_acc.append(train_acc_epoch)
-        val_loss.append(val_loss_epoch)
-        val_acc.append(val_acc_epoch)
+        metrics["train_loss"].append(train_loss_epoch)
+        metrics["train_acc"].append(train_acc_epoch)
+        metrics["train_miou"].append(train_miou_epoch)
+        metrics["val_loss"].append(val_loss_epoch)
+        metrics["val_acc"].append(val_acc_epoch)
+        metrics["val_miou"].append(val_miou_epoch)
 
-        print(f'Epoch: {epoch+1}/{hyper["epochs"]} | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f} | acc (train/val) ={train_acc_epoch:.2f}/{val_acc_epoch:.2f}')
+        print(f"Epoch: {epoch+1}/{hyper['epochs']}"
+            f" | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f}"
+            f" | acc (train/val) = {train_acc_epoch:.2f}/{val_acc_epoch:.2f}"
+            f" | miou (train/val) = {train_miou_epoch:.2f}/{val_miou_epoch:.2f}")
 
-    return train_loss, train_acc, val_loss, val_acc
+    return metrics
 
 
 
@@ -369,27 +369,3 @@ def compute_regularizationLoss(feature_tnet):
     reg_loss = torch.norm(I - TT) / TT.shape[0]                 # make reg_loss batch invariant (dividing by batch_size)
 
     return reg_loss
-
-
-def plot_curves(train_loss, train_acc, val_loss, val_acc):
-    
-    # PLOT TRAINING AND ACCURACY CURVES
-    plt.figure(figsize=(10, 8))
-    
-    plt.subplot(2,1,1)
-    plt.plot(train_loss, label='train')
-    plt.plot(val_loss, label='validation')
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title('Loss: training and validation')
-    plt.legend()
-
-    plt.subplot(2,1,2)
-    plt.plot(train_acc, label='train')
-    plt.plot(val_acc, label='validation')
-    plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
-    plt.title('Accuracy: training and validation')
-    plt.legend()
-    plt.show()
-    #plt.savefig("learning_curves.png")  # if server or remote instead of plt.show()
