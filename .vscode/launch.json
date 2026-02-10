@@ -40,5 +40,12 @@
             "program": "tnet_test.py",
             "console": "integratedTerminal"
         },
+        {
+            "name": "testing",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "testing.py",
+            "console": "integratedTerminal"
+        }
     ]
 }
