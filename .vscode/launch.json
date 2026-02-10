@@ -32,6 +32,13 @@
             "request": "launch",
             "program": "train_seg_shapenet.py",
             "console": "integratedTerminal"
-        }
+        },
+          {
+            "name": "tnet_test.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "tnet_test.py",
+            "console": "integratedTerminal"
+        },
     ]
 }
