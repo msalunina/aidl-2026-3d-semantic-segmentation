@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from tnet import TransformationNet
+from src.models.tnet import TransformationNet
 
 class BasePointNet(nn.Module):
 
@@ -24,13 +24,13 @@ class BasePointNet(nn.Module):
         
         self.conv_3 = nn.Conv1d(64, 64, 1)
         self.conv_4 = nn.Conv1d(64, 128, 1)
-        self.conv_5 = nn.Conv1d(128, 1024, 1)
+        self.conv_5 = nn.Conv1d(128, global_feat_size, 1)
 
         self.bn_1 = nn.BatchNorm1d(64)
         self.bn_2 = nn.BatchNorm1d(64)
         self.bn_3 = nn.BatchNorm1d(64)
         self.bn_4 = nn.BatchNorm1d(128)
-        self.bn_5 = nn.BatchNorm1d(1024)
+        self.bn_5 = nn.BatchNorm1d(global_feat_size)
 
 
     def forward(self, x):
@@ -43,15 +43,18 @@ class BasePointNet(nn.Module):
         x = x.transpose(2, 1) #[B,n,3] -> [B,3,n]
         
         tnet_out=x.cpu().detach().numpy()
-
+    
         x = F.relu(self.bn_1(self.conv_1(x))) #[B, 64, n]
         x = F.relu(self.bn_2(self.conv_2(x))) #[B, 64, n]
         
         x = x.transpose(2, 1) #[B,64,n] -> [B,n,64]
 
         feature_transform = self.feature_transform(x) # T-Net tensor [batch, 64, 64]
+        
         x = torch.bmm(x, feature_transform)
         x = x.transpose(2, 1) #[B, n, 64]
+        feature_transform = x #copy the result of the last feature transform, [B, n, 64]
+        
         x = F.relu(self.bn_3(self.conv_3(x))) #[B, n, 64]
         x = F.relu(self.bn_4(self.conv_4(x))) #[B, n, 128]
         x = F.relu(self.bn_5(self.conv_5(x))) #[B, n, 1024]
