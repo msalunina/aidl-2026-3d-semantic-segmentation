@@ -18,10 +18,10 @@ class TransformationNet(nn.Module):
         super(TransformationNet, self).__init__()
         self.output_dim = output_dim
 
-        # Shared MLP layers
-        self.conv_1 = nn.Conv1d(input_dim, 64, 1)
-        self.conv_2 = nn.Conv1d(64, 128, 1)
-        self.conv_3 = nn.Conv1d(128, 1024, 1)
+        # Shared MLP layers 
+        self.conv_1 = nn.Conv1d(input_dim, 64, 1)       # weight matrix: [64,input_dim] (W * x = x')
+        self.conv_2 = nn.Conv1d(64, 128, 1)             # weight matrix: [128,64]
+        self.conv_3 = nn.Conv1d(128, 1024, 1)           # weight matrix: [1024,128]
 
         # Batch normalization
         self.bn_1 = nn.BatchNorm1d(64)
@@ -31,32 +31,47 @@ class TransformationNet(nn.Module):
         self.bn_5 = nn.BatchNorm1d(256)
 
         # Fully connected layers
-        self.fc_1 = nn.Linear(1024, 512)
-        self.fc_2 = nn.Linear(512, 256)
-        self.fc_3 = nn.Linear(256, self.output_dim * self.output_dim)
+        self.fc_1 = nn.Linear(1024, 512)                # weight matrix: [512,1024]
+        self.fc_2 = nn.Linear(512, 256)                 # weight matrix: [256,512]
+        self.fc_3 = nn.Linear(256, self.output_dim * self.output_dim)   # weight matrix: [output_dim x output_dim, 256]
+
+        # I ADDED THIS IN MINE (olga):
+        # Weird fix to initialize last layers params to 0 and force an identity matrix as start.
+        # The initial value for the 3x3 (64x64) is x+identity, but x is not 0 by default so it may add something
+        # even if small. Forcing params to 0, guarantees that it will start with identity.
+        # nn.init.zeros_(self.fc_3.weight)
+        # nn.init.zeros_(self.fc_3.bias)
 
     def forward(self, x):
+        # x: [B, N, C]
+
+        # nn.Conv1 expects [B, C, N])
         num_points = x.shape[1]
-        x = x.transpose(2, 1)
+        x = x.transpose(2, 1)                           # [B, input_dim, N]
 
         # Shared MLP
-        x = F.relu(self.bn_1(self.conv_1(x)))
-        x = F.relu(self.bn_2(self.conv_2(x)))
-        x = F.relu(self.bn_3(self.conv_3(x)))
+        x = F.relu(self.bn_1(self.conv_1(x)))           # [B, 64, N]
+        x = F.relu(self.bn_2(self.conv_2(x)))           # [B, 128, N]
+        x = F.relu(self.bn_3(self.conv_3(x)))           # [B, 1024, N]
 
         # Max pooling
-        x = nn.MaxPool1d(num_points)(x)
-        x = x.view(-1, 1024) # TODO: update to accomodate batch size 1
+        x = nn.MaxPool1d(num_points)(x)                 # [B, 1024, 1]
+        # TODO: update to accomodate batch size 1
+        # Actual problem is BatchNorm, it cant estimate variance with 1 sample!!!!!
+        x = x.view(-1, 1024)                            # [B, 1024] (removes dimensions of 1)
 
         # Fully connected layers
-        x = F.relu(self.bn_4(self.fc_1(x)))
-        x = F.relu(self.bn_5(self.fc_2(x)))
-        x = self.fc_3(x)
+        x = F.relu(self.bn_4(self.fc_1(x)))             # [B, 512]
+        x = F.relu(self.bn_5(self.fc_2(x)))             # [B, 256]
+        x = self.fc_3(x)                                # [B, output_dim x output_dim]
 
-        identity_matrix = torch.eye(self.output_dim)
+        identity_matrix = torch.eye(self.output_dim)    # [output_dim, output_dim]
         if torch.cuda.is_available():
             identity_matrix = identity_matrix.cuda()
-        x = x.view(-1, self.output_dim, self.output_dim) + identity_matrix
+        # OLGA: 
+        # INSTEAD of the 3 lines above, create identity matrix directly on the device of x
+        # identity_matrix = torch.eye(self.output_dim, device=x.device).unsqueeze(0) [1, output_dim, output_dim]         
+        x = x.view(-1, self.output_dim, self.output_dim) + identity_matrix  # [B, output_dim, output_dim]
         return x
     
 
@@ -66,59 +81,78 @@ class PointNetBackbone(nn.Module):
     """
 
     # TODO: add concatenation of additional channels if input_channels > 3
-    # after input transformation
+    # after input transformation! DONE!
 
     def __init__(self, input_channels=3):
         super(PointNetBackbone, self).__init__()
         self.input_channels = input_channels
 
         # Input transformation
-        self.input_tnet = TransformationNet(input_channels, input_channels)
+        # self.input_tnet = TransformationNet(input_dim=input_channels, output_dim=input_channels) 
+        
+        # Input transform with additional channels:
+        # Force input_dim=3 and output_dim=3 (x,y,z)
+        self.input_tnet = TransformationNet(input_dim=3, output_dim=3) 
 
-        # MLP(64, 64)
-        self.conv_1 = nn.Conv1d(input_channels, 64, 1)
-        self.conv_2 = nn.Conv1d(64, 64, 1)
+        # Shared MLP(64, 64)
+        self.conv_1 = nn.Conv1d(input_channels, 64, 1)      # weight matrix: [64,C+3]
+        self.conv_2 = nn.Conv1d(64, 64, 1)                  # weight matrix: [64,64]
         self.bn_1 = nn.BatchNorm1d(64)
         self.bn_2 = nn.BatchNorm1d(64)
         
         # Feature transformation
-        self.feature_tnet = TransformationNet(64, 64)
+        self.feature_tnet = TransformationNet(input_dim=64, output_dim=64)       
         
-        # MLP(64, 128, 1024)
-        self.conv_3 = nn.Conv1d(64, 64, 1)
-        self.conv_4 = nn.Conv1d(64, 128, 1)
-        self.conv_5 = nn.Conv1d(128, 1024, 1)
+        # Shared MLP(64, 128, 1024)
+        self.conv_3 = nn.Conv1d(64, 64, 1)                  # weight matrix: [64,64]
+        self.conv_4 = nn.Conv1d(64, 128, 1)                 # weight matrix: [128,64]
+        self.conv_5 = nn.Conv1d(128, 1024, 1)               # weight matrix: [1024,128]
         self.bn_3 = nn.BatchNorm1d(64)
         self.bn_4 = nn.BatchNorm1d(128)
         self.bn_5 = nn.BatchNorm1d(1024)
         
-    def forward(self, x):        
+    def forward(self, x): 
+        # x: [B, N, 3] 
         # Input transformation
-        input_transform = self.input_tnet(x) # T-Net tensor [batch, 3, 3]
-        x = torch.bmm(x, input_transform) # Batch matrix-matrix product [batch, num_points, 3]
-        x = x.transpose(2, 1) # Transpose to [batch, 3, num_points] for Conv1d
-        
-        # MLP(64, 64)
-        x = F.relu(self.bn_1(self.conv_1(x)))
-        x = F.relu(self.bn_2(self.conv_2(x)))
+        # input_transform = self.input_tnet(x)                # [B, 3, 3] T-net tensor
+        # x = torch.bmm(x, input_transform)                   # [B, N, 3] Batch matrix-matrix product
+        # x = x.transpose(2, 1)                               # [B, 3, N] transpose for Conv1d
+
+        # x: [B, N, 3+C] 
+        # Input transform with additional channels:
+        xyz = x[:, :, :3]                                   # [B, N, 3]
+        input_transform = self.input_tnet(xyz)              # [B, 3, 3] T-net tensor
+        xyz = torch.bmm(xyz, input_transform)               # [B, N, 3] Batch matrix-matrix product
+
+        if x.shape[2]>3:
+            extra_channels = x[:, :, 3:]                    # [B, N, C]
+            x = torch.cat([xyz, extra_channels], dim=2)     # [B, N, 3+C]
+        else:  
+            x = xyz
+        x = x.transpose(2, 1)                               # [B, 3+C, N] transpose for Conv1d
+
+        # Shared MLP(64, 64)
+        x = F.relu(self.bn_1(self.conv_1(x)))               # [B, 64, N]
+        x = F.relu(self.bn_2(self.conv_2(x)))               # [B, 64, N]
 
         # Feature transformation
-        x = x.transpose(2, 1) # Transpose to [batch, num_points, 64] for feature transform
-        feature_transform = self.feature_tnet(x)  # T-Net tensor [batch, 64, 64]
-        x = torch.bmm(x, feature_transform)  # local point features [batch, num_points, 64]
-        x = x.transpose(2, 1) # Transpose back to [batch, 64, num_points] for Conv1d
+        x = x.transpose(2, 1)                               # [B, N, 64] transpose for feature transform
+        feature_transform = self.feature_tnet(x)            # [B, 64, 64] T-Net tensor 
+        x = torch.bmm(x, feature_transform)                 # [B, N, 64] local point features
+        x = x.transpose(2, 1)                               # [B, 64, N] transpose for Conv1d
 
         # Save point features for segmentation
-        point_features = x.clone()
+        point_features = x.clone()                          # [B, 64, N]
 
-        # MLP(64, 128, 1024)
-        x = F.relu(self.bn_3(self.conv_3(x)))
-        x = F.relu(self.bn_4(self.conv_4(x)))
-        x = F.relu(self.bn_5(self.conv_5(x)))
+        # Shared MLP(64, 128, 1024)
+        x = F.relu(self.bn_3(self.conv_3(x)))               # [B, 64, N]
+        x = F.relu(self.bn_4(self.conv_4(x)))               # [B, 128, N]
+        x = F.relu(self.bn_5(self.conv_5(x)))               # [B, 1024, N]
 
         # Global feature (max pooling)
-        global_feature = torch.max(x, 2, keepdim=True)[0]
-
+        global_feature = torch.max(x, 2, keepdim=True)[0]   # [B, 1024, 1] because of keepdim=True
+        # OLGA: 
+        # global_feature, ix = nn.MaxPool1d(kernel_size=num_points, return_indices=True)(x)
         return feature_transform, point_features, global_feature
     
 
@@ -139,21 +173,26 @@ class PointNetClassification(nn.Module):
         )
 
         # Classification head: MLP(512, 256, num_classes)
-        self.fc_1 = nn.Linear(1024, 512)
-        self.fc_2 = nn.Linear(512, 256)
-        self.fc_3 = nn.Linear(256, num_classes)
+        # Fully connected linear layers
+        self.fc_1 = nn.Linear(1024, 512)                    # weight matrix: [512,1024] 
+        self.fc_2 = nn.Linear(512, 256)                     # weight matrix: [256,512] 
+        self.fc_3 = nn.Linear(256, num_classes)             # weight matrix: [num_classes,256] 
 
         self.bn_1 = nn.BatchNorm1d(512)
         self.bn_2 = nn.BatchNorm1d(256)
 
 
     def forward(self, x):
+        # x: [B, N, 3] 
+        
         feature_transform, point_features, global_feature = self.backbone(x)
+        # global feature: [B, 1024, 1], but nn.Linear expects [B, 1024]
 
-        x = F.relu(self.bn_1(self.fc_1(global_feature.view(-1, 1024))))
-        x = F.relu(self.bn_2(self.fc_2(x)))
+        global_feature = global_feature.view(-1, 1024)      # [B, 1024] removes the last 1 dimension 
+        x = F.relu(self.bn_1(self.fc_1(global_feature)))    # [B, 512]
+        x = F.relu(self.bn_2(self.fc_2(x)))                 # [B, 256]
         x = self.dropout(x)
-        x = F.log_softmax(self.fc_3(x), dim=1)
+        x = F.log_softmax(self.fc_3(x), dim=1)              # [B, num_classes}]
 
         return feature_transform, x
     
@@ -175,26 +214,48 @@ class PointNetSegmentation(nn.Module):
         )
 
         # Segmentation head: MLP(512, 256, 128, num_classes)
-        self.conv_1 = nn.Conv1d(1088, 512, 1)
-        self.conv_2 = nn.Conv1d(512, 256, 1)
-        self.conv_3 = nn.Conv1d(256, 128, 1)
+        self.conv_1 = nn.Conv1d(1088, 512, 1)                   # weight matrix: [512,64+1024]
+        self.conv_2 = nn.Conv1d(512, 256, 1)                    # weight matrix: [256,512]
+        self.conv_3 = nn.Conv1d(256, 128, 1)                    # weight matrix: [128,256]
         self.conv_4 = nn.Conv1d(128, num_classes, 1)
 
+        # OLGA:
+        # I have one extra conv before the last one: from 128 to 128
+        # self.conv_4 = nn.Conv1d(128, 128, 1)              # weight matrix: [128,128]         
+        # self.conv_5 = nn.Conv1d(128, num_classes, 1)      # weight matrix: [num_classes,128]
+        # I also have batch norms!!
+        # self.bn_1 = nn.BatchNorm1d(512)
+        # self.bn_2 = nn.BatchNorm1d(256)
+        # self.bn_3 = nn.BatchNorm1d(128)
+        # self.bn_4 = nn.BatchNorm1d(128)
+        # NEED TO CHECK ORIGINAL SEGMENTATION POINTNET
 
     def forward(self, x):
-        feature_transform, point_features, global_feature = self.backbone(x)
+        # x: [B, N, 3] 
 
+        feature_transform, point_features, global_feature = self.backbone(x)
+        # global feature: [B, 1024, 1]
+        # point_features: [B, 64, N]
+        
         num_points = x.shape[1]
-        global_feature_expanded = global_feature.repeat(1, 1, num_points)
+        global_feature_expanded = global_feature.repeat(1, 1, num_points)   # [B, 1024, N]
 
         # Concatenate point features and global feature
-        x = torch.cat([point_features, global_feature_expanded], dim=1)
+        x = torch.cat([point_features, global_feature_expanded], dim=1)     # [B, 64+1024, N]
 
-        x = F.relu(self.conv_1(x))
-        x = F.relu(self.conv_2(x))
-        x = F.relu(self.conv_3(x))
+        x = F.relu(self.conv_1(x))                          # [batch, 512, nPoints]
+        x = F.relu(self.conv_2(x))                          # [batch, 256, nPoints]
+        x = F.relu(self.conv_3(x))                          # [batch, 128, nPoints]
         x = self.dropout(x)
-        x = F.log_softmax(self.conv_4(x), dim=1)
+        x = F.log_softmax(self.conv_4(x), dim=1)            # [batch, num_classes, nPoints]
+
+        # OLGA:
+        # x = F.relu(self.bn_1(self.conv_1(x)))               # [batch, 512, nPoints]
+        # x = F.relu(self.bn_2(self.conv_2(x)))               # [batch, 256, nPoints]
+        # x = F.relu(self.bn_3(self.conv_3(x)))               # [batch, 128, nPoints]
+        # x = F.relu(self.bn_4(self.conv_4(x)))               # [batch, 128, nPoints]
+        # x = self.dropout_1(x)
+        # log_probs = F.log_softmax(self.conv_5(x), dim=1)    # [batch, num_classes, nPoints]
 
         return feature_transform, x
 
