@@ -38,11 +38,11 @@ class SegmentationPointNet(nn.Module):
         bsz = x.shape[0]
         num_points = x.shape[1]
         
-        x, point_features, feature_transform, tnet_out, ix_maxpool = self.base_pointnet(x)
+        global_feature_vector, point_features, feature_transform, tnet_out, ix_maxpool = self.base_pointnet(x)
         
         #concatenar las entradas
-        point_features_expanded = point_features.repeat(1, 1, num_points)
-        point_features_expanded = point_features_expanded.reshape(bsz, point_features.shape[1], num_points)
+        point_features_expanded = global_feature_vector.repeat(1, 1, num_points)
+        point_features_expanded = global_feature_vector.reshape(bsz, point_features.shape[1], num_points)
         
         x = torch.cat([feature_transform, point_features_expanded], dim=1)
 
@@ -54,6 +54,7 @@ class SegmentationPointNet(nn.Module):
         point_features = x
         
         x = self.dropout(x)
-        x = F.log_softmax(self.conv_5(x), dim=1)
+        x = self.conv_5(x)
+        x = F.log_softmax(x, dim=1)
         
-        return point_features, x
+        return  x

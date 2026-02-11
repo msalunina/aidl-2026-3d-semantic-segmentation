@@ -13,6 +13,18 @@ from src.models.segmentation_pointnet import SegmentationPointNet
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+def testSegmentationNet(loader):
+    num_points = 1024
+    model = SegmentationPointNet(3,1024,16,0.3).to(device)
+
+    for i, (pointcloud, pc_class, label, seg_class) in enumerate(loader):
+     
+        pointcloud, pc_class = pointcloud.to(device), pc_class.to(device)
+        
+        x, tnet_out, ix_maxpool = model(pointcloud)
+          
+        print(f"output {x.shape}")
+
 def testClassificationNet(loader):
     num_points = 1024
     model = ClassificationPointNet(3,1024,16,0.3).to(device)
@@ -61,11 +73,13 @@ def testBasePointNet(loader):
 
 if __name__ == "__main__":
     
-    dataset_path = "/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation"
+    #dataset_path = "/mnt/456c90d8-963b-4daa-a98b-64d03c08e3e1/Black_1TB/datasets/shapenet/PartAnnotation"
+    dataset_path = "F:/AIDL_FP/Datasets/PartAnnotation"
     point_cloud_size = 1024
     batch_size_cfg = 1
     train_dataset = shapeNetDataset(dataset_path, point_cloud_size, 0, "")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size_cfg, shuffle=True)
     #testBasePointNet(train_loader)
-    testClassificationNet(train_loader)
+    #testClassificationNet(train_loader)
+    testSegmentationNet(train_loader)
