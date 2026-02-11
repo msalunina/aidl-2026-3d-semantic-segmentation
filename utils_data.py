@@ -107,7 +107,7 @@ def choose_architecture(architecture, num_classes):
     elif architecture == "ClassPointNet":  
         from PointNet import ClassificationPointNet
         network = ClassificationPointNet(num_classes=num_classes)
-
+   
     elif architecture == "SegPointNet":
         from PointNet import SegmentationPointNet 
         network = SegmentationPointNet(num_classes=num_classes)

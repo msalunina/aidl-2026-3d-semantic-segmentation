@@ -25,11 +25,11 @@ if __name__ == "__main__":
               "seed": 42}  
 
     hyper = {"batch_size": 32,
-             "epochs": 30,
+             "epochs": 2,
              "lr": 0.001}
         
     # Path creates an object Path and / extends it
-    RUN_NAME = f"{config['architecture']}_{config['class_name']}_{config['dataset']}_{config['nPoints']}pts_{hyper['epochs']}epochs"
+    RUN_NAME = f"{config['architecture']}_{config['class_name']}_{config['dataset']}_{config['nPoints']}pts_{hyper['epochs']}epochs_main"
     run_dir = Path("runs") / RUN_NAME
     run_dir.mkdir(parents=True, exist_ok=True)      # create folder: check if parent folder exist, otherwise create it as well
     checkpoint_path = run_dir / "checkpoint.pt"
