@@ -13,6 +13,10 @@
 *.png
 !figs/*.png
 
+logs/*
+runs/*
+data/*
+snapshots/*
 data/modelnet10/raw/README.txt
 data/shapenet/shapenet_extracted/PartAnnotation/metadata.json
 data/shapenet/shapenet_extracted/PartAnnotation/README.txt

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from tqdm import tqdm
-
+import os
 
 
 def compute_regularizationLoss(feature_tnet):
@@ -166,7 +166,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
 # ----------------------------------------------------
 #    TRAINING LOOP (iterate on epochs)
 # ----------------------------------------------------
-def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion):
+def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion, writer, device, base_path):
 
     metrics = {
         "train_loss": [],
@@ -179,6 +179,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
 
     for epoch in tqdm(range(config.num_epochs), desc="Looping on epochs", position=0):
         train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion)
+
         val_loss_epoch, val_acc_epoch, val_miou_epoch = eval_single_epoch_segmentation(config, val_loader, network, criterion)
         
         metrics["train_loss"].append(train_loss_epoch)
@@ -192,5 +193,23 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
             f" | loss (train/val) = {train_loss_epoch:.3f}/{val_loss_epoch:.3f}"
             f" | acc (train/val) = {train_acc_epoch:.3f}/{val_acc_epoch:.3f}"
             f" | miou (train/val) = {train_miou_epoch:.3f}/{val_miou_epoch:.3f}")
+        
+        if(epoch % config.snap_interval == 0):
+            checkpoint = {
+                "model_state_dict": network.cpu().state_dict(),
+            }
+            path_to_save = os.path.join(base_path, "snapshots", config.test_name)
+            if not os.path.exists(path_to_save):
+                os.makedirs(path_to_save)
+            path_to_save = os.path.join(path_to_save,f"pointnet_{epoch}_epochs.pt")
+            torch.save(checkpoint, path_to_save)
+            network.to(device)
+        
+        #add if to log tensorbard?
+        test_name = f"{config.test_name}_{config.num_epochs}_epochs" #get this name from the config?
+        writer.add_scalar(tag=f"{test_name}_Train/Loss", scalar_value=train_loss_epoch, global_step=epoch)
+        writer.add_scalar(tag=f"{test_name}_Train/Accuracy", scalar_value=train_acc_epoch, global_step=epoch)
+        writer.add_scalar(tag=f"{test_name}_Validation/Loss", scalar_value=val_loss_epoch, global_step=epoch)
+        writer.add_scalar(tag=f"{test_name}_Validation/Accuracy", scalar_value=val_acc_epoch, global_step=epoch)
 
     return metrics

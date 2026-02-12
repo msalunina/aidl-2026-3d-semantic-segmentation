@@ -11,3 +11,4 @@ tensorflow
 pyyaml
 laspy
 open3d
+tensorboard

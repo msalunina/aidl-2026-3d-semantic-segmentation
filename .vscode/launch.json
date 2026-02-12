@@ -1,0 +1,30 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Convert Las to Blocks",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/convert_las_to_blocks.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Visualize Las to Blocks",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/viz_blocks_open3d.py",
+            "console": "integratedTerminal"
+        },
+                {
+            "name": "Train segmentation",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/main.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}

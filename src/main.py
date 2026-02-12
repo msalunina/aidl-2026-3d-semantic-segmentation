@@ -4,7 +4,9 @@ from utils.config_parser import ConfigParser
 from utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
 from utils.trainer import train_model_segmentation
-
+from pathlib import Path
+import os
+from torch.utils.tensorboard import SummaryWriter
 
 def set_device():
     if torch.cuda.is_available(): 
@@ -20,13 +22,23 @@ def set_device():
 if __name__ == '__main__':
 
     # TODO: initiate logging
-
+    
+    base_path = Path(os.getcwd())
+    if "src" in base_path.parts:
+        base_path = base_path[:-1]
+    
     config_parser = ConfigParser(
         default_config_path="config/default.yaml",
         parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
     )
     config = config_parser.load()
     config_parser.display()
+
+    logs_path = os.path.join(base_path,"logs",f"{config.test_name}_{config.num_epochs}_ep")
+    if not os.path.exists(logs_path):
+        os.makedirs(logs_path)
+
+    writer = SummaryWriter(log_dir=logs_path)
 
     # Set device
     device = set_device()
@@ -98,8 +110,7 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("TRAINING")
     print("="*60)
-    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion)
-
+    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion, writer, device, base_path)
 
 
     # TODO: evaluation loop, we could put it into a separate class (evaluator.py) (measure metrics on test set)
