@@ -21,7 +21,7 @@ COLOR_MAP = config.viz_3d['color_mapping']
 
 def load_npz(path):
     d = np.load(path)
-    pts = d["points"]  # (4096,3)
+    pts = d["points"][:, :3]  # (4096,3)
     lbl = d["labels"]  # (4096,)
     return pts, lbl
 

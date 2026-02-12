@@ -13,10 +13,31 @@ class ConfigParser():
             raise ValueError("Parser argument is required. Please provide an ArgumentParser instance.")
         self.parser = parser
 
+    def _calculate_num_channels(self, use_features):
+        """Calculate total number of channels from feature list."""
+        channel_map = {
+            'xyz': 3,
+            'intensity': 1,
+            'return_number': 1,
+            'number_of_returns': 1,
+            'scan_angle_rank': 1
+        }
+        total = 0
+        for feature in use_features:
+            total += channel_map.get(feature, 0)
+        return total
+
     def load(self):
         # Load default config from YAML
         with open(self.config_path, 'r') as file:
             default_config = yaml.safe_load(file)
+
+        # Calculate num_channels from use_features if set to "auto"
+        num_channels_default = default_config['training']['num_channels']
+        if num_channels_default == 'auto':
+            use_features = default_config['dataset']['use_features']
+            num_channels_default = self._calculate_num_channels(use_features)
+            default_config['training']['num_channels'] = num_channels_default
 
         # ---- COMMAND LINE OVERRIDABLE PARAMETERS ----
         # All training parameters can be overridden from command line
@@ -30,8 +51,8 @@ class ConfigParser():
         self.parser.add_argument(
             '--num_channels', 
             type=int, 
-            default=default_config['training']['num_channels'], 
-            help='Number of input channels (e.g., 3 for XYZ)'
+            default=num_channels_default, 
+            help='Number of input channels (auto-calculated from use_features or manually specified)'
         )
         self.parser.add_argument(
             '--num_points', 
@@ -114,7 +135,8 @@ class ConfigParser():
             new_key = f"{parent_key}{sep}{key}" if parent_key else key
             
             # Keep certain nested structures intact
-            preserve_nested = key in ['class_mapping', 'color_mapping', '2d', '3d']
+            preserve_nested = key in ['class_mapping', 'color_mapping', '2d', '3d', 
+                                      'extract_features', 'use_features']
             preserve_parent = parent_key == 'visualization'
             
             if isinstance(value, dict) and not preserve_nested and not preserve_parent:
@@ -127,6 +149,8 @@ class ConfigParser():
                 elif parent_key == 'data_preprocessing':
                     if key == 'num_points':
                         new_key = 'preprocess_num_points'
+                    elif key == 'normalize':
+                        new_key = 'preprocess_normalize'
                     else:
                         new_key = key
                 elif parent_key == 'training':

@@ -28,7 +28,7 @@ def main():
 
     for i, fpath in enumerate(picks, 1):
         d = np.load(fpath)
-        pts = d["points"]
+        pts = d["points"][:, :3]
         lbl = d["labels"].astype(int)
 
         # Optional subsample (not usually needed since pts is 4096)

@@ -1,5 +1,5 @@
 """
-Dataset class for loading and preprocessing LAS point cloud files
+Dataset class for loading and preprocessing point cloud files with multiple features
 """
 
 import numpy as np
@@ -11,13 +11,25 @@ from typing import Literal
 
 class DALESDataset(Dataset):
     """
-    Dataset for loading DALES point cloud blocks.
+    Dataset for loading DALES point cloud blocks with configurable feature selection.
+    
+    The dataset loads .npz files containing all available features (7 channels:
+    x, y, z, intensity, return_number, number_of_returns, scan_angle_rank) and selects only the
+    requested features for training based on configuration.
+    
+    Channel mapping in .npz files:
+    - 0-2: x, y, z coordinates
+    - 3: intensity
+    - 4: return_number
+    - 5: number_of_returns
+    - 6: scan_angle_rank
     
     Args:
         data_dir: Path to directory containing .npz block files
         split: One of 'train', 'val', or 'test'
+        use_features: List of feature names to use ['xyz', 'intensity', 'return_number', 'number_of_returns', 'scan_angle_rank']
         num_points: Number of points to sample per block (if None, use all points)
-        normalize: Whether to normalize point clouds to unit sphere
+        normalize: Whether to normalize XYZ coordinates to unit sphere (other channels unchanged)
         use_all_files: If True, use all files in directory without splitting (for separate test folder)
         train_ratio: Proportion of data for training (ignored if use_all_files=True)
         val_ratio: Proportion of data for validation (ignored if use_all_files=True)
@@ -29,6 +41,7 @@ class DALESDataset(Dataset):
         self, 
         data_dir: str,
         split: Literal['train', 'val', 'test'] = 'train',
+        use_features: list = None,
         num_points: int = None,
         normalize: bool = True,
         use_all_files: bool = False,
@@ -41,6 +54,14 @@ class DALESDataset(Dataset):
         self.num_points = num_points
         self.normalize = normalize
         self.use_all_files = use_all_files
+        
+        # Feature selection configuration
+        if use_features is None:
+            use_features = ['xyz']  # Default to XYZ only
+        self.use_features = use_features
+        
+        # Build channel indices mapping
+        self._build_channel_mapping()
         
         # Load all block file paths
         self.block_files = sorted(self.data_dir.glob('**/*.npz'))
@@ -75,11 +96,52 @@ class DALESDataset(Dataset):
             
             print(f"Loaded {len(self.block_files)} blocks for {split} split")
     
+    def _build_channel_mapping(self):
+        """
+        Build mapping from feature names to channel indices in the .npz file.
+        
+        .npz files contain 7 channels: [x, y, z, intensity, return_number, number_of_returns, scan_angle_rank]
+        This method creates a list of indices to extract based on use_features.
+        """
+        # All available channels in preprocessed .npz files
+        all_channels = {
+            'xyz': [0, 1, 2],         # x, y, z
+            'intensity': [3],         # intensity
+            'return_number': [4],     # return_number
+            'number_of_returns': [5], # number_of_returns
+            'scan_angle_rank': [6]    # scan_angle_rank
+        }
+        
+        # Build list of channel indices to extract
+        self.channel_indices = []
+        for feature in self.use_features:
+            if feature not in all_channels:
+                raise ValueError(f"Unknown feature: {feature}. Available: {list(all_channels.keys())}")
+            self.channel_indices.extend(all_channels[feature])
+        
+        # Calculate total number of selected channels
+        self.num_channels = len(self.channel_indices)
+        
+        if self.split == 'train':
+            print(f"Selected features: {self.use_features}")
+            print(f"Channel indices: {self.channel_indices}")
+            print(f"Total channels for training: {self.num_channels}")
+    
     def _load_block(self, file_path: Path):
-        """Load a single block from .npz file"""
+        """
+        Load a single block from .npz file and extract only the configured channels.
+        
+        Returns:
+            points: Array of shape (N, num_selected_channels)
+            labels: Array of shape (N,)
+        """
         data = np.load(file_path)
-        points = data['points'].astype(np.float32)  # Shape: (N, 3)
-        labels = data['labels'].astype(np.int64)    # Shape: (N,)
+        points = data['points'].astype(np.float32)      # Shape: (N, 7)
+        labels = data['labels'].astype(np.int64)        # Shape: (N,)
+        
+        # Select only the configured channels
+        points = points[:, self.channel_indices]        # Shape: (N, num_selected_channels)
+        
         return points, labels
     
     def _downsample_points(self, points: np.ndarray, labels: np.ndarray):
@@ -100,17 +162,32 @@ class DALESDataset(Dataset):
     
     def _normalize_points(self, points: np.ndarray):
         """
-        Normalize point cloud to fit in a unit sphere centered at origin.
+        Normalize XYZ coordinates (first 3 channels) to fit in a unit sphere centered at origin.
         Subtracts centroid and scales by max distance from centroid.
+        Additional channels (if present) are left unchanged.
+        
+        Args:
+            points: Array of shape (N, num_channels) where num_channels >= 3
+            
+        Returns:
+            Normalized points with same shape as input
         """
-        # Center the points
-        centroid = np.mean(points, axis=0)
-        points = points - centroid
+        points = points.copy()
+        
+        # Normalize only XYZ coordinates (first 3 channels)
+        xyz = points[:, :3]
+        
+        # Center the XYZ points
+        centroid = np.mean(xyz, axis=0)
+        xyz = xyz - centroid
         
         # Scale to unit sphere
-        max_dist = np.max(np.sqrt(np.sum(points ** 2, axis=1)))
+        max_dist = np.max(np.sqrt(np.sum(xyz ** 2, axis=1)))
         if max_dist > 0:
-            points = points / max_dist
+            xyz = xyz / max_dist
+        
+        # Update XYZ coordinates, keep other channels unchanged
+        points[:, :3] = xyz
         
         return points
 
@@ -123,7 +200,7 @@ class DALESDataset(Dataset):
         Get a single item from the dataset.
         
         Returns:
-            points: Tensor of shape (num_points, 3) or (N, 3) if num_points is None
+            points: Tensor of shape (num_points, num_channels) or (N, num_channels) if num_points is None
             labels: Tensor of shape (num_points,) or (N,) if num_points is None
         """
         # Load block
@@ -133,7 +210,7 @@ class DALESDataset(Dataset):
         if self.num_points is not None:
             points, labels = self._downsample_points(points, labels)
         
-        # Normalize if needed
+        # Normalize if needed (only affects XYZ coordinates)
         if self.normalize:
             points = self._normalize_points(points)
         

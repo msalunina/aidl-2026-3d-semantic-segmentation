@@ -38,6 +38,7 @@ if __name__ == '__main__':
     train_dataset = DALESDataset(
         data_dir=f"{config.model_data_path}/train",
         split='train',
+        use_features=config.dataset_use_features,
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
         train_ratio=config.dataset_train_ratio,
@@ -47,6 +48,7 @@ if __name__ == '__main__':
     val_dataset = DALESDataset(
         data_dir=f"{config.model_data_path}/train",
         split='val',
+        use_features=config.dataset_use_features,
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
         train_ratio=config.dataset_train_ratio,
@@ -56,6 +58,7 @@ if __name__ == '__main__':
     test_dataset = DALESDataset(
         data_dir=f"{config.model_data_path}/test",
         split='test',
+        use_features=config.dataset_use_features,
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
         use_all_files=config.dataset_test_use_all_files,
