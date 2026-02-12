@@ -16,7 +16,7 @@ IGNORE_LABEL = config.ignore_label
 
 
 def main():
-    files = glob.glob(f"{BLOCK_DIR}\\*.npz")
+    files = list(Path(BLOCK_DIR).glob("*.npz"))
     if not files:
         raise RuntimeError(f"No .npz files found in {BLOCK_DIR}")
 
