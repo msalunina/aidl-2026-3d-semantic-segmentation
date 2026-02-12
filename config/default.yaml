@@ -14,6 +14,15 @@ data_preprocessing:
   # Optional: cap blocks per tile for quick experiments (None = keep all)
   max_blocks_per_tile: Null
 
+  extract_features:
+    - xyz                    # XYZ coordinates (3 channels) - REQUIRED
+    - intensity              # Intensity value (1 channel)
+    - return_number          # Return number (1 channel)
+    - number_of_returns      # Total returns (1 channel)
+    - scan_angle_rank        # Scan angle rank (1 channel)
+
+  normalize: true           # Normalize XYZ to unit sphere per block
+
   # 0 = unknown (ignore)
   class_mapping:
     1: 0 # ground
@@ -29,15 +38,24 @@ data_preprocessing:
   ignore_label: -1
 
 dataset:
-  normalize: false           # Normalize point clouds to unit sphere
+  normalize: false           # Normalize XYZ coordinates to unit sphere
   test_use_all_files: true   # If true, use all files without splitting
   train_ratio: 0.8           # 80% for training
   val_ratio: 0.2             # 20% for validation
   seed: 42                   # Random seed for reproducible splits
+  
+  # Features to use for training (selected from preprocessed data)
+  # Available: xyz, intensity, return_number, number_of_returns, scan_angle_rank
+  use_features:
+    - xyz                    # XYZ coordinates (3 channels) - REQUIRED
+    # - intensity              # Intensity value (1 channel)
+    - return_number          # Return number (1 channel)
+    - number_of_returns      # Total returns (1 channel)
+    - scan_angle_rank        # Scan angle rank (1 channel)
 
 training:
   model_name: pointnet
-  num_channels: 3
+  num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)
   num_points: 1024
   batch_size: 32
   num_epochs: 1
