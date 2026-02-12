@@ -1,7 +1,20 @@
 import argparse
+import torch
 from utils.config_parser import ConfigParser
 from utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
+from utils.trainer import train_model_segmentation
+
+
+def set_device():
+    if torch.cuda.is_available(): 
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available(): 
+        device = torch.device("mps")
+    else: device = torch.device("cpu")
+    
+    print(f"\nUsing device: {device}")
+    return device
 
 
 if __name__ == '__main__':
@@ -15,8 +28,8 @@ if __name__ == '__main__':
     config = config_parser.load()
     config_parser.display()
 
-
-    # TODO: set device
+    # Set device
+    device = set_device()
 
     print("\n" + "="*60)
     print("CREATING DATASETS AND DATALOADERS")
@@ -54,19 +67,37 @@ if __name__ == '__main__':
     val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
 
-    # TODO: initialize model dependent on the provided input
-    # e.g.:
-    # if args.model == 'pointnet':
-    #     from models.pointnet import PointNetSegmentation
-    #     model = PointNetSegmentation(...)
-    # elif args.model == '...':
-    #     ...
 
-    # TODO: define loss function and optimizer (should be the same?)
+    print("\n" + "="*60)
+    print("INITIALIZING MODEL, LOSS and OPTIMIZER")
+    print("="*60)
+    # Initialize model dependent on the provided input
+    if config.model_name == "pointnet":
+        from models.pointnet import PointNetSegmentation
+        model = PointNetSegmentation(num_classes=config.num_classes, 
+                                     input_channels=config.num_channels, 
+                                     dropout=config.dropout_rate).to(device)
+    else: 
+        raise ValueError(f"Model name {config.model_name} does not exist")
+        
+    # Define loss function and optimizer (should be the same?)
+    # We use NLLLoss because 'pointnet' outputs log-probabilities (log_softmax)
+    # ignore_index = 1: when label is -1, do not include it in the loss
+    criterion = torch.nn.NLLLoss(ignore_index=config.ignore_label)         
+    if config.optimizer == "adam":
+        optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    else:
+        raise ValueError(f"{config.optimizer} needs to be coded, stick to Adam")
 
     # TODO: we could put a learning rate scheduler here
 
     # TODO: training loop, we could put it into a separate class (trainer.py)
+    print("\n" + "="*60)
+    print("TRAINING")
+    print("="*60)
+    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion)
+
+
 
     # TODO: evaluation loop, we could put it into a separate class (evaluator.py) (measure metrics on test set)
 

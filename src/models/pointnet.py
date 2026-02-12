@@ -190,9 +190,9 @@ class PointNetClassification(nn.Module):
         x = F.relu(self.bn_1(self.fc_1(global_feature)))    # [B, 512]
         x = F.relu(self.bn_2(self.fc_2(x)))                 # [B, 256]
         x = self.dropout(x)
-        x = F.log_softmax(self.fc_3(x), dim=1)              # [B, num_classes}]
+        log_probs = F.log_softmax(self.fc_3(x), dim=1)      # [B, num_classes}]
 
-        return feature_transform, x
+        return feature_transform, log_probs
     
 
 class PointNetSegmentation(nn.Module):
@@ -246,7 +246,7 @@ class PointNetSegmentation(nn.Module):
         x = F.relu(self.bn_3(self.conv_3(x)))               # [batch, 128, nPoints]
         # This line can be commented if we simplify the extra 128 layer.
         x = F.relu(self.bn_4(self.conv_4(x)))               # [batch, 128, nPoints] 
-        x = F.log_softmax(self.conv_5(x), dim=1)            # [batch, num_classes, nPoints]
+        log_probs = F.log_softmax(self.conv_5(x), dim=1)    # [batch, num_classes, nPoints]
 
-        return feature_transform, x
+        return feature_transform, log_probs
 

@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from tqdm import tqdm
 
 
 
@@ -21,8 +22,8 @@ def compute_regularizationLoss(feature_tnet):
 
 def compute_batch_intersection_and_union(labels, predictions, num_classes): 
 
-    inter_batch = torch.zeros(num_classes, device=predictions.device, dtype=torch.float64)
-    union_batch = torch.zeros(num_classes, device=predictions.device, dtype=torch.float64)
+    inter_batch = torch.zeros(num_classes, device=predictions.device, dtype=torch.float32)
+    union_batch = torch.zeros(num_classes, device=predictions.device, dtype=torch.float32)
 
     for c in range(num_classes):
         inter_batch[c] = ((predictions == c) & (labels == c)).sum()     # BOTH ARE c
@@ -34,7 +35,7 @@ def compute_batch_intersection_and_union(labels, predictions, num_classes):
 # ----------------------------------------------------
 #    TRAINING EPOCH FUNCTION (SEGMENTATION)
 # ----------------------------------------------------
-def train_single_epoch_segmentation(train_loader, network, optimizer, criterion, num_classes):
+def train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion):
     
     device = next(network.parameters()).device  # guarantee that we are using the same device than the model
     network.train()                             # Activate the train=True flag inside the model
@@ -42,9 +43,9 @@ def train_single_epoch_segmentation(train_loader, network, optimizer, criterion,
     loss_history = []
     nCorrect = 0
     nTotal = 0
-    inter = torch.zeros(num_classes, device=device, dtype=torch.float64)
-    union = torch.zeros(num_classes, device=device, dtype=torch.float64)
-    for batch in train_loader:
+    inter = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
+    union = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
+    for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
 
         # Pointnet needs: [B, N, C] 
         points_BNC, labels = batch                                   # Points: [B, N, C] / labels: [B, N]
@@ -70,7 +71,7 @@ def train_single_epoch_segmentation(train_loader, network, optimizer, criterion,
         # Compute predictions
         predictions = log_probs_BCN.argmax(dim=1)
         # Identify valid labels (-1 is not valid)
-        id_valid = labels != -1                                      
+        id_valid = labels != config.ignore_label                                     
         valid_predictions = predictions[id_valid]
         valid_labels = labels[id_valid]
         # Accuracy
@@ -78,7 +79,7 @@ def train_single_epoch_segmentation(train_loader, network, optimizer, criterion,
         nCorrect = nCorrect + batch_correct                                 # num correct (valid) per epoch 
         nTotal = nTotal + id_valid.sum().item()                             # num total (valid) per epoch 
         # Update intersection and union
-        inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, num_classes)
+        inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, config.num_classes)
         inter += inter_batch
         union += union_batch
         # ------------------------------------------
@@ -90,7 +91,7 @@ def train_single_epoch_segmentation(train_loader, network, optimizer, criterion,
     train_acc_epoch = nCorrect / nTotal
     # Compute IoU per class and mean
     id_present = union>0                                                    # id of classes that are present
-    iou_class_epoch = torch.zeros(num_classes, device=device, dtype=torch.float64)
+    iou_class_epoch = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
     iou_class_epoch[id_present] = inter[id_present] / union[id_present]     # iou of each class, per epoch (could be returned)
     train_miou_epoch = iou_class_epoch[id_present].mean().item()            # mean iou over classes, per epoch
     
@@ -102,7 +103,7 @@ def train_single_epoch_segmentation(train_loader, network, optimizer, criterion,
 # ----------------------------------------------------
 #    TESTING EPOCH FUNCTION (SEGMENTATION)
 # ----------------------------------------------------
-def eval_single_epoch_segmentation(data_loader, network, criterion, num_classes):
+def eval_single_epoch_segmentation(config, data_loader, network, criterion):
 
     device = next(network.parameters()).device  # guarantee that we are using the same device than the model
 
@@ -112,9 +113,9 @@ def eval_single_epoch_segmentation(data_loader, network, criterion, num_classes)
         loss_history = []
         nCorrect = 0
         nTotal = 0
-        inter = torch.zeros(num_classes, device=device, dtype=torch.float64)
-        union = torch.zeros(num_classes, device=device, dtype=torch.float64)
-        for batch in data_loader:
+        inter = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
+        union = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
+        for batch in tqdm(data_loader, desc="val epoch", position=1, leave=False):
             
             # Pointnet needs: [B, N, C] 
             points_BNC, labels = batch                              # Points: [B, N, C] / labels: [B, N]  
@@ -133,7 +134,7 @@ def eval_single_epoch_segmentation(data_loader, network, criterion, num_classes)
             # Compute predictions
             predictions = log_probs_BCN.argmax(dim=1)
             # Identify valid labels (-1 is not valid)
-            id_valid = labels != -1                                      
+            id_valid = labels != config.ignore_label                                     
             valid_predictions = predictions[id_valid]
             valid_labels = labels[id_valid]
             # Accuracy
@@ -141,7 +142,7 @@ def eval_single_epoch_segmentation(data_loader, network, criterion, num_classes)
             nCorrect = nCorrect + batch_correct                                 # num correct (valid) per epoch 
             nTotal = nTotal + id_valid.sum().item()                             # num total (valid) per epoch 
             # Update intersection and union
-            inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, num_classes)
+            inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, config.num_classes)
             inter += inter_batch
             union += union_batch
             # ------------------------------------------
@@ -153,7 +154,7 @@ def eval_single_epoch_segmentation(data_loader, network, criterion, num_classes)
         eval_acc_epoch = nCorrect / nTotal
         # Compute IoU per class and mean
         id_present = union>0                                                    # id of classes that are present
-        iou_class_epoch = torch.zeros(num_classes, device=device, dtype=torch.float64)
+        iou_class_epoch = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
         iou_class_epoch[id_present] = inter[id_present] / union[id_present]     # iou of each class, per epoch (could be returned)
         eval_miou_epoch = iou_class_epoch[id_present].mean().item()             # mean iou over classes, per epoch
     
@@ -165,7 +166,7 @@ def eval_single_epoch_segmentation(data_loader, network, criterion, num_classes)
 # ----------------------------------------------------
 #    TRAINING LOOP (iterate on epochs)
 # ----------------------------------------------------
-def train_model_segmentation(hyper, train_loader, val_loader, network, optimizer, criterion, num_classes):
+def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion):
 
     metrics = {
         "train_loss": [],
@@ -173,11 +174,12 @@ def train_model_segmentation(hyper, train_loader, val_loader, network, optimizer
         "train_miou": [],
         "val_loss": [],   
         "val_acc": [],   
-        "val_miou": []}
+        "val_miou": []
+        }
 
-    for epoch in range(hyper["epochs"]):
-        train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(train_loader, network, optimizer, criterion, num_classes)
-        val_loss_epoch, val_acc_epoch, val_miou_epoch = eval_single_epoch_segmentation(val_loader, network, criterion, num_classes)
+    for epoch in tqdm(range(config.num_epochs), desc="Looping on epochs", position=0):
+        train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion)
+        val_loss_epoch, val_acc_epoch, val_miou_epoch = eval_single_epoch_segmentation(config, val_loader, network, criterion)
         
         metrics["train_loss"].append(train_loss_epoch)
         metrics["train_acc"].append(train_acc_epoch)
@@ -186,9 +188,9 @@ def train_model_segmentation(hyper, train_loader, val_loader, network, optimizer
         metrics["val_acc"].append(val_acc_epoch)
         metrics["val_miou"].append(val_miou_epoch)
 
-        print(f"Epoch: {epoch+1}/{hyper['epochs']}"
-            f" | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f}"
-            f" | acc (train/val) = {train_acc_epoch:.2f}/{val_acc_epoch:.2f}"
-            f" | miou (train/val) = {train_miou_epoch:.2f}/{val_miou_epoch:.2f}")
+        tqdm.write(f"Epoch: {epoch+1}/{config.num_epochs}"
+            f" | loss (train/val) = {train_loss_epoch:.3f}/{val_loss_epoch:.3f}"
+            f" | acc (train/val) = {train_acc_epoch:.3f}/{val_acc_epoch:.3f}"
+            f" | miou (train/val) = {train_miou_epoch:.3f}/{val_miou_epoch:.3f}")
 
     return metrics
