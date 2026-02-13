@@ -48,7 +48,7 @@ dataset:
   # Available: xyz, intensity, return_number, number_of_returns, scan_angle_rank
   use_features:
     - xyz                    # XYZ coordinates (3 channels) - REQUIRED
-    # - intensity              # Intensity value (1 channel)
+    #- intensity              # Intensity value (1 channel)
     - return_number          # Return number (1 channel)
     - number_of_returns      # Total returns (1 channel)
     - scan_angle_rank        # Scan angle rank (1 channel)

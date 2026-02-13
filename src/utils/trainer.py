@@ -43,8 +43,8 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     loss_history = []
     nCorrect = 0
     nTotal = 0
-    inter = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
-    union = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
+    inter = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+    union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
     for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
 
         # Pointnet needs: [B, N, C] 
@@ -79,7 +79,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         nCorrect = nCorrect + batch_correct                                 # num correct (valid) per epoch 
         nTotal = nTotal + id_valid.sum().item()                             # num total (valid) per epoch 
         # Update intersection and union
-        inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, config.num_classes)
+        inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, network.num_classes)
         inter += inter_batch
         union += union_batch
         # ------------------------------------------
@@ -91,7 +91,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     train_acc_epoch = nCorrect / nTotal
     # Compute IoU per class and mean
     id_present = union>0                                                    # id of classes that are present
-    iou_class_epoch = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
+    iou_class_epoch = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
     iou_class_epoch[id_present] = inter[id_present] / union[id_present]     # iou of each class, per epoch (could be returned)
     train_miou_epoch = iou_class_epoch[id_present].mean().item()            # mean iou over classes, per epoch
     
@@ -113,8 +113,8 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
         loss_history = []
         nCorrect = 0
         nTotal = 0
-        inter = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
-        union = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
+        inter = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+        union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
         for batch in tqdm(data_loader, desc="val epoch", position=1, leave=False):
             
             # Pointnet needs: [B, N, C] 
@@ -142,7 +142,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
             nCorrect = nCorrect + batch_correct                                 # num correct (valid) per epoch 
             nTotal = nTotal + id_valid.sum().item()                             # num total (valid) per epoch 
             # Update intersection and union
-            inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, config.num_classes)
+            inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, network.num_classes)
             inter += inter_batch
             union += union_batch
             # ------------------------------------------
@@ -154,7 +154,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
         eval_acc_epoch = nCorrect / nTotal
         # Compute IoU per class and mean
         id_present = union>0                                                    # id of classes that are present
-        iou_class_epoch = torch.zeros(config.num_classes, device=device, dtype=torch.float32)
+        iou_class_epoch = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
         iou_class_epoch[id_present] = inter[id_present] / union[id_present]     # iou of each class, per epoch (could be returned)
         eval_miou_epoch = iou_class_epoch[id_present].mean().item()             # mean iou over classes, per epoch
     
@@ -209,7 +209,9 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         test_name = f"{config.test_name}_{config.num_epochs}_epochs" #get this name from the config?
         writer.add_scalar(tag=f"{test_name}_Train/Loss", scalar_value=train_loss_epoch, global_step=epoch)
         writer.add_scalar(tag=f"{test_name}_Train/Accuracy", scalar_value=train_acc_epoch, global_step=epoch)
+        writer.add_scalar(tag=f"{test_name}_Train/mIoU", scalar_value=train_miou_epoch, global_step=epoch)
         writer.add_scalar(tag=f"{test_name}_Validation/Loss", scalar_value=val_loss_epoch, global_step=epoch)
         writer.add_scalar(tag=f"{test_name}_Validation/Accuracy", scalar_value=val_acc_epoch, global_step=epoch)
+        writer.add_scalar(tag=f"{test_name}_Validation/mIoU", scalar_value=val_miou_epoch, global_step=epoch)
 
     return metrics

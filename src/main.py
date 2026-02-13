@@ -1,11 +1,13 @@
 import argparse
 import torch
+import numpy as np
+import os
+import random
 from utils.config_parser import ConfigParser
 from utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
 from utils.trainer import train_model_segmentation
 from pathlib import Path
-import os
 from torch.utils.tensorboard import SummaryWriter
 
 def set_device():
@@ -19,9 +21,14 @@ def set_device():
     return device
 
 
-if __name__ == '__main__':
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
 
-    # TODO: initiate logging
+
+if __name__ == '__main__':
     
     base_path = Path(os.getcwd())
     if "src" in base_path.parts:
@@ -34,11 +41,15 @@ if __name__ == '__main__':
     config = config_parser.load()
     config_parser.display()
 
+    # TODO: initiate logging¡
     logs_path = os.path.join(base_path,"logs",f"{config.test_name}_{config.num_epochs}_ep")
     if not os.path.exists(logs_path):
         os.makedirs(logs_path)
 
     writer = SummaryWriter(log_dir=logs_path)
+
+    # set seed (here? config.dataset_seed?)
+    set_seed(config.dataset_seed)
 
     # Set device
     device = set_device()
@@ -97,7 +108,7 @@ if __name__ == '__main__':
         
     # Define loss function and optimizer (should be the same?)
     # We use NLLLoss because 'pointnet' outputs log-probabilities (log_softmax)
-    # ignore_index = 1: when label is -1, do not include it in the loss
+    # ignore_index = -1: when label is -1, do not include it in the loss
     criterion = torch.nn.NLLLoss(ignore_index=config.ignore_label)         
     if config.optimizer == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
@@ -106,7 +117,7 @@ if __name__ == '__main__':
 
     # TODO: we could put a learning rate scheduler here
 
-    # TODO: training loop, we could put it into a separate class (trainer.py)
+    # Training loop, we could put it into a separate class (trainer.py)
     print("\n" + "="*60)
     print("TRAINING")
     print("="*60)
