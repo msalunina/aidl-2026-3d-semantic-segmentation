@@ -6,6 +6,7 @@ Based on the paper: PointNet: Deep Learning on Point Sets for 3D Classification 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models.img_encoder import ImageEncoder
  
 
 class TransformationNet(nn.Module):
@@ -212,9 +213,12 @@ class PointNetSegmentation(nn.Module):
             input_channels=input_channels
         )
 
+        #image feature extractor
+        self.img_encoder = ImageEncoder()
+
         # Segmentation head: 
         # MLP(512, 256, 128)
-        self.conv_1 = nn.Conv1d(1088, 512, 1)                   # weight matrix: [512,64+1024]
+        self.conv_1 = nn.Conv1d(2112, 512, 1)                   # weight matrix: [512,64+1024+1024]
         self.conv_2 = nn.Conv1d(512, 256, 1)                    # weight matrix: [256,512]
         self.conv_3 = nn.Conv1d(256, 128, 1)                    # weight matrix: [128,256]
         self.bn_1 = nn.BatchNorm1d(512)
@@ -228,18 +232,21 @@ class PointNetSegmentation(nn.Module):
         self.conv_5 = nn.Conv1d(128, num_classes, 1)            # weight matrix: [num_classes,128]
         self.bn_4 = nn.BatchNorm1d(128)
 
-    def forward(self, x):
+    def forward(self, x, img):
         # x: [B, N, 3] or [B, N, 3+C]
 
         feature_transform, point_features, global_feature = self.backbone(x)
         # point_features: [B, 64, N]
         # global feature: [B, 1024, 1]
+
+        feature_vector, _ = self.img_encoder(img)
         
         num_points = x.shape[1]
         global_feature_expanded = global_feature.repeat(1, 1, num_points)   # [B, 1024, N]
+        image_feature_expanded = feature_vector.repeat(1, 1, num_points)
 
         # Concatenate point features and global feature
-        x = torch.cat([point_features, global_feature_expanded], dim=1)     # [B, 64+1024, N]
+        x = torch.cat([point_features, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024, N]
 
         x = F.relu(self.bn_1(self.conv_1(x)))               # [batch, 512, nPoints]
         x = F.relu(self.bn_2(self.conv_2(x)))               # [batch, 256, nPoints]

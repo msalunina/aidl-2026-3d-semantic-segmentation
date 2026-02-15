@@ -55,8 +55,10 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         # Set network gradients to 0
         optimizer.zero_grad()  
 
-        # Forward points through the network                                    
-        feature_tnet, log_probs_BCN = network(points_BNC)             
+        # Forward points through the network 
+        image = torch.rand(points_BNC.shape[0], 1, 256, 256).to(device)
+                                   
+        feature_tnet, log_probs_BCN = network(points_BNC, image)             
         
         # Compute loss: NLLLoss(ignore_index=-1) 
         # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
@@ -121,9 +123,10 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
             points_BNC, labels = batch                              # Points: [B, N, C] / labels: [B, N]  
             points_BNC = points_BNC.to(device)
             labels = labels.to(device) 
-
+            
+            image = torch.rand(points_BNC.shape[0], 1, 256, 256).to(device)
             # Forward points through the network 
-            _, log_probs_BCN = network(points_BNC)                  
+            _, log_probs_BCN = network(points_BNC, image)                  
 
             # Compute loss: NLLLoss(ignore_index=-1) 
             # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!

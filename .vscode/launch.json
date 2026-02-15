@@ -19,11 +19,18 @@
             "program": "src/viz_blocks_open3d.py",
             "console": "integratedTerminal"
         },
-                {
+        {
             "name": "Train segmentation",
             "type": "debugpy",
             "request": "launch",
             "program": "src/main.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Current file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
             "console": "integratedTerminal"
         }
     ]

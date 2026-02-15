@@ -54,13 +54,13 @@ dataset:
     - scan_angle_rank        # Scan angle rank (1 channel)
 
 training:
-  test_name: segmentation_test
+  test_name: segmentation_ipointnet
   snap_interval: 5
   model_name: pointnet
   num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)
   num_points: 1024
   batch_size: 32
-  num_epochs: 30
+  num_epochs: 25
   learning_rate: 0.001
   dropout_rate: 0.3
   optimizer: adam
