@@ -48,16 +48,16 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
 
         # Pointnet needs: [B, N, C] 
-        points_BNC, labels = batch                                   # Points: [B, N, C] / labels: [B, N]
+        points_BNC, labels, image = batch                                   # Points: [B, N, C] / labels: [B, N]
+        image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
         points_BNC = points_BNC.to(device)
         labels = labels.to(device) 
+        image = image.to(device)
 
         # Set network gradients to 0
         optimizer.zero_grad()  
 
-        # Forward points through the network 
-        image = torch.rand(points_BNC.shape[0], 1, 256, 256).to(device)
-                                   
+        # Forward points and image through the network                                    
         feature_tnet, log_probs_BCN = network(points_BNC, image)             
         
         # Compute loss: NLLLoss(ignore_index=-1) 
@@ -120,11 +120,12 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
         for batch in tqdm(data_loader, desc="val epoch", position=1, leave=False):
             
             # Pointnet needs: [B, N, C] 
-            points_BNC, labels = batch                              # Points: [B, N, C] / labels: [B, N]  
+            points_BNC, labels, image = batch                              # Points: [B, N, C] / labels: [B, N]  
+            image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
             points_BNC = points_BNC.to(device)
             labels = labels.to(device) 
-            
-            image = torch.rand(points_BNC.shape[0], 1, 256, 256).to(device)
+            image = image.to(device)
+
             # Forward points through the network 
             _, log_probs_BCN = network(points_BNC, image)                  
 
@@ -179,7 +180,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         "val_acc": [],   
         "val_miou": []
         }
-
+    
     for epoch in tqdm(range(config.num_epochs), desc="Looping on epochs", position=0):
         train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion)
 
@@ -216,5 +217,11 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         writer.add_scalar(tag=f"{test_name}_Validation/Loss", scalar_value=val_loss_epoch, global_step=epoch)
         writer.add_scalar(tag=f"{test_name}_Validation/Accuracy", scalar_value=val_acc_epoch, global_step=epoch)
         writer.add_scalar(tag=f"{test_name}_Validation/mIoU", scalar_value=val_miou_epoch, global_step=epoch)
-
+        #show a pointcloud from training with the transformation
+        """
+        for pc, label, img in train_loader:
+        pcs = pc[:1,:,:3]
+        writer.add_mesh("pointcloud", vertices=pcs, global_step=0)
+        break
+        """
     return metrics

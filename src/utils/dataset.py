@@ -40,6 +40,7 @@ class DALESDataset(Dataset):
     def __init__(
         self, 
         data_dir: str,
+        images_dir: str,
         split: Literal['train', 'val', 'test'] = 'train',
         use_features: list = None,
         num_points: int = None,
@@ -54,6 +55,9 @@ class DALESDataset(Dataset):
         self.num_points = num_points
         self.normalize = normalize
         self.use_all_files = use_all_files
+
+        #add the path for the images
+        self.images_dir = Path(images_dir)
         
         # Feature selection configuration
         if use_features is None:
@@ -65,6 +69,7 @@ class DALESDataset(Dataset):
         
         # Load all block file paths
         self.block_files = sorted(self.data_dir.glob('**/*.npz'))
+        self.image_files = sorted(self.images_dir.glob('**/*.npz'))
         
         if len(self.block_files) == 0:
             raise ValueError(f"No .npz files found in {self.data_dir}")
@@ -93,6 +98,7 @@ class DALESDataset(Dataset):
                 raise ValueError(f"Invalid split: {split}. Must be 'train', 'val', or 'test'")
             
             self.block_files = [self.block_files[i] for i in split_indices]
+            self.image_files = [self.image_files[i] for i in split_indices]
             
             print(f"Loaded {len(self.block_files)} blocks for {split} split")
     
@@ -127,6 +133,16 @@ class DALESDataset(Dataset):
             print(f"Channel indices: {self.channel_indices}")
             print(f"Total channels for training: {self.num_channels}")
     
+    def _load_image(self, file_path: Path):
+        """
+        Load a single image from a .npz file 
+        Returns
+            image: numpy array 256,256 with range z values
+        """
+        data = np.load(file_path)
+        zrange = data['z_range'].astype(np.float32)
+        return zrange
+
     def _load_block(self, file_path: Path):
         """
         Load a single block from .npz file and extract only the configured channels.
@@ -205,7 +221,7 @@ class DALESDataset(Dataset):
         """
         # Load block
         points, labels = self._load_block(self.block_files[idx])
-        
+        image = self._load_image(self.image_files[idx])
         # Downsample if needed
         if self.num_points is not None:
             points, labels = self._downsample_points(points, labels)
@@ -218,4 +234,4 @@ class DALESDataset(Dataset):
         points = torch.from_numpy(points).float()
         labels = torch.from_numpy(labels).long()
         
-        return points, labels
+        return points, labels, image

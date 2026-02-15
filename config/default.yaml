@@ -1,6 +1,7 @@
 paths:
   raw_data: ./data/dales_las
   model_data: ./data/dales_blocks
+  image_data: ./data/dales_blocks_BEV
   logs: ./logs
   figures: ./figs
   models: ./model_objects

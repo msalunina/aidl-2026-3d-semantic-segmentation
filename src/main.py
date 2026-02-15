@@ -60,6 +60,7 @@ if __name__ == '__main__':
     # Create datasets
     train_dataset = DALESDataset(
         data_dir=f"{config.model_data_path}/train",
+        images_dir=f"{config.image_data_path}/train",
         split='train',
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
@@ -70,6 +71,7 @@ if __name__ == '__main__':
     )
     val_dataset = DALESDataset(
         data_dir=f"{config.model_data_path}/train",
+        images_dir=f"{config.image_data_path}/train",
         split='val',
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
@@ -80,6 +82,7 @@ if __name__ == '__main__':
     )
     test_dataset = DALESDataset(
         data_dir=f"{config.model_data_path}/test",
+        images_dir=f"{config.image_data_path}/test",
         split='test',
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
@@ -92,7 +95,6 @@ if __name__ == '__main__':
     train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
-
 
     print("\n" + "="*60)
     print("INITIALIZING MODEL, LOSS and OPTIMIZER")
