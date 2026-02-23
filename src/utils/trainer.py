@@ -225,15 +225,15 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         writer.add_scalars(main_tag="Loss", tag_scalar_dict={
             "Train": train_loss_epoch,
             "Validation": val_loss_epoch,
-        }, global_step=epoch)
+        }, global_step=epoch+1)
         writer.add_scalars(main_tag="Accuracy", tag_scalar_dict={
             "Train": train_acc_epoch,
             "Validation": val_acc_epoch,
-        }, global_step=epoch)
+        }, global_step=epoch+1)
         writer.add_scalars(main_tag="mIoU", tag_scalar_dict={
             "Train": train_miou_epoch,
             "Validation": val_miou_epoch
-        }, global_step=epoch)
+        }, global_step=epoch+1)
 
         #show a pointcloud from training with the transformation
         """
