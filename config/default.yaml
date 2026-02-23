@@ -60,10 +60,16 @@ training:
   num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)
   num_points: 1024
   batch_size: 32
-  num_epochs: 30
+  num_epochs: 2
   learning_rate: 0.001
   dropout_rate: 0.3
   optimizer: adam
+  loss_weights:
+    - 0.03968058064795845
+    - 0.07309077899483409
+    - 0.12226475340028614
+    - 2.1065384156113427
+    - 2.6584254713455793
 
 visualization:
   2d:

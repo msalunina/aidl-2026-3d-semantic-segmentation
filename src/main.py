@@ -109,7 +109,8 @@ if __name__ == '__main__':
     # Define loss function and optimizer (should be the same?)
     # We use NLLLoss because 'pointnet' outputs log-probabilities (log_softmax)
     # ignore_index = -1: when label is -1, do not include it in the loss
-    criterion = torch.nn.NLLLoss(ignore_index=config.ignore_label)         
+    loss_weights = torch.tensor(config.loss_weights, dtype=torch.float32).to(device)
+    criterion = torch.nn.NLLLoss(weight=loss_weights, ignore_index=config.ignore_label)         
     if config.optimizer == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     else:
