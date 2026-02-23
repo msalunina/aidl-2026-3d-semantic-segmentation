@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 import torch
 import numpy as np
 import os
@@ -41,8 +42,9 @@ if __name__ == '__main__':
     config = config_parser.load()
     config_parser.display()
 
-    # TODO: initiate logging¡
-    logs_path = os.path.join(base_path,"logs",f"{config.test_name}_{config.num_epochs}_ep")
+    # Initialize TensorBoard writer
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    logs_path = os.path.join(base_path, "logs", f"{config.test_name}_{timestamp}")
     if not os.path.exists(logs_path):
         os.makedirs(logs_path)
 

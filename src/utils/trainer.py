@@ -221,14 +221,20 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
             torch.save(checkpoint, path_to_save)
             network.to(device)
         
-        #add if to log tensorbard?
-        test_name = f"{config.test_name}_{config.num_epochs}_epochs" #get this name from the config?
-        writer.add_scalar(tag=f"{test_name}_Train/Loss", scalar_value=train_loss_epoch, global_step=epoch)
-        writer.add_scalar(tag=f"{test_name}_Train/Accuracy", scalar_value=train_acc_epoch, global_step=epoch)
-        writer.add_scalar(tag=f"{test_name}_Train/mIoU", scalar_value=train_miou_epoch, global_step=epoch)
-        writer.add_scalar(tag=f"{test_name}_Validation/Loss", scalar_value=val_loss_epoch, global_step=epoch)
-        writer.add_scalar(tag=f"{test_name}_Validation/Accuracy", scalar_value=val_acc_epoch, global_step=epoch)
-        writer.add_scalar(tag=f"{test_name}_Validation/mIoU", scalar_value=val_miou_epoch, global_step=epoch)
+        # log to tensorboard
+        writer.add_scalars(main_tag="Loss", tag_scalar_dict={
+            "Train": train_loss_epoch,
+            "Validation": val_loss_epoch,
+        }, global_step=epoch)
+        writer.add_scalars(main_tag="Accuracy", tag_scalar_dict={
+            "Train": train_acc_epoch,
+            "Validation": val_acc_epoch,
+        }, global_step=epoch)
+        writer.add_scalars(main_tag="mIoU", tag_scalar_dict={
+            "Train": train_miou_epoch,
+            "Validation": val_miou_epoch
+        }, global_step=epoch)
+
         #show a pointcloud from training with the transformation
         """
         for pc, label, img in train_loader:
