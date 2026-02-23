@@ -6,6 +6,7 @@ Based on the paper: PointNet: Deep Learning on Point Sets for 3D Classification 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models.img_encoder import ImageEncoder
  
 
 class TransformationNet(nn.Module):
@@ -193,7 +194,7 @@ class PointNetClassification(nn.Module):
         log_probs = F.log_softmax(self.fc_3(x), dim=1)      # [B, num_classes}]
 
         return feature_transform, log_probs
-    
+
 
 class PointNetSegmentation(nn.Module):
     """
@@ -240,6 +241,68 @@ class PointNetSegmentation(nn.Module):
 
         # Concatenate point features and global feature
         x = torch.cat([point_features, global_feature_expanded], dim=1)     # [B, 64+1024, N]
+
+        x = F.relu(self.bn_1(self.conv_1(x)))               # [batch, 512, nPoints]
+        x = F.relu(self.bn_2(self.conv_2(x)))               # [batch, 256, nPoints]
+        x = F.relu(self.bn_3(self.conv_3(x)))               # [batch, 128, nPoints]
+        # This line can be commented if we simplify the extra 128 layer.
+        x = F.relu(self.bn_4(self.conv_4(x)))               # [batch, 128, nPoints] 
+        log_probs = F.log_softmax(self.conv_5(x), dim=1)    # [batch, num_classes, nPoints]
+
+        return feature_transform, log_probs
+
+
+class IPointNetSegmentation(nn.Module):
+    """
+    PointNet for 3D Semantic Segmentation
+    """
+
+    def __init__(self, num_classes, input_channels=3, dropout=0.3):
+        super(IPointNetSegmentation, self).__init__()
+        self.num_classes = num_classes
+        self.input_channels = input_channels
+        # OLGA: paper says there is no dropout for segmentation
+        # self.dropout = nn.Dropout(p=dropout)    
+
+        # Feature extraction backbone
+        self.backbone = PointNetBackbone(
+            input_channels=input_channels
+        )
+
+        #image feature extractor
+        self.img_encoder = ImageEncoder()
+
+        # Segmentation head: 
+        # MLP(512, 256, 128)
+        self.conv_1 = nn.Conv1d(2112, 512, 1)                   # weight matrix: [512,64+1024+1024]
+        self.conv_2 = nn.Conv1d(512, 256, 1)                    # weight matrix: [256,512]
+        self.conv_3 = nn.Conv1d(256, 128, 1)                    # weight matrix: [128,256]
+        self.bn_1 = nn.BatchNorm1d(512)
+        self.bn_2 = nn.BatchNorm1d(256)
+        self.bn_3 = nn.BatchNorm1d(128)
+
+        # MLP(128,num_classes)
+        # OLGA: according to Fig 2 in the paper, the Segmentation head has
+        # one extra 128 layer (self.conv_4 + self.bn_4) before num_classes
+        self.conv_4 = nn.Conv1d(128, 128, 1)                    # weight matrix: [128,128]         
+        self.conv_5 = nn.Conv1d(128, num_classes, 1)            # weight matrix: [num_classes,128]
+        self.bn_4 = nn.BatchNorm1d(128)
+
+    def forward(self, x, img):
+        # x: [B, N, 3] or [B, N, 3+C]
+
+        feature_transform, point_features, global_feature = self.backbone(x)
+        # point_features: [B, 64, N]
+        # global feature: [B, 1024, 1]
+
+        feature_vector, _ = self.img_encoder(img)
+        
+        num_points = x.shape[1]
+        global_feature_expanded = global_feature.repeat(1, 1, num_points)   # [B, 1024, N]
+        image_feature_expanded = feature_vector.repeat(1, 1, num_points)
+
+        # Concatenate point features and global feature
+        x = torch.cat([point_features, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024, N]
 
         x = F.relu(self.bn_1(self.conv_1(x)))               # [batch, 512, nPoints]
         x = F.relu(self.bn_2(self.conv_2(x)))               # [batch, 256, nPoints]

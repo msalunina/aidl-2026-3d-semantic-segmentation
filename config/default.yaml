@@ -1,6 +1,7 @@
 paths:
   raw_data: ./data/dales_las
   model_data: ./data/dales_blocks
+  image_data: ./data/dales_blocks_BEV
   logs: ./logs
   figures: ./figs
   models: ./model_objects
@@ -54,7 +55,7 @@ dataset:
     - scan_angle_rank        # Scan angle rank (1 channel)
 
 training:
-  test_name: segmentation_test
+  test_name: segmentation_ipointnet
   snap_interval: 5
   model_name: pointnet
   num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)

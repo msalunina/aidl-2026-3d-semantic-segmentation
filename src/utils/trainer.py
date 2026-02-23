@@ -35,7 +35,7 @@ def compute_batch_intersection_and_union(labels, predictions, num_classes):
 # ----------------------------------------------------
 #    TRAINING EPOCH FUNCTION (SEGMENTATION)
 # ----------------------------------------------------
-def train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion):
+def train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, use_image=False):
     
     device = next(network.parameters()).device  # guarantee that we are using the same device than the model
     network.train()                             # Activate the train=True flag inside the model
@@ -48,15 +48,21 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
 
         # Pointnet needs: [B, N, C] 
-        points_BNC, labels = batch                                   # Points: [B, N, C] / labels: [B, N]
+        points_BNC, labels, image = batch                                   # Points: [B, N, C] / labels: [B, N]
+        if use_image:
+            image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
+            image = image.to(device)
         points_BNC = points_BNC.to(device)
         labels = labels.to(device) 
 
         # Set network gradients to 0
         optimizer.zero_grad()  
 
-        # Forward points through the network                                    
-        feature_tnet, log_probs_BCN = network(points_BNC)             
+        # Forward points and image through the network  
+        if use_image:                                  
+            feature_tnet, log_probs_BCN = network(points_BNC, image)
+        else:
+            feature_tnet, log_probs_BCN = network(points_BNC)             
         
         # Compute loss: NLLLoss(ignore_index=-1) 
         # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
@@ -103,7 +109,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
 # ----------------------------------------------------
 #    TESTING EPOCH FUNCTION (SEGMENTATION)
 # ----------------------------------------------------
-def eval_single_epoch_segmentation(config, data_loader, network, criterion):
+def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_image=False):
 
     device = next(network.parameters()).device  # guarantee that we are using the same device than the model
 
@@ -118,12 +124,18 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
         for batch in tqdm(data_loader, desc="val epoch", position=1, leave=False):
             
             # Pointnet needs: [B, N, C] 
-            points_BNC, labels = batch                              # Points: [B, N, C] / labels: [B, N]  
+            points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N]  
+            if use_image:
+                image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
+                image = image.to(device)
             points_BNC = points_BNC.to(device)
             labels = labels.to(device) 
 
             # Forward points through the network 
-            _, log_probs_BCN = network(points_BNC)                  
+            if use_image:                                  
+                feature_tnet, log_probs_BCN = network(points_BNC, image)
+            else:
+                feature_tnet, log_probs_BCN = network(points_BNC)            
 
             # Compute loss: NLLLoss(ignore_index=-1) 
             # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
@@ -168,6 +180,10 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
 # ----------------------------------------------------
 def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion, writer, device, base_path):
 
+    use_image = False
+    if config.model_name == "ipointnet":
+        use_image = True
+
     metrics = {
         "train_loss": [],
         "train_acc": [], 
@@ -176,11 +192,11 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         "val_acc": [],   
         "val_miou": []
         }
-
+    
     for epoch in tqdm(range(config.num_epochs), desc="Looping on epochs", position=0):
-        train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion)
+        train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, use_image)
 
-        val_loss_epoch, val_acc_epoch, val_miou_epoch = eval_single_epoch_segmentation(config, val_loader, network, criterion)
+        val_loss_epoch, val_acc_epoch, val_miou_epoch = eval_single_epoch_segmentation(config, val_loader, network, criterion, use_image)
         
         metrics["train_loss"].append(train_loss_epoch)
         metrics["train_acc"].append(train_acc_epoch)
@@ -213,5 +229,11 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         writer.add_scalar(tag=f"{test_name}_Validation/Loss", scalar_value=val_loss_epoch, global_step=epoch)
         writer.add_scalar(tag=f"{test_name}_Validation/Accuracy", scalar_value=val_acc_epoch, global_step=epoch)
         writer.add_scalar(tag=f"{test_name}_Validation/mIoU", scalar_value=val_miou_epoch, global_step=epoch)
-
+        #show a pointcloud from training with the transformation
+        """
+        for pc, label, img in train_loader:
+        pcs = pc[:1,:,:3]
+        writer.add_mesh("pointcloud", vertices=pcs, global_step=0)
+        break
+        """
     return metrics
