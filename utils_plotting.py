@@ -2,46 +2,73 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_metrics(metrics, metric, save_dir = None):
+def plot_metrics(metrics, task, save_dir = None):
 
-    train_loss = metrics["train_loss"]
-    val_loss = metrics["val_loss"]
+    if task == "classification":
 
-    if metric == "acc":
-        title = "Accuracy"
-        train_metric = metrics["train_acc"]
-        val_metric = metrics["val_acc"]
-        fig_name = "loss_accuracy_curves.png"
-    elif metric == "miou":
-        title = "Mean IoU"        
-        train_metric = metrics["train_miou"]
-        val_metric = metrics["val_miou"]
-        fig_name = "loss_miou_curves.png"
-    else: raise TypeError(f"{metric} doesn't exist!")
-
+        fig = plt.figure(figsize=(10, 5))
+        ax1 = fig.add_subplot(121)
+        ax1.set_title(f"{task} / Loss")
+        ax1.plot(metrics["train_loss"], label='train')
+        ax1.plot(metrics["val_loss"], label='validation')
+        ax1.set_xlabel("Epoch")
+        ax1.set_ylabel("Loss")
+        ax1.set_box_aspect(1)
+        ax1.legend()
     
-    # PLOT TRAINING AND ACCURACY CURVES
-    plt.figure(figsize=(10, 8))
-    
-    plt.subplot(2,1,1)
-    plt.plot(train_loss, label='train')
-    plt.plot(val_loss, label='validation')
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title('Loss')
-    plt.legend()
+        ax2 = fig.add_subplot(122)
+        ax2.set_title(f"{task} / Accuracy")
+        ax2.plot(metrics["train_acc"], label='train')
+        ax2.plot(metrics["val_acc"], label='validation')
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("Accuracy")
+        ax2.set_box_aspect(1)
+        ax2.legend()
 
-    plt.subplot(2,1,2)
-    plt.plot(train_metric, label='train')
-    plt.plot(val_metric, label='validation')
-    plt.xlabel("Epoch")
-    plt.ylabel(title)
-    plt.title(title)
-    plt.legend()
-    # FIFRST SAVE THEN SHOW!!!!
-    if save_dir is not None:
-        plt.savefig(save_dir / fig_name, dpi=200, bbox_inches="tight")
-    plt.show()
+        # FIFRST SAVE THEN SHOW!!!!
+        if save_dir is not None:
+            fig.savefig(save_dir / "metric_curves.png", dpi=200, bbox_inches="tight")
+        plt.show()
+
+
+    elif task == "segmentation":
+    
+        fig = plt.figure(figsize=(15, 5))
+        ax1 = fig.add_subplot(131)
+        ax1.set_title(f"{task} / Loss")
+        ax1.plot(metrics["train_loss"], label='train')
+        ax1.plot(metrics["val_loss"], label='validation')
+        ax1.set_xlabel("Epoch")
+        ax1.set_ylabel("Loss")
+        ax1.set_box_aspect(1)
+        ax1.legend()
+    
+        ax2 = fig.add_subplot(132)
+        ax2.set_title(f"{task} / Accuracy")
+        ax2.plot(metrics["train_acc"], label='train')
+        ax2.plot(metrics["val_acc"], label='validation')
+        ax2.set_xlabel("Epoch")
+        ax2.set_ylabel("Accuracy")
+        ax2.set_box_aspect(1)
+        ax2.legend()
+
+        ax3 = fig.add_subplot(133)
+        ax3.set_title(f"{task} / Mean IoU")
+        ax3.plot(metrics["train_miou"], label='train')
+        ax3.plot(metrics["val_miou"], label='validation')
+        ax3.set_xlabel("Epoch")
+        ax3.set_ylabel("Mean IoU")
+        ax3.set_box_aspect(1)
+        ax3.legend()
+
+        # FIFRST SAVE THEN SHOW!!!!
+        if save_dir is not None:
+            fig.savefig(save_dir / "metric_curves.png", dpi=200, bbox_inches="tight")
+        plt.show()
+
+    else:  raise ValueError(f"Unknown task: {task}")
+
+
 
 
 

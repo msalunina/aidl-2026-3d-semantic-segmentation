@@ -11,17 +11,23 @@ from utils_data import load_dataset, choose_architecture, info_dataset_batch
 from utils_plotting import plot_metrics
 
 
+def set_device():
+    if torch.cuda.is_available(): device = torch.device("cuda")
+    elif torch.backends.mps.is_available(): device = torch.device("mps")
+    else: device = torch.device("cpu")
+
+    print(f"\nUsing device: {device}")
+    return device
+
+
 # RUN ONLY IF EXECUTED AS MAIN
 if __name__ == "__main__":
 
     # GPU agnostic thingy
-    if torch.backends.mps.is_available(): device = torch.device("mps")
-    elif torch.cuda.is_available(): device = torch.device("cuda")
-    else: device = torch.device("cpu")
-    print("Using device:", device)
+    device = set_device()
 
     config = {"architecture": "ClassPointNetSmall",
-              "dataset": "ModelNet",
+              "dataset": "ShapeNet",
               "class_name": "",         # All classes: "" | Specific class: "Airplane", "Chair"...
               "nPoints": 1024,
               "seed": 42}  
@@ -96,5 +102,4 @@ if __name__ == "__main__":
                 }, checkpoint_path)
 
     # PLOTTING CURVES
-    plot_metrics(metrics, metric="acc", save_dir=run_dir)
-    
+    plot_metrics(metrics, task="classification", save_dir=run_dir)    

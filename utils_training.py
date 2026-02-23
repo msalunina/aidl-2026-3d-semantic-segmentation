@@ -2,8 +2,7 @@ import torch
 import numpy as np
 import random
 from torch_geometric.utils import to_dense_batch
-
-
+from tqdm import tqdm
 
 # ----------------------------------------------------
 #                      SET SEED
@@ -15,6 +14,20 @@ def set_seed(seed=42):
     torch.manual_seed(seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
 
+
+# //////////////////////////////////////////////////////////////////////////////
+#                     GENERAL TRAINING FUNCTIONS
+# //////////////////////////////////////////////////////////////////////////////
+def compute_regularizationLoss(feature_tnet):
+    # REGULARIZATION: force Tnet matrix to be orthogonal (TT^t = I)
+    # i.e. allow transforming the sapce but without distorting it
+    # The loss adds this term to be minimized: ||I-TT^t||
+    # It is a training constrain --> no need to be included in validation
+    TT = torch.bmm(feature_tnet, feature_tnet.transpose(2, 1))
+    I = torch.eye(TT.shape[-1], device=TT.device).unsqueeze(0).expand(TT.shape[0], -1, -1) # [64,64]->[1,64,64]->[batch,64,64]
+    reg_loss = torch.norm(I - TT) / TT.shape[0]                 # make reg_loss batch invariant (dividing by batch_size)
+
+    return reg_loss    
 
 
 # //////////////////////////////////////////////////////////////////////////////
@@ -74,7 +87,7 @@ def train_single_epoch(train_loader, network, optimizer, criterion):
     loss_history = []
     nCorrect = 0
     nTotal = 0
-    for batch in train_loader:
+    for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
         
         # Pointnet needs: [batch, nPoints, coordinates] 
         points_BNC, labels_B = unpack_batch(batch)
@@ -118,7 +131,7 @@ def eval_single_epoch(data_loader, network, criterion):
         loss_history = []
         nCorrect = 0
         nTotal = 0
-        for batch in data_loader:
+        for batch in tqdm(data_loader, desc="val epoch", position=1, leave=False):
             # Pointnet needs: [batch, nPoints, coordinates] 
             points_BNC, labels_B = unpack_batch(batch) 
             points_BNC = points_BNC.to(device)
@@ -154,7 +167,7 @@ def train_model(hyper, train_loader, val_loader, network, optimizer, criterion):
                "val_loss": [],   
                "val_acc": []}
 
-    for epoch in range(hyper["epochs"]):
+    for epoch in tqdm(range(hyper["epochs"]), desc="Looping on epochs", position=0):
         train_loss_epoch, train_acc_epoch = train_single_epoch(train_loader, network, optimizer, criterion)
         val_loss_epoch, val_acc_epoch = eval_single_epoch(val_loader, network, criterion)
 
@@ -163,7 +176,7 @@ def train_model(hyper, train_loader, val_loader, network, optimizer, criterion):
         metrics["val_loss"].append(val_loss_epoch)
         metrics["val_acc"].append(val_acc_epoch)
 
-        print(f"Epoch: {epoch+1}/{hyper['epochs']}"
+        tqdm.write(f"Epoch: {epoch+1}/{hyper['epochs']}"
             f" | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f}"
             f" | acc (train/val) = {train_acc_epoch:.2f}/{val_acc_epoch:.2f}")
 
@@ -177,23 +190,16 @@ def train_model(hyper, train_loader, val_loader, network, optimizer, criterion):
 # //////////////////////////////////////////////////////////////////////////////
 #                     SEGMENTATION TRAINING FUNCTIONS
 # //////////////////////////////////////////////////////////////////////////////
+def compute_batch_intersection_and_union(labels, predictions, num_classes): 
 
-def compute_iou(labels, predictions):
+    inter_batch = torch.zeros(num_classes, device=predictions.device, dtype=torch.float32)
+    union_batch = torch.zeros(num_classes, device=predictions.device, dtype=torch.float32)
 
-    # IDENTIFY VALID LABELS (-1 is not valid)
-    id_valid = labels != -1  
-    labels = labels[id_valid]  
-    predictions = predictions[id_valid]  
-
-    iou = []
-    for i in torch.unique(labels):
-        intersection = ( (labels == i) & (predictions==i) ).sum().item()    # TOTS DOS SON i
-        union = ((labels==i) | (predictions==i)).sum().item()               # O BE UN O BE L'ALTRE SON i
-        iou.append(intersection / union)
-
-    meaniou = sum(iou) / len(iou)
-
-    return meaniou
+    for c in range(num_classes):
+        inter_batch[c] = ((predictions == c) & (labels == c)).sum()     # BOTH ARE c
+        union_batch[c] = ((predictions == c) | (labels == c)).sum()     # EITHER ONE OR THE OTHER ARE c
+    
+    return inter_batch, union_batch
 
 # ----------------------------------------------------
 #           UNPACK SEGMENTATION BATCH 
@@ -229,45 +235,60 @@ def train_single_epoch_segmentation(train_loader, network, optimizer, criterion)
     network.train()                             # Activate the train=True flag inside the model
 
     loss_history = []
-    miou_history = []
     nCorrect = 0
     nTotal = 0
-    for batch in train_loader:
+    inter = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+    union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+    for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
         
         # Pointnet needs: [batch, nPoints, coordinates] 
-        points_BNC, labels_BN = unpack_segmentation_batch(batch)
+        points_BNC, labels_BN = unpack_segmentation_batch(batch)        # Points: [B, N, C] / labels: [B, N]
         points_BNC = points_BNC.to(device)
         labels_BN = labels_BN.to(device)      
 
-        # forward batch and loss
-        optimizer.zero_grad()                  # Set network gradients to 0
-        log_probs, _, _, feature_tnet, _ = network(points_BNC)    # Forward batch through the network  
-        reg_loss = compute_regularizationLoss(feature_tnet)
-        # NLLLoss expects class dimension at dim=1 → use [B, C, N] layout
-        loss = criterion(log_probs, labels_BN) + 0.001 * reg_loss       # Compute loss: NLLLoss   
+        # Set network gradients to 0
+        optimizer.zero_grad()  
+
+        # Forward batch points through the network                
+        log_probs_BCN, _, _, feature_tnet, _ = network(points_BNC)    
+
+        # Compute loss: NLLLoss (ignore_index=-1) 
+        # NLLLoss expects class dimension at dim=1 (B, C, N), network returns [B, num_classes, N] --> HAPPY!
+        reg_loss = compute_regularizationLoss(feature_tnet)             # compute regularization term
+        loss = criterion(log_probs_BCN, labels_BN) + 0.001 * reg_loss   # add it to the loss   
         loss_history.append(loss.item())         
         
-        loss.backward()                                                 # Compute backpropagation
+        # Backpropagate loss and update weights
+        loss.backward()                                                 
         optimizer.step()    
         
-        # COMPUTE METRICS
+        # ----------- COMPUTE METRICS -------------
+        # Compute predictions
+        predictions = log_probs_BCN.argmax(dim=1)
         # Identify valid labels (-1 is not valid)
-        id_valid = labels_BN != -1  
-        num_valid = id_valid.sum().item()
-        assert num_valid > 0, "All points in this batch are unlabeled (-1)!"  
+        id_valid = labels_BN != -1                                    
+        valid_predictions = predictions[id_valid]
+        valid_labels = labels_BN[id_valid]
         # Accuracy
-        predictions = log_probs.argmax(dim=1)
-        batch_correct = (predictions[id_valid] == labels_BN[id_valid]).sum().item()          # .item() brings one single scalar to CPU
-        nCorrect = nCorrect + batch_correct
-        nTotal = nTotal + num_valid         # segmentation: 1 prediction per point and N points
-        # IoU
-        miou = compute_iou(labels_BN, predictions)
-        miou_history.append(miou)
+        batch_correct = (valid_predictions == valid_labels).sum().item()    # num correct (valid) per batch 
+        nCorrect = nCorrect + batch_correct                                 # num correct (valid) per epoch 
+        nTotal = nTotal + id_valid.sum().item()                             # num total (valid) per epoch 
+        # Update intersection and union
+        inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, network.num_classes)
+        inter += inter_batch
+        union += union_batch
+        # ------------------------------------------
 
+    assert nTotal > 0, "No valid points in epoch (all labels are -1)."
+    assert (union > 0).any(), "Not a single class present for IoU in epoch."
     # Average across all batches    
     train_loss_epoch = np.mean(loss_history) 
     train_acc_epoch = nCorrect / nTotal
-    train_miou_epoch = np.mean(miou_history)
+    # Compute IoU per class and mean
+    id_present = union>0                                                    # id of classes that are present
+    iou_class_epoch = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+    iou_class_epoch[id_present] = inter[id_present] / union[id_present]     # iou of each class, per epoch (could be returned)
+    train_miou_epoch = iou_class_epoch[id_present].mean().item()            # mean iou over classes, per epoch
     
     return train_loss_epoch, train_acc_epoch, train_miou_epoch
 # ----------------------------------------------------
@@ -284,40 +305,52 @@ def eval_single_epoch_segmentation(data_loader, network, criterion):
         network.eval()                      # Dectivate the train=True flag inside the model
 
         loss_history = []
-        miou_history = []
         nCorrect = 0
         nTotal = 0
-        for batch in data_loader:
+        inter = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+        union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+        for batch in tqdm(data_loader, desc="val epoch", position=1, leave=False):
             # Pointnet needs: [batch, nPoints, coordinates] 
             points_BNC, labels_BN = unpack_segmentation_batch(batch) 
             points_BNC = points_BNC.to(device)
             labels_BN = labels_BN.to(device)    
 
-            # forward batch and loss
-            log_probs, _, _, _, _ = network(points_BNC)         # Forward batch through the network
-            # NLLLoss expects class dimension at dim=1 → use [B, C, N] layout
-            loss = criterion(log_probs, labels_BN)                  # Compute loss
+            # Forward batch points through the network 
+            log_probs_BCN, _, _, _, _ = network(points_BNC)
+
+            # Compute loss: NLLLoss(ignore_index=-1) 
+            # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
+            loss = criterion(log_probs_BCN, labels_BN)               
             loss_history.append(loss.item())         
             
-            # COMPUTE METRICS
+            # ----------- COMPUTE METRICS -------------
+            # Compute predictions
+            predictions = log_probs_BCN.argmax(dim=1)
             # Identify valid labels (-1 is not valid)
-            id_valid = labels_BN != -1  
-            num_valid = id_valid.sum().item()
-            assert num_valid > 0, "All points in this batch are unlabeled (-1)!"  
+            id_valid = labels_BN != -1                                    
+            valid_predictions = predictions[id_valid]
+            valid_labels = labels_BN[id_valid]
             # Accuracy
-            predictions = log_probs.argmax(dim=1)
-            batch_correct = (predictions[id_valid] == labels_BN[id_valid]).sum().item()          # .item() brings one single scalar to CPU
-            nCorrect = nCorrect + batch_correct
-            nTotal = nTotal + num_valid         # segmentation: 1 prediction per point and N points
-            # IoU
-            miou = compute_iou(labels_BN, predictions)
-            miou_history.append(miou)
+            batch_correct = (valid_predictions == valid_labels).sum().item()    # num correct (valid) per batch 
+            nCorrect = nCorrect + batch_correct                                 # num correct (valid) per epoch 
+            nTotal = nTotal + id_valid.sum().item()                             # num total (valid) per epoch 
+            # Update intersection and union
+            inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, network.num_classes)
+            inter += inter_batch
+            union += union_batch
+            # ------------------------------------------
 
-        # Average across all batches 
-        eval_loss_epoch = np.mean(loss_history)       
+        assert nTotal > 0, "No valid points in epoch (all labels are -1)."
+        assert (union > 0).any(), "Not a single class present for IoU in epoch."
+        # Average across all batches    
+        eval_loss_epoch = np.mean(loss_history) 
         eval_acc_epoch = nCorrect / nTotal
-        eval_miou_epoch = np.mean(miou_history)
-    
+        # Compute IoU per class and mean
+        id_present = union>0                                                    # id of classes that are present
+        iou_class_epoch = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+        iou_class_epoch[id_present] = inter[id_present] / union[id_present]     # iou of each class, per epoch (could be returned)
+        eval_miou_epoch = iou_class_epoch[id_present].mean().item()             # mean iou over classes, per epoch
+ 
     return eval_loss_epoch, eval_acc_epoch, eval_miou_epoch
 # ----------------------------------------------------
 
@@ -334,8 +367,8 @@ def train_model_segmentation(hyper, train_loader, val_loader, network, optimizer
                "val_loss": [],   
                "val_acc": [],   
                "val_miou": []}
-
-    for epoch in range(hyper["epochs"]):
+    
+    for epoch in tqdm(range(hyper["epochs"]), desc="Looping on epochs", position=0):
         train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(train_loader, network, optimizer, criterion)
         val_loss_epoch, val_acc_epoch, val_miou_epoch = eval_single_epoch_segmentation(val_loader, network, criterion)
         
@@ -346,7 +379,7 @@ def train_model_segmentation(hyper, train_loader, val_loader, network, optimizer
         metrics["val_acc"].append(val_acc_epoch)
         metrics["val_miou"].append(val_miou_epoch)
 
-        print(f"Epoch: {epoch+1}/{hyper['epochs']}"
+        tqdm.write(f"Epoch: {epoch+1}/{hyper['epochs']}"
             f" | loss (train/val) = {train_loss_epoch:.4f}/{val_loss_epoch:.4f}"
             f" | acc (train/val) = {train_acc_epoch:.2f}/{val_acc_epoch:.2f}"
             f" | miou (train/val) = {train_miou_epoch:.2f}/{val_miou_epoch:.2f}")
@@ -355,17 +388,4 @@ def train_model_segmentation(hyper, train_loader, val_loader, network, optimizer
 
 
 
-# //////////////////////////////////////////////////////////////////////////////
-#                     GENERAL TRAINING FUNCTIONS
-# //////////////////////////////////////////////////////////////////////////////
 
-def compute_regularizationLoss(feature_tnet):
-    # REGULARIZATION: force Tnet matrix to be orthogonal (TT^t = I)
-    # i.e. allow transforming the sapce but without distorting it
-    # The loss adds this term to be minimized: ||I-TT^t||
-    # It is a training constrain --> no need to be included in validation
-    TT = torch.bmm(feature_tnet, feature_tnet.transpose(2, 1))
-    I = torch.eye(TT.shape[-1], device=TT.device).unsqueeze(0).expand(TT.shape[0], -1, -1) # [64,64]->[1,64,64]->[batch,64,64]
-    reg_loss = torch.norm(I - TT) / TT.shape[0]                 # make reg_loss batch invariant (dividing by batch_size)
-
-    return reg_loss

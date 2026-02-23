@@ -160,6 +160,7 @@ class ClassificationPointNet(nn.Module):
 
     def __init__(self, num_classes, dropout=0.3, point_dimension=3):
         super().__init__()
+        self.num_classes = num_classes
         self.base_pointnet = BasePointNet(point_dimension=point_dimension)
 
         # Fully connected linear layers (512,256,num_classes)
@@ -189,6 +190,7 @@ class ClassificationPointNet(nn.Module):
 class SegmentationPointNet(nn.Module):
     def __init__(self, num_classes, dropout=0.3, point_dimension=3):
         super().__init__()
+        self.num_classes = num_classes
         self.base_pointnet = BasePointNet(point_dimension=point_dimension)
 
         # Shared MLP (512,256,128)

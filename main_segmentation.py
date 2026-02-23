@@ -7,29 +7,41 @@ from torch.utils.data import DataLoader
 from utils_training import train_model_segmentation, set_seed
 from utils_data import load_dataset, info_dataset_batch, choose_architecture
 from utils_plotting import plot_metrics, plot_object_parts
+from types import SimpleNamespace
+
+
+def set_device():
+    if torch.cuda.is_available(): device = torch.device("cuda")
+    elif torch.backends.mps.is_available(): device = torch.device("mps")
+    else: device = torch.device("cpu")
+
+    print(f"\nUsing device: {device}")
+    return device
+
+
 
 
 # RUN ONLY IF EXECUTED AS MAIN
 if __name__ == "__main__":
 
     # GPU agnostic thingy
-    if torch.backends.mps.is_available(): device = torch.device("mps")
-    elif torch.cuda.is_available(): device = torch.device("cuda")
-    else: device = torch.device("cpu")
-    print("Using device:", device)
+    device = set_device()
 
     config = {"architecture": "SegPointNet",
-              "dataset": "ShapeNet",
-              "class_name": "Airplane",         # Specific class: "Airplane", "Chair"... | Classification (all classes): "" |
-              "nPoints": 1024,
-              "seed": 42}  
+                "dataset": "ShapeNet",
+                "class_name": "Chair",         # Specific class: "Airplane", "Chair"... | Classification (all classes): "" |
+                "nPoints": 1024,
+                "seed": 42}  
+    
+    hyper = {"batch_size": 128,
+                "epochs": 30,
+                "lr": 0.001}
+    # config = SimpleNamespace(**config)     # vars(config) will return the dictionary
+    # hyper = SimpleNamespace(**hyper)
 
-    hyper = {"batch_size": 32,
-             "epochs": 2,
-             "lr": 0.001}
         
     # Path creates an object Path and / extends it
-    RUN_NAME = f"{config['architecture']}_{config['class_name']}_{config['dataset']}_{config['nPoints']}pts_{hyper['epochs']}epochs_main"
+    RUN_NAME = f"{config['architecture']}_{config['class_name']}_{config['dataset']}_{config['nPoints']}pts_{hyper['epochs']}epochs"
     run_dir = Path("runs") / RUN_NAME
     run_dir.mkdir(parents=True, exist_ok=True)      # create folder: check if parent folder exist, otherwise create it as well
     checkpoint_path = run_dir / "checkpoint.pt"
@@ -74,5 +86,4 @@ if __name__ == "__main__":
                 }, checkpoint_path)
 
     # PLOTTING CURVES
-    plot_metrics(metrics, metric="acc", save_dir=run_dir)
-    plot_metrics(metrics, metric="miou", save_dir=run_dir)
+    plot_metrics(metrics, task="segmentation", save_dir=run_dir)
