@@ -125,18 +125,24 @@ if __name__ == '__main__':
     else:
         raise ValueError(f"{config.optimizer} needs to be coded, stick to Adam")
 
-    # TODO: we could put a learning rate scheduler here
+    # Learning rate scheduler
+    if config.scheduler_type == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, 
+            T_max=config.num_epochs,
+            eta_min=config.scheduler_min_lr
+        )
+        print(f"Using CosineAnnealingLR scheduler: T_max={config.num_epochs}, eta_min={config.scheduler_min_lr}")
 
     # Training loop, we could put it into a separate class (trainer.py)
     print("\n" + "="*60)
     print("TRAINING")
     print("="*60)
-    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion, writer, device, base_path)
+    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion, scheduler, writer, device, base_path)
 
 
-    # TODO: evaluation loop, we could put it into a separate class (evaluator.py) (measure metrics on test set)
+    # TODO: measure metrics on test set
 
-    # TODO: save logs to log file
 
     # ? if we want to compare metrics across different runs, we could save them to a CSV file
     # to display on the same plot after (in a separate script)

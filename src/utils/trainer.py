@@ -178,7 +178,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
 # ----------------------------------------------------
 #    TRAINING LOOP (iterate on epochs)
 # ----------------------------------------------------
-def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion, writer, device, base_path):
+def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion, scheduler, writer, device, base_path):
 
     use_image = False
     if config.model_name == "ipointnet":
@@ -205,10 +205,17 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         metrics["val_acc"].append(val_acc_epoch)
         metrics["val_miou"].append(val_miou_epoch)
 
+        # Get current learning rate
+        current_lr = optimizer.param_groups[0]['lr']
+        
         tqdm.write(f"Epoch: {epoch+1}/{config.num_epochs}"
             f" | loss (train/val) = {train_loss_epoch:.3f}/{val_loss_epoch:.3f}"
             f" | acc (train/val) = {train_acc_epoch:.3f}/{val_acc_epoch:.3f}"
-            f" | miou (train/val) = {train_miou_epoch:.3f}/{val_miou_epoch:.3f}")
+            f" | miou (train/val) = {train_miou_epoch:.3f}/{val_miou_epoch:.3f}"
+            f" | lr = {current_lr:.6f}")
+        
+        # Step the learning rate scheduler
+        scheduler.step()
         
         if(epoch % config.snap_interval == 0):
             checkpoint = {
@@ -234,6 +241,9 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
             "Train": train_miou_epoch,
             "Validation": val_miou_epoch
         }, global_step=epoch+1)
+        
+        # Log learning rate to tensorboard
+        writer.add_scalar("Learning_Rate", current_lr, global_step=epoch+1)
 
         #show a pointcloud from training with the transformation
         """
