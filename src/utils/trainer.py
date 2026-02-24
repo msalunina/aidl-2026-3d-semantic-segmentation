@@ -71,7 +71,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         # Compute predictions
         predictions = log_probs_BCN.argmax(dim=1)
         # Identify valid labels (-1 is not valid)
-        id_valid = labels != config.ignore_label                                     
+        id_valid = labels != -1 #config.ignore_label                                     
         valid_predictions = predictions[id_valid]
         valid_labels = labels[id_valid]
         # Accuracy
@@ -134,7 +134,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion):
             # Compute predictions
             predictions = log_probs_BCN.argmax(dim=1)
             # Identify valid labels (-1 is not valid)
-            id_valid = labels != config.ignore_label                                     
+            id_valid = labels != -1 #config.ignore_label                                     
             valid_predictions = predictions[id_valid]
             valid_labels = labels[id_valid]
             # Accuracy
