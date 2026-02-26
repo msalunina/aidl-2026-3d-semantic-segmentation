@@ -9,7 +9,7 @@ from utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
 from utils.evaluator import test_model_segmentation
 from pathlib import Path
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 def set_device():
     if torch.cuda.is_available(): 
@@ -42,13 +42,18 @@ if __name__ == '__main__':
     config = config_parser.load()
     config_parser.display()
 
-    # Initialize TensorBoard writer
+    # Initialize W&B
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    logs_path = os.path.join(base_path, "logs", f"{config.test_name}_{timestamp}")
-    if not os.path.exists(logs_path):
-        os.makedirs(logs_path)
-
-    writer = SummaryWriter(log_dir=logs_path)
+    run_name = f"{config.test_name}_{timestamp}"
+    wandb_mode = getattr(config, 'wandb_mode', 'online') if getattr(config, 'wandb_enabled', True) else 'disabled'
+    wandb.init(
+        project=getattr(config, 'wandb_project', 'aidl-3d-semantic-segmentation'),
+        entity=getattr(config, 'wandb_entity', None),
+        name=run_name,
+        group=config.test_name,
+        config=vars(config),
+        mode=wandb_mode,
+    )
 
     # set seed (here? config.dataset_seed?)
     set_seed(config.dataset_seed)
@@ -115,5 +120,7 @@ if __name__ == '__main__':
     print("TESTING")
     print("="*60)
     with torch.no_grad():       # Stops tracking gradients, saves memory
-        metrics = test_model_segmentation(config, test_loader, model_trained, criterion, writer, device, base_path)
+        metrics = test_model_segmentation(config, test_loader, model_trained, criterion, device, base_path)
+
+    wandb.finish()
 

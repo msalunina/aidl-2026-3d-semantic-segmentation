@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 import os
+import wandb
 
 
 def compute_regularizationLoss(feature_tnet):
@@ -178,7 +179,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
 # ----------------------------------------------------
 #    TRAINING LOOP (iterate on epochs)
 # ----------------------------------------------------
-def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion, scheduler, writer, device, base_path):
+def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion, scheduler, device, base_path):
 
     use_image = False
     if config.model_name == "ipointnet":
@@ -228,22 +229,15 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
             torch.save(checkpoint, path_to_save)
             network.to(device)
         
-        # log to tensorboard
-        writer.add_scalars(main_tag="Loss", tag_scalar_dict={
-            "Train": train_loss_epoch,
-            "Validation": val_loss_epoch,
-        }, global_step=epoch+1)
-        writer.add_scalars(main_tag="Accuracy", tag_scalar_dict={
-            "Train": train_acc_epoch,
-            "Validation": val_acc_epoch,
-        }, global_step=epoch+1)
-        writer.add_scalars(main_tag="mIoU", tag_scalar_dict={
-            "Train": train_miou_epoch,
-            "Validation": val_miou_epoch
-        }, global_step=epoch+1)
-        
-        # Log learning rate to tensorboard
-        writer.add_scalar("Learning_Rate", current_lr, global_step=epoch+1)
+        wandb.log({
+            "Loss/Train": train_loss_epoch,
+            "Loss/Validation": val_loss_epoch,
+            "Accuracy/Train": train_acc_epoch,
+            "Accuracy/Validation": val_acc_epoch,
+            "mIoU/Train": train_miou_epoch,
+            "mIoU/Validation": val_miou_epoch,
+            "Learning_Rate": current_lr,
+        }, step=epoch+1)
 
         #show a pointcloud from training with the transformation
         """

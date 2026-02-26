@@ -1,12 +1,13 @@
 import torch
 import os
+import wandb
 from utils.trainer import eval_single_epoch_segmentation
 from tqdm import tqdm
 
 # ----------------------------------------------------
 #    TESTING LOOP (iterate on epochs)
 # ----------------------------------------------------
-def test_model_segmentation(config, test_loader, network, criterion, writer, device, base_path):
+def test_model_segmentation(config, test_loader, network, criterion, device, base_path):
 
     use_image = False
     if config.model_name == "ipointnet":
@@ -29,10 +30,11 @@ def test_model_segmentation(config, test_loader, network, criterion, writer, dev
             f" | acc (test) = {test_acc_epoch:.3f}"
             f" | miou (tesr) = {test_miou_epoch:.3f}")
         
-        # log to tensorboard
-        writer.add_scalars(main_tag="Loss", tag_scalar_dict={"Test": test_loss_epoch}, global_step=epoch+1)
-        writer.add_scalars(main_tag="Accuracy", tag_scalar_dict={"Test": test_acc_epoch}, global_step=epoch+1)
-        writer.add_scalars(main_tag="mIoU", tag_scalar_dict={"Test": test_miou_epoch}, global_step=epoch+1)
+        wandb.log({
+            "Loss/Test": test_loss_epoch,
+            "Accuracy/Test": test_acc_epoch,
+            "mIoU/Test": test_miou_epoch,
+        }, step=epoch+1)
         
         #show a pointcloud from training with the transformation
         """

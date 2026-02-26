@@ -61,7 +61,7 @@ training:
   num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)
   num_points: 1026
   batch_size: 32
-  num_epochs: 50
+  num_epochs: 5
   learning_rate: 0.01
   dropout_rate: 0.5
   optimizer: adam
@@ -76,6 +76,12 @@ training:
     - 0.12226475340028614
     - 2.1065384156113427
     - 2.6584254713455793
+
+wandb:
+  enabled: true
+  project: dales-semantic-segmentation
+  entity: aidl-3d-semantic-segmentation
+  mode: online   # online | offline | disabled
 
 visualization:
   2d:

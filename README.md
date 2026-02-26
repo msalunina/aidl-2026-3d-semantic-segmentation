@@ -42,6 +42,40 @@ Environment:
 conda create -n aidl-2026-project python=3.10 -y
 conda activate aidl-2026-project
 pip install -r requirements.txt
+wandb login
+```
+
+**Note:** `wandb login` only needs to be run once. It stores your API key locally. To run without an internet connection, set `wandb.mode: offline` in `config/default.yaml`.
+
+## Experiment tracking (W&B)
+
+Training and test metrics are logged to [Weights & Biases](https://wandb.ai).
+
+Each run logs per-epoch:
+- `Loss/Train`, `Loss/Validation` (training) / `Loss/Test` (testing)
+- `Accuracy/Train`, `Accuracy/Validation` / `Accuracy/Test`
+- `mIoU/Train`, `mIoU/Validation` / `mIoU/Test`
+- `Learning_Rate` (training only)
+
+View results at **https://wandb.ai/aidl-3d-semantic-segmentation/dales-semantic-segmentation** once a run starts.
+
+### Offline mode
+
+If you have no internet access, set in `config/default.yaml`:
+```yaml
+wandb:
+  mode: offline
+```
+Then sync later with:
+```bash
+wandb sync wandb/
+```
+
+### Disable W&B entirely
+
+```yaml
+wandb:
+  enabled: false
 ```
 
 ## Configuration

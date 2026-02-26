@@ -9,7 +9,7 @@ from utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
 from utils.trainer import train_model_segmentation
 from pathlib import Path
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 def set_device():
     if torch.cuda.is_available(): 
@@ -30,6 +30,8 @@ def set_seed(seed=42):
 
 
 if __name__ == '__main__':
+
+    start_time = datetime.now()
     
     base_path = Path(os.getcwd())
     if "src" in base_path.parts:
@@ -42,13 +44,18 @@ if __name__ == '__main__':
     config = config_parser.load()
     config_parser.display()
 
-    # Initialize TensorBoard writer
+    # Initialize W&B
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    logs_path = os.path.join(base_path, "logs", f"{config.test_name}_{timestamp}")
-    if not os.path.exists(logs_path):
-        os.makedirs(logs_path)
-
-    writer = SummaryWriter(log_dir=logs_path)
+    run_name = f"{config.test_name}_{timestamp}"
+    wandb_mode = getattr(config, 'wandb_mode', 'online') if getattr(config, 'wandb_enabled', True) else 'disabled'
+    wandb.init(
+        project=getattr(config, 'wandb_project', 'aidl-3d-semantic-segmentation'),
+        entity=getattr(config, 'wandb_entity', None),
+        name=run_name,
+        group=config.test_name,
+        config=vars(config),
+        mode=wandb_mode,
+    )
 
     # set seed (here? config.dataset_seed?)
     set_seed(config.dataset_seed)
@@ -138,7 +145,12 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("TRAINING")
     print("="*60)
-    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion, scheduler, writer, device, base_path)
+    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion, scheduler, device, base_path)
+
+    wandb.finish()
+
+    end_time = datetime.now()
+    print(f"\nTotal training time: {end_time - start_time}")
 
 
     # TODO: measure metrics on test set
