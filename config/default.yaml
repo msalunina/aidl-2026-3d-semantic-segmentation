@@ -44,6 +44,10 @@ dataset:
   train_ratio: 0.8           # 80% for training
   val_ratio: 0.2             # 20% for validation
   seed: 42                   # Random seed for reproducible splits
+  augmentation: true         # Apply training-time point cloud augmentation
+  rotation_deg_max: 180.0    # Random Z-rotation angle sampled from [-max, +max]
+  scale_min: 0.9             # Random isotropic scaling lower bound
+  scale_max: 1.1             # Random isotropic scaling upper bound
   
   # Features to use for training (selected from preprocessed data)
   # Available: xyz, intensity, return_number, number_of_returns, scan_angle_rank
@@ -61,21 +65,22 @@ training:
   num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)
   num_points: 1026
   batch_size: 32
-  num_epochs: 5
+  num_epochs: 20
   learning_rate: 0.01
-  dropout_rate: 0.5
+  dropout_rate: 0.3
   optimizer: adam
   
   # Learning rate scheduler
   scheduler_type: cosine  # cosine decay scheduler
   scheduler_min_lr: 0.00001  # minimum learning rate
   
+  # Loss weights optimized for Focal Loss (gamma=2.0)
   loss_weights:
-    - 0.03968058064795845
-    - 0.07309077899483409
-    - 0.12226475340028614
-    - 2.1065384156113427
-    - 2.6584254713455793
+    - 0.2553
+    - 0.3465
+    - 0.4482
+    - 1.8602
+    - 2.0897
 
 wandb:
   enabled: true

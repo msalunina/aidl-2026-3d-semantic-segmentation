@@ -102,7 +102,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     iou_class_epoch[id_present] = inter[id_present] / union[id_present]     # iou of each class, per epoch (could be returned)
     train_miou_epoch = iou_class_epoch[id_present].mean().item()            # mean iou over classes, per epoch
     
-    return train_loss_epoch, train_acc_epoch, train_miou_epoch
+    return train_loss_epoch, train_acc_epoch, train_miou_epoch, iou_class_epoch
 # ----------------------------------------------------
 
 
@@ -171,7 +171,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         iou_class_epoch[id_present] = inter[id_present] / union[id_present]     # iou of each class, per epoch (could be returned)
         eval_miou_epoch = iou_class_epoch[id_present].mean().item()             # mean iou over classes, per epoch
     
-    return eval_loss_epoch, eval_acc_epoch, eval_miou_epoch
+    return eval_loss_epoch, eval_acc_epoch, eval_miou_epoch, iou_class_epoch
 # ----------------------------------------------------
 
 
@@ -195,9 +195,9 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         }
     
     for epoch in tqdm(range(config.num_epochs), desc="Looping on epochs", position=0):
-        train_loss_epoch, train_acc_epoch, train_miou_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, use_image)
+        train_loss_epoch, train_acc_epoch, train_miou_epoch, train_iou_class_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, use_image)
 
-        val_loss_epoch, val_acc_epoch, val_miou_epoch = eval_single_epoch_segmentation(config, val_loader, network, criterion, use_image)
+        val_loss_epoch, val_acc_epoch, val_miou_epoch, val_iou_class_epoch = eval_single_epoch_segmentation(config, val_loader, network, criterion, use_image)
         
         metrics["train_loss"].append(train_loss_epoch)
         metrics["train_acc"].append(train_acc_epoch)
@@ -229,7 +229,11 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
             torch.save(checkpoint, path_to_save)
             network.to(device)
         
-        wandb.log({
+        # Class names for DALES dataset
+        class_names = ["Ground", "Vegetation", "Buildings", "Vehicle", "Utility"]
+        
+        # Build wandb log dict with per-class IoU
+        log_dict = {
             "Loss/Train": train_loss_epoch,
             "Loss/Validation": val_loss_epoch,
             "Accuracy/Train": train_acc_epoch,
@@ -237,7 +241,14 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
             "mIoU/Train": train_miou_epoch,
             "mIoU/Validation": val_miou_epoch,
             "Learning_Rate": current_lr,
-        }, step=epoch+1)
+        }
+        
+        # Add per-class IoU metrics
+        for i, class_name in enumerate(class_names):
+            log_dict[f"IoU_Class/{class_name}/Train"] = train_iou_class_epoch[i].item()
+            log_dict[f"IoU_Class/{class_name}/Validation"] = val_iou_class_epoch[i].item()
+        
+        wandb.log(log_dict, step=epoch+1)
 
         #show a pointcloud from training with the transformation
         """

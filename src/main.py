@@ -8,6 +8,8 @@ from utils.config_parser import ConfigParser
 from utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
 from utils.trainer import train_model_segmentation
+from utils.focal_loss import FocalLoss
+from utils.sampler import ClassBalancedSampler
 from pathlib import Path
 import wandb
 
@@ -74,6 +76,10 @@ if __name__ == '__main__':
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
+        augmentation=config.dataset_augmentation,
+        rotation_deg_max=config.dataset_rotation_deg_max,
+        scale_min=config.dataset_scale_min,
+        scale_max=config.dataset_scale_max,
         train_ratio=config.dataset_train_ratio,
         val_ratio=config.dataset_val_ratio,
         seed=config.dataset_seed
@@ -89,21 +95,21 @@ if __name__ == '__main__':
         val_ratio=config.dataset_val_ratio,
         seed=config.dataset_seed
     )
-    test_dataset = DALESDataset(
-        data_dir=f"{config.model_data_path}/test",
-        images_dir=f"{config.image_data_path}/test",
-        split='test',
-        use_features=config.dataset_use_features,
-        num_points=config.train_num_points,
-        normalize=config.dataset_normalize,
-        use_all_files=config.dataset_test_use_all_files,
-        seed=config.dataset_seed
-    )
 
-    # Create DataLoader
-    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+    # Create DataLoader with class-balanced sampling for training
+    print("\nSetting up class-balanced sampling for training...")
+    train_sampler = ClassBalancedSampler(
+        train_dataset, 
+        rare_classes=[3, 4],  # Vehicle and Utility classes
+        rare_class_boost=3.0,  # Blocks with rare classes are 3x more likely to be sampled
+        verbose=True
+    )
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=config.batch_size, 
+        sampler=train_sampler  # Use sampler instead of shuffle
+    )
     val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
 
     print("\n" + "="*60)
     print("INITIALIZING MODEL, LOSS and OPTIMIZER")
@@ -122,11 +128,12 @@ if __name__ == '__main__':
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
         
-    # Define loss function and optimizer (should be the same?)
-    # We use NLLLoss because 'pointnet' outputs log-probabilities (log_softmax)
-    # ignore_index = -1: when label is -1, do not include it in the loss
+    # Define loss function and optimizer
+    # We use Focal Loss to better handle class imbalance
+    # Focal Loss down-weights easy examples and focuses on hard examples
     loss_weights = torch.tensor(config.loss_weights, dtype=torch.float32).to(device)
-    criterion = torch.nn.NLLLoss(weight=loss_weights, ignore_index=config.ignore_label)         
+    criterion = FocalLoss(alpha=loss_weights, gamma=2.0, ignore_index=config.ignore_label)
+    print("Using Focal Loss with gamma=2.0 and class weights")         
     if config.optimizer == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     else:
@@ -147,15 +154,21 @@ if __name__ == '__main__':
     print("="*60)
     metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion, scheduler, device, base_path)
 
+    model_objects_dir = base_path / "model_objects"
+    model_objects_dir.mkdir(parents=True, exist_ok=True)
+    model_export_path = model_objects_dir / f"{config.test_name}.pt"
+    torch.save(model.state_dict(), model_export_path)
+    wandb.save(str(model_export_path), base_path=str(base_path))
+
+    if metrics.get("val_acc"):
+        wandb.run.summary["val_acc"] = float(max(metrics["val_acc"]))
+    if metrics.get("val_loss"):
+        wandb.run.summary["val_loss"] = float(min(metrics["val_loss"]))
+    if metrics.get("val_miou"):
+        wandb.run.summary["val_miou"] = float(max(metrics["val_miou"]))
+
     wandb.finish()
 
     end_time = datetime.now()
     print(f"\nTotal training time: {end_time - start_time}")
-
-
-    # TODO: measure metrics on test set
-
-
-    # ? if we want to compare metrics across different runs, we could save them to a CSV file
-    # to display on the same plot after (in a separate script)
 
