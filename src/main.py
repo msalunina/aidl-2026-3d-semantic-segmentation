@@ -1,4 +1,5 @@
 import argparse
+from datetime import datetime
 import torch
 import numpy as np
 import os
@@ -7,8 +8,10 @@ from utils.config_parser import ConfigParser
 from utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
 from utils.trainer import train_model_segmentation
+from utils.focal_loss import FocalLoss
+from utils.sampler import ClassBalancedSampler
 from pathlib import Path
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 def set_device():
     if torch.cuda.is_available(): 
@@ -29,6 +32,8 @@ def set_seed(seed=42):
 
 
 if __name__ == '__main__':
+
+    start_time = datetime.now()
     
     base_path = Path(os.getcwd())
     if "src" in base_path.parts:
@@ -41,12 +46,18 @@ if __name__ == '__main__':
     config = config_parser.load()
     config_parser.display()
 
-    # TODO: initiate logging¡
-    logs_path = os.path.join(base_path,"logs",f"{config.test_name}_{config.num_epochs}_ep")
-    if not os.path.exists(logs_path):
-        os.makedirs(logs_path)
-
-    writer = SummaryWriter(log_dir=logs_path)
+    # Initialize W&B
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_name = f"{config.test_name}_{timestamp}"
+    wandb_mode = getattr(config, 'wandb_mode', 'online') if getattr(config, 'wandb_enabled', True) else 'disabled'
+    wandb.init(
+        project=getattr(config, 'wandb_project', 'aidl-3d-semantic-segmentation'),
+        entity=getattr(config, 'wandb_entity', None),
+        name=run_name,
+        group=config.test_name,
+        config=vars(config),
+        mode=wandb_mode,
+    )
 
     # set seed (here? config.dataset_seed?)
     set_seed(config.dataset_seed)
@@ -60,16 +71,22 @@ if __name__ == '__main__':
     # Create datasets
     train_dataset = DALESDataset(
         data_dir=f"{config.model_data_path}/train",
+        images_dir=f"{config.image_data_path}/train",
         split='train',
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
+        augmentation=config.dataset_augmentation,
+        rotation_deg_max=config.dataset_rotation_deg_max,
+        scale_min=config.dataset_scale_min,
+        scale_max=config.dataset_scale_max,
         train_ratio=config.dataset_train_ratio,
         val_ratio=config.dataset_val_ratio,
         seed=config.dataset_seed
     )
     val_dataset = DALESDataset(
         data_dir=f"{config.model_data_path}/train",
+        images_dir=f"{config.image_data_path}/train",
         split='val',
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
@@ -78,21 +95,21 @@ if __name__ == '__main__':
         val_ratio=config.dataset_val_ratio,
         seed=config.dataset_seed
     )
-    test_dataset = DALESDataset(
-        data_dir=f"{config.model_data_path}/test",
-        split='test',
-        use_features=config.dataset_use_features,
-        num_points=config.train_num_points,
-        normalize=config.dataset_normalize,
-        use_all_files=config.dataset_test_use_all_files,
-        seed=config.dataset_seed
+
+    # Create DataLoader with class-balanced sampling for training
+    print("\nSetting up class-balanced sampling for training...")
+    train_sampler = ClassBalancedSampler(
+        train_dataset, 
+        rare_classes=[3, 4],  # Vehicle and Utility classes
+        rare_class_boost=3.0,  # Blocks with rare classes are 3x more likely to be sampled
+        verbose=True
     )
-
-    # Create DataLoader
-    train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=config.batch_size, 
+        sampler=train_sampler  # Use sampler instead of shuffle
+    )
     val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
-
 
     print("\n" + "="*60)
     print("INITIALIZING MODEL, LOSS and OPTIMIZER")
@@ -103,31 +120,55 @@ if __name__ == '__main__':
         model = PointNetSegmentation(num_classes=config.num_classes, 
                                      input_channels=config.num_channels, 
                                      dropout=config.dropout_rate).to(device)
+    elif config.model_name == "ipointnet":
+        from models.pointnet import IPointNetSegmentation
+        model = IPointNetSegmentation(num_classes=config.num_classes, 
+                                      input_channels=config.num_channels, 
+                                      dropout=config.dropout_rate).to(device)
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
         
-    # Define loss function and optimizer (should be the same?)
-    # We use NLLLoss because 'pointnet' outputs log-probabilities (log_softmax)
-    # ignore_index = -1: when label is -1, do not include it in the loss
-    criterion = torch.nn.NLLLoss(ignore_index=config.ignore_label)         
+    # Define loss function and optimizer
+    # We use Focal Loss to better handle class imbalance
+    # Focal Loss down-weights easy examples and focuses on hard examples
+    loss_weights = torch.tensor(config.loss_weights, dtype=torch.float32).to(device)
+    criterion = FocalLoss(alpha=loss_weights, gamma=2.0, ignore_index=config.ignore_label)
+    print("Using Focal Loss with gamma=2.0 and class weights")         
     if config.optimizer == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     else:
         raise ValueError(f"{config.optimizer} needs to be coded, stick to Adam")
 
-    # TODO: we could put a learning rate scheduler here
+    # Learning rate scheduler
+    if config.scheduler_type == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, 
+            T_max=config.num_epochs,
+            eta_min=config.scheduler_min_lr
+        )
+        print(f"Using CosineAnnealingLR scheduler: T_max={config.num_epochs}, eta_min={config.scheduler_min_lr}")
 
     # Training loop, we could put it into a separate class (trainer.py)
     print("\n" + "="*60)
     print("TRAINING")
     print("="*60)
-    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion, writer, device, base_path)
+    metrics = train_model_segmentation(config, train_loader, val_loader, model, optimizer, criterion, scheduler, device, base_path)
 
+    model_objects_dir = base_path / "model_objects"
+    model_objects_dir.mkdir(parents=True, exist_ok=True)
+    model_export_path = model_objects_dir / f"{config.test_name}.pt"
+    torch.save(model.state_dict(), model_export_path)
+    wandb.save(str(model_export_path), base_path=str(base_path))
 
-    # TODO: evaluation loop, we could put it into a separate class (evaluator.py) (measure metrics on test set)
+    if metrics.get("val_acc"):
+        wandb.run.summary["val_acc"] = float(max(metrics["val_acc"]))
+    if metrics.get("val_loss"):
+        wandb.run.summary["val_loss"] = float(min(metrics["val_loss"]))
+    if metrics.get("val_miou"):
+        wandb.run.summary["val_miou"] = float(max(metrics["val_miou"]))
 
-    # TODO: save logs to log file
+    wandb.finish()
 
-    # ? if we want to compare metrics across different runs, we could save them to a CSV file
-    # to display on the same plot after (in a separate script)
+    end_time = datetime.now()
+    print(f"\nTotal training time: {end_time - start_time}")
 

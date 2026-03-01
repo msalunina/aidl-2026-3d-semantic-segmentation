@@ -32,6 +32,13 @@
             "request": "launch",
             "program": "src/train_shapenet.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Current file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
         }
     ]
 }

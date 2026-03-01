@@ -151,9 +151,9 @@ class PointNetBackbone(nn.Module):
         x = F.relu(self.bn_5(self.conv_5(x)))               # [B, 1024, N]
 
         # Global feature (max pooling)
-        global_feature = torch.max(x, 2, keepdim=True)[0]   # [B, 1024, 1] because of keepdim=True
+        global_feature, critical_point_indices = torch.max(x, 2, keepdim=True)   # [B, 1024, 1] because of keepdim=True
                 
-        return feature_transform, point_features, global_feature
+        return feature_transform, point_features, global_feature, critical_point_indices, input_transform
     
 
 class PointNetClassification(nn.Module):
@@ -184,7 +184,7 @@ class PointNetClassification(nn.Module):
     def forward(self, x):
         # x: [B, N, 3] or [B, N, 3+C]
         
-        feature_transform, point_features, global_feature = self.backbone(x)
+        feature_transform, point_features, global_feature, critical_point_indices, input_transform = self.backbone(x)
         # global feature: [B, 1024, 1], but nn.Linear expects [B, 1024]
 
         global_feature = global_feature.view(-1, 1024)      # [B, 1024] removes the last 1 dimension 
@@ -193,7 +193,7 @@ class PointNetClassification(nn.Module):
         x = self.dropout(x)
         log_probs = F.log_softmax(self.fc_3(x), dim=1)      # [B, num_classes}]
 
-        return feature_transform, log_probs
+        return feature_transform, log_probs, critical_point_indices, input_transform
 
 
 class PointNetSegmentation(nn.Module):
@@ -232,7 +232,7 @@ class PointNetSegmentation(nn.Module):
     def forward(self, x):
         # x: [B, N, 3] or [B, N, 3+C]
 
-        feature_transform, point_features, global_feature = self.backbone(x)
+        feature_transform, point_features, global_feature, critical_point_indices, input_transform = self.backbone(x)
         # point_features: [B, 64, N]
         # global feature: [B, 1024, 1]
         
@@ -249,7 +249,7 @@ class PointNetSegmentation(nn.Module):
         x = F.relu(self.bn_4(self.conv_4(x)))               # [batch, 128, nPoints] 
         log_probs = F.log_softmax(self.conv_5(x), dim=1)    # [batch, num_classes, nPoints]
 
-        return feature_transform, log_probs
+        return feature_transform, log_probs, critical_point_indices, input_transform
 
 
 class IPointNetSegmentation(nn.Module):
@@ -291,7 +291,7 @@ class IPointNetSegmentation(nn.Module):
     def forward(self, x, img):
         # x: [B, N, 3] or [B, N, 3+C]
 
-        feature_transform, point_features, global_feature = self.backbone(x)
+        feature_transform, point_features, global_feature, critical_point_indices, input_transform = self.backbone(x)
         # point_features: [B, 64, N]
         # global feature: [B, 1024, 1]
 
@@ -311,5 +311,5 @@ class IPointNetSegmentation(nn.Module):
         x = F.relu(self.bn_4(self.conv_4(x)))               # [batch, 128, nPoints] 
         log_probs = F.log_softmax(self.conv_5(x), dim=1)    # [batch, num_classes, nPoints]
 
-        return feature_transform, log_probs
+        return feature_transform, log_probs, critical_point_indices, input_transform
 

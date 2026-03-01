@@ -1,6 +1,7 @@
 paths:
   raw_data: ./data/dales_las
   model_data: ./data/dales_blocks
+  image_data: ./data/dales_blocks_BEV
   logs: ./logs
   figures: ./figs
   models: ./model_objects
@@ -43,27 +44,49 @@ dataset:
   train_ratio: 0.8           # 80% for training
   val_ratio: 0.2             # 20% for validation
   seed: 42                   # Random seed for reproducible splits
+  augmentation: true         # Apply training-time point cloud augmentation
+  rotation_deg_max: 180.0    # Random Z-rotation angle sampled from [-max, +max]
+  scale_min: 0.9             # Random isotropic scaling lower bound
+  scale_max: 1.1             # Random isotropic scaling upper bound
   
   # Features to use for training (selected from preprocessed data)
   # Available: xyz, intensity, return_number, number_of_returns, scan_angle_rank
   use_features:
     - xyz                    # XYZ coordinates (3 channels) - REQUIRED
     #- intensity              # Intensity value (1 channel)
-    - return_number          # Return number (1 channel)
-    - number_of_returns      # Total returns (1 channel)
-    - scan_angle_rank        # Scan angle rank (1 channel)
+    #- return_number          # Return number (1 channel)
+    #- number_of_returns      # Total returns (1 channel)
+    #- scan_angle_rank        # Scan angle rank (1 channel)
 
 training:
-  test_name: segmentation_test
+  test_name: PointNet
   snap_interval: 5
   model_name: pointnet
   num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)
   num_points: 1024
-  batch_size: 32
-  num_epochs: 25
-  learning_rate: 0.001
+  batch_size: 1
+  num_epochs: 20
+  learning_rate: 0.01
   dropout_rate: 0.3
   optimizer: adam
+  
+  # Learning rate scheduler
+  scheduler_type: cosine  # cosine decay scheduler
+  scheduler_min_lr: 0.00001  # minimum learning rate
+  
+  # Loss weights optimized for Focal Loss (gamma=2.0)
+  loss_weights:
+    - 0.2553
+    - 0.3465
+    - 0.4482
+    - 1.8602
+    - 2.0897
+
+wandb:
+  enabled: true
+  project: dales-semantic-segmentation
+  entity: aidl-3d-semantic-segmentation
+  mode: online   # online | offline | disabled
 
 visualization:
   2d:

@@ -9,6 +9,9 @@
 *.las
 *.npz
 
+# ignore wandb logs
+wandb/*
+
 # ignore all png except for those in the 'figs' directory
 *.png
 !figs/*.png

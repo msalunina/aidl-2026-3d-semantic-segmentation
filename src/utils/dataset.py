@@ -40,10 +40,15 @@ class DALESDataset(Dataset):
     def __init__(
         self, 
         data_dir: str,
+        images_dir: str,
         split: Literal['train', 'val', 'test'] = 'train',
         use_features: list = None,
         num_points: int = None,
         normalize: bool = True,
+        augmentation: bool = False,
+        rotation_deg_max: float = 180.0,
+        scale_min: float = 0.9,
+        scale_max: float = 1.1,
         use_all_files: bool = False,
         train_ratio: float = 0.7,
         val_ratio: float = 0.15,
@@ -54,6 +59,18 @@ class DALESDataset(Dataset):
         self.num_points = num_points
         self.normalize = normalize
         self.use_all_files = use_all_files
+        self.augmentation = augmentation and split == 'train'
+        self.rotation_deg_max = rotation_deg_max
+        self.scale_min = scale_min
+        self.scale_max = scale_max
+
+        if self.scale_min <= 0:
+            raise ValueError(f"scale_min must be > 0, got {self.scale_min}")
+        if self.scale_max < self.scale_min:
+            raise ValueError(f"scale_max ({self.scale_max}) must be >= scale_min ({self.scale_min})")
+
+        #add the path for the images
+        self.images_dir = Path(images_dir)
         
         # Feature selection configuration
         if use_features is None:
@@ -65,6 +82,7 @@ class DALESDataset(Dataset):
         
         # Load all block file paths
         self.block_files = sorted(self.data_dir.glob('**/*.npz'))
+        self.image_files = sorted(self.images_dir.glob('**/*.npz'))
         
         if len(self.block_files) == 0:
             raise ValueError(f"No .npz files found in {self.data_dir}")
@@ -93,6 +111,7 @@ class DALESDataset(Dataset):
                 raise ValueError(f"Invalid split: {split}. Must be 'train', 'val', or 'test'")
             
             self.block_files = [self.block_files[i] for i in split_indices]
+            self.image_files = [self.image_files[i] for i in split_indices]
             
             print(f"Loaded {len(self.block_files)} blocks for {split} split")
     
@@ -126,7 +145,21 @@ class DALESDataset(Dataset):
             print(f"Selected features: {self.use_features}")
             print(f"Channel indices: {self.channel_indices}")
             print(f"Total channels for training: {self.num_channels}")
+            print(
+                f"Augmentation: {self.augmentation} "
+                f"(rotation_deg_max={self.rotation_deg_max}, scale=[{self.scale_min}, {self.scale_max}])"
+            )
     
+    def _load_image(self, file_path: Path):
+        """
+        Load a single image from a .npz file 
+        Returns
+            image: numpy array 256,256 with range z values
+        """
+        data = np.load(file_path)
+        zrange = data['z_range'].astype(np.float32)
+        return zrange
+
     def _load_block(self, file_path: Path):
         """
         Load a single block from .npz file and extract only the configured channels.
@@ -191,6 +224,35 @@ class DALESDataset(Dataset):
         
         return points
 
+    def _augment_points(self, points: np.ndarray):
+        """
+        Apply random geometric augmentation to XYZ coordinates.
+
+        Augmentations:
+        - Random rotation around Z-axis
+        - Random isotropic scaling
+        """
+        points = points.copy()
+
+        if points.shape[1] < 3:
+            return points
+
+        xyz = points[:, :3]
+
+        angle_rad = np.deg2rad(np.random.uniform(-self.rotation_deg_max, self.rotation_deg_max))
+        cos_theta, sin_theta = np.cos(angle_rad), np.sin(angle_rad)
+        rotation = np.array([
+            [cos_theta, -sin_theta, 0.0],
+            [sin_theta,  cos_theta, 0.0],
+            [0.0,        0.0,       1.0],
+        ], dtype=np.float32)
+
+        scale = np.random.uniform(self.scale_min, self.scale_max)
+        xyz = np.matmul(xyz, rotation.T) * scale
+
+        points[:, :3] = xyz
+        return points
+
     def __len__(self):
         """Return the number of blocks in this split"""
         return len(self.block_files)
@@ -205,7 +267,7 @@ class DALESDataset(Dataset):
         """
         # Load block
         points, labels = self._load_block(self.block_files[idx])
-        
+        image = self._load_image(self.image_files[idx])
         # Downsample if needed
         if self.num_points is not None:
             points, labels = self._downsample_points(points, labels)
@@ -213,9 +275,13 @@ class DALESDataset(Dataset):
         # Normalize if needed (only affects XYZ coordinates)
         if self.normalize:
             points = self._normalize_points(points)
+
+        # Augment only training samples (only affects XYZ coordinates)
+        if self.augmentation:
+            points = self._augment_points(points)
         
         # Convert to torch tensors
         points = torch.from_numpy(points).float()
         labels = torch.from_numpy(labels).long()
         
-        return points, labels
+        return points, labels, image

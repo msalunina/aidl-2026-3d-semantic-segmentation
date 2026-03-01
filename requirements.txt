@@ -11,4 +11,5 @@ tensorflow
 pyyaml
 laspy
 open3d
-tensorboard
+plyfile
+wandb
