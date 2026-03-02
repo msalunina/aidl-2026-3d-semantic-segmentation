@@ -5,6 +5,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 import os
+import sys
 import random
 import numpy as np
 import torch
@@ -15,7 +16,7 @@ from ray.tune.schedulers import ASHAScheduler
 from src.utils.config_parser import ConfigParser
 from src.utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
-from src.utils.trainer import train_model_segmentation
+from src.utils.trainer_for_ray import train_model_segmentation
 from src.utils.focal_loss import FocalLoss
 from src.utils.sampler import ClassBalancedSampler
 
@@ -40,19 +41,30 @@ def load_base_config():
     """
     Loads existing YAML config via ConfigParser, and returns (cfg, repo_root_path).
 
-    Run from repo root as:
-        python -m src.tune_ray ...
+    IMPORTANT for Ray:
+    - Ray workers have extra argv flags (e.g., --node-ip-address=...).
+    - If ConfigParser internally uses argparse.parse_args(), it will crash.
+    - So we temporarily sanitizing sys.argv while loading the config.
     """
-    base_path = Path(os.getcwd())
-    if base_path.name == "src":
-        base_path = base_path.parent
+    repo_root = Path(__file__).resolve().parents[1]  # src/ -> repo root
+    config_path = repo_root / "config" / "default.yaml"
+    if not config_path.exists():
+        raise FileNotFoundError(f"Config not found: {config_path}")
 
     config_parser = ConfigParser(
-        default_config_path="config/default.yaml",
+        default_config_path=str(config_path),  # ABSOLUTE PATH
         parser=argparse.ArgumentParser(description="Ray Tune HPO for DALES Segmentation"),
     )
-    cfg = config_parser.load()
-    return cfg, base_path
+
+    old_argv = sys.argv[:]
+    try:
+        # Strip Ray-injected args so ConfigParser/argparse doesn't explode
+        sys.argv = [old_argv[0]]
+        cfg = config_parser.load()
+    finally:
+        sys.argv = old_argv
+
+    return cfg, repo_root
 
 
 def trainable(trial_cfg: dict):
@@ -85,7 +97,7 @@ def trainable(trial_cfg: dict):
     set_seed(cfg.dataset_seed)
     device = set_device()
 
-    # Datasets / loaders (same as main.py)
+    # Datasets / loaders
     train_dataset = DALESDataset(
         data_dir=f"{cfg.model_data_path}/train",
         images_dir=f"{cfg.image_data_path}/train",
@@ -120,7 +132,6 @@ def trainable(trial_cfg: dict):
         verbose=False,
     )
 
-    # Optional loader args (can be set in config; defaults are safe)
     num_workers = int(getattr(cfg, "num_workers", 0))
     pin_memory = bool(getattr(cfg, "pin_memory", torch.cuda.is_available()))
 
@@ -142,13 +153,15 @@ def trainable(trial_cfg: dict):
     # Model
     if cfg.model_name == "pointnet":
         from src.models.pointnet import PointNetSegmentation
+
         model = PointNetSegmentation(
             num_classes=cfg.num_classes,
             input_channels=cfg.num_channels,
-            dropout=cfg.dropout_rate,  # segmentation dropout currently unused in your model
+            dropout=cfg.dropout_rate,
         ).to(device)
     elif cfg.model_name == "ipointnet":
         from src.models.pointnet import IPointNetSegmentation
+
         model = IPointNetSegmentation(
             num_classes=cfg.num_classes,
             input_channels=cfg.num_channels,
@@ -171,7 +184,6 @@ def trainable(trial_cfg: dict):
             eta_min=getattr(cfg, "scheduler_min_lr", 1e-6),
         )
 
-    # Ray reporting
     def report_fn(**kwargs):
         tune.report(**kwargs)
 
@@ -201,7 +213,35 @@ def main():
         action="store_true",
         help="Also tune scheduler_min_lr (only used for cosine scheduler).",
     )
+    ap.add_argument(
+        "--ray-tmp",
+        type=str,
+        default="raytmp",
+        help="Short temp dir for Ray (helps avoid Windows MAX_PATH issues).",
+    )
     args = ap.parse_args()
+
+    # --- Make storage path unambiguous on Windows: use file:// URI ---
+    out_dir = Path(args.out).expanduser()
+    if not out_dir.is_absolute():
+        out_dir = Path.cwd() / out_dir
+    out_dir = out_dir.resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    storage_uri = out_dir.as_uri()  # file:///C:/.../runs/ray_tune
+    print(f"[Ray Tune] storage_path = {storage_uri}")
+
+    # --- Reduce long-path issues: force Ray temp dir to something short ---
+    # Must be set BEFORE Ray auto-initializes (i.e., before tuner.fit()).
+    ray_tmp = Path(args.ray_tmp).expanduser()
+    if not ray_tmp.is_absolute():
+        ray_tmp = Path.cwd() / ray_tmp
+    ray_tmp = ray_tmp.resolve()
+    ray_tmp.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("RAY_TMPDIR", str(ray_tmp))
+    # (optional) if you still see long log paths, you can also shorten Python temp:
+    # os.environ.setdefault("TMP", str(ray_tmp))
+    # os.environ.setdefault("TEMP", str(ray_tmp))
 
     param_space = {
         "learning_rate": tune.loguniform(1e-5, 3e-3),
@@ -223,8 +263,6 @@ def main():
 
     scheduler = ASHAScheduler(
         time_attr="epoch",
-        metric="val_miou",
-        mode="max",
         max_t=args.max_epochs,
         grace_period=max(3, args.max_epochs // 10),
         reduction_factor=2,
@@ -240,14 +278,22 @@ def main():
         ),
         run_config=tune.RunConfig(
             name=f"dales_hpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            local_dir=args.out,
+            storage_path=storage_uri,
             verbose=1,
         ),
         param_space=param_space,
     )
 
     results = tuner.fit()
-    best = results.get_best_result(metric="val_miou", mode="max")
+
+    # If all trials error / no metrics, avoid crashing here
+    try:
+        best = results.get_best_result(metric="val_miou", mode="max")
+    except Exception as e:
+        print("\nNo best trial found (likely all trials errored or no metrics reported).")
+        print("Exception:", repr(e))
+        print("Check trial error.txt files under:", out_dir)
+        return
 
     print("\nBest trial:")
     print("  best val_miou:", best.metrics.get("val_miou"))
