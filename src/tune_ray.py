@@ -1,4 +1,6 @@
 # src/tune_ray.py
+# Use example: python -m src.tune_ray --num-samples 5 --max-epochs 10 --cpus 4 --gpus 1 --ray-tmp C:\rtmp
+#
 from __future__ import annotations
 
 import argparse
