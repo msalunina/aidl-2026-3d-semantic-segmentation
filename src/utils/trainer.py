@@ -49,14 +49,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
 
         # Pointnet needs: [B, N, C]
-        if use_image: 
-            points_BNC, labels, image = batch                                   # Points: [B, N, C] / labels: [B, N]
-            image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
-            image = image.to(device)
-        else:
-            points_BNC, labels = batch
-        
-        
+        points_BNC, labels, image = batch                           # Points: [B, N, C] / labels: [B, N] / image [B, H, W]       
         points_BNC = points_BNC.to(device)
         labels = labels.to(device) 
 
@@ -64,7 +57,9 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         optimizer.zero_grad()  
 
         # Forward points and image through the network  
-        if use_image:                                  
+        if use_image:  
+            image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
+            image = image.to(device)                                
             feature_tnet, log_probs_BCN = network(points_BNC, image)
         else:
             feature_tnet, log_probs_BCN = network(points_BNC)             
@@ -128,19 +123,15 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
         for batch in tqdm(data_loader, desc="val epoch", position=1, leave=False):
             
-            # Pointnet needs: [B, N, C] 
-            if use_image:
-                points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N]  
-                image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
-                image = image.to(device)
-            else:
-                points_BNC, labels = batch  # Points: [B, N, C] / labels: [B, N]  
-                
+            # Pointnet needs: [B, N, C]   
+            points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]       
             points_BNC = points_BNC.to(device)
             labels = labels.to(device) 
 
             # Forward points through the network 
-            if use_image:                                  
+            if use_image:  
+                image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
+                image = image.to(device)                                
                 feature_tnet, log_probs_BCN = network(points_BNC, image)
             else:
                 feature_tnet, log_probs_BCN = network(points_BNC)            
@@ -228,6 +219,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         if(epoch % config.snap_interval == 0):
             checkpoint = {
                 "model_state_dict": network.cpu().state_dict(),
+                "config": config,   # save full configuration
             }
             path_to_save = os.path.join(base_path, "snapshots", config.test_name)
             if not os.path.exists(path_to_save):
