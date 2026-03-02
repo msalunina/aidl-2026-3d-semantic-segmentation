@@ -36,7 +36,7 @@ if __name__ == '__main__':
     if "src" in base_path.parts:
         base_path = base_path[:-1]
 
-    epoch = 10    
+    epoch = 0    
     checkpoint_path = base_path / "snapshots" / "PointNet" / f"pointnet_{epoch}_epochs.pt"
     
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)    # it loads more things that weights
