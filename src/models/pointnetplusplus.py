@@ -132,8 +132,8 @@ def sample_and_group(num_centers, K, points, features=None):
     features: [B, N, D] or None
 
     returns:
-      new_xyz: [B, S, 3]
-      grouped: [B, S, K, 3 + D]  (if features is not None)
+      centers_xyz: [B, S, 3]
+      new_knn_xyz: [B, S, K, 3 + D]  (if features is not None)
                [B, S, K, 3]      (otherwise)
     """    
     # Sample centers (indices)
@@ -153,12 +153,67 @@ def sample_and_group(num_centers, K, points, features=None):
 
     if features is not None:
         knn_feat = gather_points_by_index(features, knn_idx)    # [B,S,K,D]
-        grouped = torch.cat([knn_xyz_norm, knn_feat], dim=-1)   # [B,S,K,3+D]
+        knn_points = torch.cat([knn_xyz_norm, knn_feat], dim=-1)# [B,S,K,3+D]
     else:
-        grouped = knn_xyz_norm                                  # [B,S,K,3]
+        knn_points = knn_xyz_norm                               # [B,S,K,3]
 
-    return centers_xyz, grouped
+    return centers_xyz, knn_points
 
 
 
 class PointNetSetAbstraction(nn.Module):
+    """
+    Single-scale Set Abstraction (SA) layer using:
+      - FPS to sample S centers
+      - kNN to group K neighbors per center
+      - shared MLP (Conv2d 1x1) + maxpool over neighbors
+      to produce a feature per center.
+    """    
+
+
+    def __init__(self, num_centers, K, in_channels, mlp_channels):
+        super().__init__()
+        self.num_centers = num_centers
+        self.K = K
+        self.in_channels = in_channels
+        self.mlp_channels = mlp_channels
+        
+        # Shared MLP over neighborhood points (implemented as 1x1 Conv2d)
+        layers = []
+        in_c = in_channels
+        for out_c in mlp_channels:
+            layers.append(nn.Conv2d(in_c, out_c, kernel_size=1))    
+            layers.append(nn.BatchNorm2d(out_c))
+            layers.append(nn.ReLU(inplace=True))
+            in_c = out_c
+        # Sequential expects separated arguments, not a list. The * unpacks them   
+        self.mlp = nn.Sequential(*layers)       
+
+
+    def forward(self, points, features=None):
+        """
+        Input:
+            points:   [B, N, 3]
+            features: [B, N, D] or None
+        Output:
+            new_points:   [B, S, 3]        (the sampled centers xyz)
+            new_features: [B, S, C_out]    (learned features per center)
+        """
+        # sample centers ans group neighbourhoods
+        centers_xyz, knn_points = sample_and_group(self.num_centers, self.K, points, features=features)
+        # centers_xyz: [B, S, 3]
+        # knn_xyz:     [B, S, K, 3(+D)]
+        
+        # 2) Prepare for Conv2d: [B, S, K, C] -> [B, C, S, K]
+        knn_points = knn_points.permute(0, 3, 1, 2).contiguous()      # [B, C_in, S, K]
+
+        # 3) Local PointNet (shared MLP)
+        x = self.mlp(knn_points)                                   # [B, C_out, S, K]
+
+        # 4) Symmetric pooling over K neighbors
+        x, _ = torch.max(x, dim=3)                              # [B, C_out, S]
+
+        # 5) Back to [B, S, C_out]
+        center_features = x.permute(0, 2, 1).contiguous()          # [B, S, C_out]
+
+        return centers_xyz, center_features
