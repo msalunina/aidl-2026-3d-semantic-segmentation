@@ -152,8 +152,8 @@ def sample_and_group(num_centers, K, points, features=None):
     knn_xyz_norm = knn_xyz - centers_xyz.unsqueeze(2)           # [B,S,K,3]
 
     if features is not None:
-        knn_feat = gather_points_by_index(features, knn_idx)    # [B,S,K,D]
-        knn_points = torch.cat([knn_xyz_norm, knn_feat], dim=-1)# [B,S,K,3+D]
+        knn_features = gather_points_by_index(features, knn_idx)    # [B,S,K,D]
+        knn_points = torch.cat([knn_xyz_norm, knn_features], dim=-1)# [B,S,K,3+D]
     else:
         knn_points = knn_xyz_norm                               # [B,S,K,3]
 
@@ -170,7 +170,6 @@ class PointNetSetAbstraction(nn.Module):
       to produce a feature per center.
     """    
 
-
     def __init__(self, num_centers, K, in_channels, mlp_channels):
         super().__init__()
         self.num_centers = num_centers
@@ -182,7 +181,7 @@ class PointNetSetAbstraction(nn.Module):
         layers = []
         in_c = in_channels
         for out_c in mlp_channels:
-            layers.append(nn.Conv2d(in_c, out_c, kernel_size=1))    
+            layers.append(nn.Conv2d(in_c, out_c, kernel_size=1, bias=False))    
             layers.append(nn.BatchNorm2d(out_c))
             layers.append(nn.ReLU(inplace=True))
             in_c = out_c
@@ -202,7 +201,7 @@ class PointNetSetAbstraction(nn.Module):
         # sample centers ans group neighbourhoods
         centers_xyz, knn_points = sample_and_group(self.num_centers, self.K, points, features=features)
         # centers_xyz: [B, S, 3]
-        # knn_xyz:     [B, S, K, 3(+D)]
+        # knn_points:  [B, S, K, 3(+D)]
         
         # 2) Prepare for Conv2d: [B, S, K, C] -> [B, C, S, K]
         knn_points = knn_points.permute(0, 3, 1, 2).contiguous()      # [B, C_in, S, K]
@@ -214,6 +213,175 @@ class PointNetSetAbstraction(nn.Module):
         x, _ = torch.max(x, dim=3)                              # [B, C_out, S]
 
         # 5) Back to [B, S, C_out]
-        center_features = x.permute(0, 2, 1).contiguous()          # [B, S, C_out]
+        center_feat = x.permute(0, 2, 1).contiguous()          # [B, S, C_out]
 
-        return centers_xyz, center_features
+        return centers_xyz, center_feat
+
+
+
+class PointNetPlusPlusBackbone(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        # SA1: no input features -> knn_points has 3 channels 
+        self.sa1 = PointNetSetAbstraction(num_centers=512, K=32, in_channels=3, mlp_channels=[64, 64, 128])
+
+        # SA2: features now 128 -> knn_points has 3 + 128
+        self.sa2 = PointNetSetAbstraction(num_centers=128, K=32, in_channels=3 + 128, mlp_channels=[128, 128, 256])
+
+        # SA3: features now 256 -> knn_points has 3 + 256
+        self.sa3 = PointNetSetAbstraction(num_centers=32, K=32, in_channels=3 + 256, mlp_channels=[256, 512, 1024])
+
+    def forward(self, xyz, features=None):
+        """
+        xyz:      [B, N, 3]
+        features: [B, N, D] or None
+
+        returns: levels = [(xyz0, f0), (xyz1, f1), (xyz2, f2), (xyz3, f3)]
+        """
+        xyz0, f0 = xyz, features
+        xyz1, f1 = self.sa1(xyz0, features=f0)    # [B,512,3], [B,512,128]
+        xyz2, f2 = self.sa2(xyz1, features=f1)    # [B,128,3], [B,128,256]
+        xyz3, f3 = self.sa3(xyz2, features=f2)    # [B, 32,3], [B, 32,1024]
+
+        return (xyz0,f0), (xyz1, f1), (xyz2, f2), (xyz3, f3)
+
+
+class PointNetPlusPlusClassifier(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        
+        # Backbone
+        self.backbone = PointNetPlusPlusBackbone()
+        
+        # Classification head
+        self.fc1 = nn.Linear(1024, 512, bias=False)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.dp1 = nn.Dropout(0.4)
+
+        self.fc2 = nn.Linear(512, 256, bias=False)
+        self.bn2 = nn.BatchNorm1d(256)
+        self.dp2 = nn.Dropout(0.4)
+
+        self.fc3 = nn.Linear(256, num_classes)
+
+    def forward(self, xyz, features=None):
+        """
+        xyz: [B, N, 3]
+        features: [B, N, D] or None
+        """
+        _, _, _, (xyz3, f3) = self.backbone(xyz, features=features)   # features: [B,32,1024]
+
+        # global pooling over centers dimension S=32
+        global_features, _ = torch.max(f3, dim=1)     # [B,1024]
+
+        x = self.dp1(F.relu(self.bn1(self.fc1(global_features))))
+        x = self.dp2(F.relu(self.bn2(self.fc2(x))))
+        logits = self.fc3(x)                                # [B,num_classes]
+        log_probs = F.log_softmax(logits, dim=1)
+
+        return log_probs
+    
+
+
+
+# RUN ONLY IF EXECUTED AS MAIN
+if __name__ == "__main__":
+
+    def set_device():
+        if torch.cuda.is_available(): device = torch.device("cuda")
+        elif torch.backends.mps.is_available(): device = torch.device("mps")
+        else: device = torch.device("cpu")
+
+        print(f"\nUsing device: {device}")
+        return device
+
+    # GPU agnostic thingy
+    device = set_device()
+
+    import torch_geometric.transforms as T
+    import torch.optim as optim
+    from torch_geometric.datasets import ModelNet
+    from torch.utils.data import random_split
+    from torch_geometric.loader import DataLoader as DataLoaderGeometric
+    from torch_geometric.utils import to_dense_batch
+    from tqdm import tqdm
+
+    # Importing ModelNet
+    transform = T.Compose([T.SamplePoints(1024), T.NormalizeScale()])                   
+    full_train_dataset = ModelNet(root="data/ModelNet", name="10", train=True, transform=transform)    
+    test_dataset       = ModelNet(root="data/ModelNet", name="10", train=False, transform=transform)    
+    
+    train_size = int(0.8 * len(full_train_dataset))
+    val_size   = len(full_train_dataset) - train_size
+    train_dataset, val_dataset = random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(42)) # reproducibility)
+
+    # DATALOADERS
+    train_loader = DataLoaderGeometric(train_dataset, batch_size=32, shuffle=True) 
+    val_loader   = DataLoaderGeometric(val_dataset, batch_size=32, shuffle=False) 
+    test_loader  = DataLoaderGeometric(test_dataset, batch_size=32, shuffle=False)
+
+    network = PointNetPlusPlusClassifier(num_classes=10).to(device)
+    optimizer = optim.Adam(network.parameters(), lr=0.001)
+    criterion = nn.NLLLoss()
+    
+    num_epochs = 20
+
+    for epoch in range(num_epochs):
+
+        # TRAINING
+        network.train()
+        total_loss, total_correct, total_seen = 0.0, 0, 0
+
+        for batch in tqdm(train_loader, desc="train epoch", leave=False):
+
+            batch = batch.to(device)
+
+            # batch.pos: [B*N, 3]  -> [B, N, 3]
+            xyz, _ = to_dense_batch(batch.pos, batch.batch)  
+            labels = batch.y   
+            B = labels.shape[0]
+
+            optimizer.zero_grad()
+            log_probs = network(xyz)                 # [B, num_classes]
+            loss = criterion(log_probs, labels)
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item() * B
+            preds = log_probs.argmax(dim=1)
+            total_correct += (preds == labels).sum().item()
+            total_seen += B    
+        
+        train_loss = total_loss / total_seen
+        train_acc  = total_correct / total_seen
+
+
+        # VALIDATING
+        network.eval()
+
+        with torch.no_grad():
+
+            total_loss, total_correct, total_seen = 0.0, 0, 0
+
+            for batch in tqdm(val_loader, desc="val epoch", leave=False):
+                batch = batch.to(device)
+                # batch.pos: [B*N, 3]  -> [B, N, 3]
+                xyz, _ = to_dense_batch(batch.pos, batch.batch)  
+                labels = batch.y   
+                B = labels.shape[0]
+
+                log_probs = network(xyz)
+                loss = criterion(log_probs, labels)
+
+                total_loss += loss.item() * B
+                preds = log_probs.argmax(dim=1)
+                total_correct += (preds == labels).sum().item()
+                total_seen += B
+
+            val_loss = total_loss / total_seen
+            val_acc  = total_correct / total_seen
+
+        tqdm.write(f"Epoch: {epoch+1}/{num_epochs}"
+            f" | loss (train/val) = {train_loss:.3f}/{val_loss:.3f}"
+            f" | acc (train/val) = {train_acc:.3f}/{val_acc:.3f}")
