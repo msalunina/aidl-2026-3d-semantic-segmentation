@@ -182,7 +182,7 @@ def interpolate_features_3nn(target_xyz, source_xyz, source_features, eps=1e-8):
     dist2 = torch.sum(diff * diff, dim=-1)                                      # [B, N, k]
 
     # 3) convert to inverse-distance weights and normalize them: w1+w2+w3=1
-    w = 1.0 / (torch.sqrt(dist2) + eps)                                         # [B, N, k]
+    w = 1.0 / (dist2 + eps)                                         # [B, N, k]
     w = w / torch.sum(w, dim=2, keepdim=True)                                   # [B, N, k]
 
     # 4) Weighted sum of the 3 neighbor features
@@ -200,8 +200,7 @@ class PointNetSetAbstraction(nn.Module):
     Single-scale Set Abstraction (SA) layer using:
       - FPS to sample S centers
       - kNN to group K neighbors per center
-      - shared MLP (Conv2d 1x1) + maxpool over neighbors
-      to produce a feature per center.
+      - shared MLP (Conv2d 1x1) + maxpool over neighbors to produce a feature per center.
     """    
 
     def __init__(self, num_centers, K, in_channels, mlp_channels):
@@ -253,6 +252,47 @@ class PointNetSetAbstraction(nn.Module):
 
 
 
+class PointNetSetAbstractionGlobal(nn.Module):
+    """
+    Global Set Abstraction layer.
+
+    Applies a PointNet (shared MLP + maxpool) over the whole point set
+    to produce a single global feature.
+    """
+
+    def __init__(self, in_channels, mlp_channels):
+        super().__init__()
+
+        layers = []
+        in_c = in_channels
+        for out_c in mlp_channels:
+            layers.append(nn.Conv1d(in_c, out_c, kernel_size=1, bias=False))
+            layers.append(nn.BatchNorm1d(out_c))
+            layers.append(nn.ReLU(inplace=True))
+            in_c = out_c
+
+        self.mlp = nn.Sequential(*layers)
+
+    def forward(self, xyz, features=None):
+        """
+        Input:
+            xyz:      [B, N, 3]
+            features: [B, N, D] or None
+
+        Output:
+            global_features: [B, C_out]
+        """
+
+        if features is not None:
+            points_data = torch.cat([xyz, features], dim=-1)                # [B,N,3+D]
+        else:
+            points_data = xyz                                               # [B,N,3]
+
+        points_data = points_data.permute(0, 2, 1).contiguous()             # [B,C,N]
+        points_data = self.mlp(points_data)                                 # [B,C_out,N]
+        global_features, _ = torch.max(points_data, dim=2, keepdim=False)   # [B,C_out]
+
+        return global_features
 
 
 # ----------------------------------------------------
@@ -319,17 +359,30 @@ class PointNetFeaturePropagation(nn.Module):
 # ----------------------------------------------------
 #           POINTNET++ CLASSIFICATION
 # ----------------------------------------------------
-class PointNetPlusPlusClassifier(nn.Module):
+class PointNetPlusPlusClassifier(nn.Module):  
     """
-    PointNet++ classification
-    """    
-    def __init__(self, num_classes, extra_channels=0, dropout = 0.4):
+    PointNet++ classifier (SSG architecture from the paper).
+
+    Encoder:
+    SA(512, [64,64,128])
+    SA(128, [128,128,256])
+    Global SA([256,512,1024])
+
+    Head: FC(512) → FC(256) → FC(num_classes)
+    """
+
+    def __init__(self, num_classes, extra_channels=0, dropout = 0.5):
+        """
+        num_classes:     number of semantic classes
+        extra_channels:  D (extra input features per point besides xyz). If you only have xyz -> 0.
+        dropout:         dropout in the final classifier head
+        """
         super().__init__()
         self.extra_channels = extra_channels
         self.num_classes = num_classes
 
         # -----------------------
-        # Encoder (Set Abstraction)
+        #       Encoder 
         # -----------------------
         # input:  xyz=[B,N,3],   feat=[B,N,C-3] or None       
         # output: xyz=[B,512,3], feat=[B,512,128]
@@ -338,21 +391,24 @@ class PointNetPlusPlusClassifier(nn.Module):
         # output: xyz=[B,128,3], feat=[B,128,256] 
         self.sa2 = PointNetSetAbstraction(num_centers=128, K=32, in_channels=3 + 128, mlp_channels=[128, 128, 256])
         # input:  xyz=[B,128,3], feat=[B,128,256] 
-        # output: xyz=[B,32,3], feat=[B,32,1024] 
-        self.sa3 = PointNetSetAbstraction(num_centers=32, K=32, in_channels=3 + 256, mlp_channels=[256, 512, 1024])
+        # output: global_features=[B,1024] 
+        self.sa3 = PointNetSetAbstractionGlobal(in_channels=3 + 256, mlp_channels=[256, 512, 1024])
 
         # -----------------------       
         #   Classification head
         # -----------------------
-        self.fc1 = nn.Linear(1024, 512, bias=False)
-        self.bn1 = nn.BatchNorm1d(512)
-        self.dp1 = nn.Dropout(p=dropout)
+        self.classifier = nn.Sequential(
+            nn.Linear(1024, 512, bias=False),
+            nn.BatchNorm1d(512),
+            nn.Dropout(p=dropout),
 
-        self.fc2 = nn.Linear(512, 256, bias=False)
-        self.bn2 = nn.BatchNorm1d(256)
-        self.dp2 = nn.Dropout(p=dropout)
+            nn.Linear(512, 256, bias=False),
+            nn.BatchNorm1d(256),
+            nn.Dropout(p=dropout),
 
-        self.fc3 = nn.Linear(256, num_classes)
+            nn.Linear(256, num_classes)
+        )
+
 
     def forward(self, points):
         """
@@ -375,14 +431,10 @@ class PointNetPlusPlusClassifier(nn.Module):
         # -------- Encoder --------
         xyz1, feat1 = self.sa1(xyz0, feat0)             # xyz1 [B,512,3], feat1 [B,512,128]
         xyz2, feat2 = self.sa2(xyz1, feat1)             # xyz2 [B,128,3], feat2 [B,128,256]
-        xyz3, feat3 = self.sa3(xyz2, feat2)             # xyz3 [B,32,3],  feat3 [B,32,1024]
-
-        # global pooling over centers dimension S=32
-        global_features, _ = torch.max(feat3, dim=1)    # [B,1024]
-
-        x = self.dp1(F.relu(self.bn1(self.fc1(global_features))))   
-        x = self.dp2(F.relu(self.bn2(self.fc2(x))))
-        logits = self.fc3(x)                            # [B,num_classes]
+        global_features = self.sa3(xyz2, feat2)         # global_features [B,1024]     
+        
+        # -------- Head --------
+        logits = self.classifier(global_features)       # [B,num_classes]
         log_probs = F.log_softmax(logits, dim=1)
 
         return log_probs
@@ -401,7 +453,7 @@ class PointNetPlusPlusSegmentation(nn.Module):
     def __init__(self, num_classes, extra_channels = 0, dropout = 0.5):
         """
         num_classes:     number of semantic classes
-        input_feat_dim:  D (extra input features per point besides xyz). If you only have xyz -> 0.
+        extra_channels:  D (extra input features per point besides xyz). If you only have xyz -> 0.
         dropout:         dropout in the final classifier head
         """
         super().__init__()
@@ -409,29 +461,31 @@ class PointNetPlusPlusSegmentation(nn.Module):
         self.num_classes = num_classes
 
         # -----------------------
-        # Encoder (Set Abstraction)
+        #        Encoder 
         # -----------------------
-        # input:  xyz=[B,N,3],   feat=[B,N,C-3] or None         
-        # output: xyz=[B,512,3], feat=[B,512,128]
-        self.sa1 = PointNetSetAbstraction(num_centers=512, K=32, in_channels=3 + extra_channels, mlp_channels=[64, 64, 128]) 
-        # input:  xyz=[B,512,3], feat=[B,512,128] 
-        # output: xyz=[B,128,3], feat=[B,128,256] 
-        self.sa2 = PointNetSetAbstraction(num_centers=128, K=32, in_channels=3 + 128, mlp_channels=[128, 128, 256])
-        # input:  xyz=[B,128,3], feat=[B,128,256] 
-        # output: xyz=[B,32,3], feat=[B,32,1024] 
-        self.sa3 = PointNetSetAbstraction(num_centers=32, K=32, in_channels=3 + 256, mlp_channels=[256, 512, 1024])
-
+        # input:  xyz=[B,N,3],    feat=[B,N,C-3] or None
+        # output: xyz=[B,1024,3], feat=[B,1024,64]
+        self.sa1 = PointNetSetAbstraction(num_centers=1024, K=32, in_channels=3 + extra_channels, mlp_channels=[32, 32, 64])
+        # input:  xyz=[B,1024,3], feat=[B,1024,64]
+        # output: xyz=[B,256,3],  feat=[B,256,128]
+        self.sa2 = PointNetSetAbstraction(num_centers=256, K=32, in_channels=3 + 64, mlp_channels=[64, 64, 128])
+        # input:  xyz=[B,256,3], feat=[B,256,128]
+        # output: xyz=[B,64,3], feat=[B,64,256]
+        self.sa3 = PointNetSetAbstraction(num_centers=64, K=32, in_channels=3 + 128, mlp_channels=[128, 128, 256])
+        # input:  xyz=[B,64,3], feat=[B,64,256]
+        # output: xyz=[B,16,3], feat=[B,16,512]
+        self.sa4 = PointNetSetAbstraction(num_centers=16, K=32, in_channels=3 + 256, mlp_channels=[256, 256, 512])
+       
         # -----------------------
-        # Decoder (Feature Propagation)
+        #        Decoder 
         # -----------------------
-        # FP3: from SA3 (1024) -> SA2 (256)
-        # interpolate gives 1024, skip has 256 => in_channels=1280
-        self.fp3 = PointNetFeaturePropagation(in_channels=1024 + 256, mlp_channels=[256, 256])
-        # FP2: from SA2-level (256) -> SA1-level (128)
-        # interp 256 + skip 128 => 384
-        self.fp2 = PointNetFeaturePropagation(in_channels=256 + 128, mlp_channels=[256, 128])
-        # FP1: from SA1-level (128) -> original N points (skip is original input features)
-        # interp 128 + skip D (if any) => 128 + D
+        # 16 -> 64 : interpolated features gives 512 + skip has 256 = 768
+        self.fp4 = PointNetFeaturePropagation(in_channels=512 + 256, mlp_channels=[256, 256])
+        # 64 -> 256 : interpolated features gives 256 + skip has 128 = 384
+        self.fp3 = PointNetFeaturePropagation(in_channels=256 + 128, mlp_channels=[256, 256])
+        # 256 -> 1024 : interpolated features gives 256 + skip has 64 = 320
+        self.fp2 = PointNetFeaturePropagation(in_channels=256 + 64, mlp_channels=[256, 128])
+        # 1024 -> N : interpolated features gives 128 + skip has D (if any) = 128 + extra_channels
         self.fp1 = PointNetFeaturePropagation(in_channels=128 + extra_channels, mlp_channels=[128, 128, 128])
 
         # -----------------------
@@ -442,6 +496,12 @@ class PointNetPlusPlusSegmentation(nn.Module):
             nn.BatchNorm1d(128),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
+
+            nn.Conv1d(128, 128, kernel_size=1, bias=False),
+            nn.BatchNorm1d(128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+
             nn.Conv1d(128, num_classes, kernel_size=1)
         )
 
@@ -464,26 +524,32 @@ class PointNetPlusPlusSegmentation(nn.Module):
             feat0 = None
 
         # -------- Encoder --------
-        xyz1, feat1 = self.sa1(xyz0, feat0)             # xyz1 [B,512,3], feat1 [B,512,128]
-        xyz2, feat2 = self.sa2(xyz1, feat1)             # xyz2 [B,128,3], feat2 [B,128,256]
-        xyz3, feat3 = self.sa3(xyz2, feat2)             # xyz3 [B,32,3],  feat3 [B,32,1024]
+        xyz1, feat1 = self.sa1(xyz0, feat0)   # xyz1 [B,1024,3], feat1 [B,1024,64]
+        xyz2, feat2 = self.sa2(xyz1, feat1)   # xyz2 [B,256,3],  feat2 [B,256,128]
+        xyz3, feat3 = self.sa3(xyz2, feat2)   # xyz3 [B,64,3],   feat3 [B,64,256]
+        xyz4, feat4 = self.sa4(xyz3, feat3)   # xyz4 [B,16,3],   feat4 [B,16,512]
 
         # -------- Decoder --------
-        # FP3: upsample from 32 -> 128
-        feat2_up = self.fp3(target_xyz=xyz2, 
-                            source_xyz=xyz3, 
-                            source_features=feat3, 
-                            target_skip_features=feat2) # [B,128,256]
-        # FP2: upsample from 128 -> 512
-        feat1_up = self.fp2(target_xyz=xyz1, 
-                            source_xyz=xyz2, 
-                            source_features=feat2_up, 
-                            target_skip_features=feat1) # [B,512,128]
-        # FP1: upsample from 512 -> N
-        feat0_up = self.fp1(target_xyz=xyz0, 
+        # FP4: upsample from 16 -> 64
+        feat3_up = self.fp4(target_xyz=xyz3,
+                            source_xyz=xyz4,
+                            source_features=feat4,
+                            target_skip_features=feat3)  # [B,64,256]
+        # FP3: upsample from 64 -> 256
+        feat2_up = self.fp3(target_xyz=xyz2,
+                            source_xyz=xyz3,
+                            source_features=feat3_up,
+                            target_skip_features=feat2)  # [B,256,256]
+        # FP2: upsample from 256 -> 1024
+        feat1_up = self.fp2(target_xyz=xyz1,
+                            source_xyz=xyz2,
+                            source_features=feat2_up,
+                            target_skip_features=feat1)  # [B,1024,128]
+        # FP1: upsample from 1024 -> N
+        feat0_up = self.fp1(target_xyz=xyz0,
                             source_xyz=xyz1,
-                            source_features=feat1_up, 
-                            target_skip_features=feat0) # [B,N,128]
+                            source_features=feat1_up,
+                            target_skip_features=feat0)  # [B,N,128]
 
         # -------- Head --------
         x = feat0_up.permute(0, 2, 1).contiguous()      # [B,128,N]
