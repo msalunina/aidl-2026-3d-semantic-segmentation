@@ -400,15 +400,16 @@ class PointNetPlusPlusClassifier(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(1024, 512, bias=False),
             nn.BatchNorm1d(512),
+            nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
 
             nn.Linear(512, 256, bias=False),
             nn.BatchNorm1d(256),
+            nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
 
             nn.Linear(256, num_classes)
         )
-
 
     def forward(self, points):
         """
