@@ -151,14 +151,14 @@ def main(config):
             t_miou = 0
             v_miou = 0
             for m in range(classes_size[i]):
-                t_miou = train_iou_class_epoch[offset].item()
-                v_miou = val_iou_class_epoch[offset].item()
+                t_miou += train_iou_class_epoch[offset].item()
+                v_miou += val_iou_class_epoch[offset].item()
                 offset+=1
             v_miou /= classes_size[i]
             t_miou /= classes_size[i]
 
             writer.add_scalar(tag=f"{test_name}_IoU_Class/{class_name}/Train", scalar_value=t_miou, global_step=epoch)
-            writer.add_scalar(tag=f"{test_name}_IoU_Class/{class_name}/validaiton", scalar_value=t_miou, global_step=epoch)
+            writer.add_scalar(tag=f"{test_name}_IoU_Class/{class_name}/Validation", scalar_value=v_miou, global_step=epoch)
 
 
     checkpoint = {"model_state_dict": model.cpu().state_dict()}
