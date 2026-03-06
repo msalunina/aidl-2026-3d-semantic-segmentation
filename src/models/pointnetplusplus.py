@@ -378,8 +378,8 @@ class PointNetPlusPlusClassifier(nn.Module):
         dropout:         dropout in the final classifier head
         """
         super().__init__()
-        self.extra_channels = extra_channels
         self.num_classes = num_classes
+        self.extra_channels = extra_channels
 
         # -----------------------
         #       Encoder 
@@ -458,8 +458,8 @@ class PointNetPlusPlusSegmentation(nn.Module):
         dropout:         dropout in the final classifier head
         """
         super().__init__()
-        self.extra_channels = extra_channels
         self.num_classes = num_classes
+        self.extra_channels = extra_channels
 
         # -----------------------
         #        Encoder 

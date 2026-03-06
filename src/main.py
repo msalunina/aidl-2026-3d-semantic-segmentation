@@ -125,6 +125,11 @@ if __name__ == '__main__':
         model = IPointNetSegmentation(num_classes=config.num_classes, 
                                       input_channels=config.num_channels, 
                                       dropout=config.dropout_rate).to(device)
+    elif config.model_name == "pointnetplusplus":
+        from models.pointnetplusplus import PointNetPlusPlusSegmentation
+        model = PointNetPlusPlusSegmentation(num_classes=config.num_classes,
+                                             extra_channels=config.num_channels-3,
+                                             dropout=0.5).to(device)
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
         
