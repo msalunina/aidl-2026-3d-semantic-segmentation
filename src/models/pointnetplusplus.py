@@ -1,40 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from time import time
-import numpy as np
-
-
-def square_distance(setA, setB):
-    """  
-    Computes pairwise squared distance between two sets of points from the same point cloud
-    distance = ||a-b||^2 = ||a||^2 +||b||^2-2*a*b
-
-    input: 
-        setA: [B, S, 3]
-        setB: [B, N, 3]
-
-    returns: 
-        distance: [B, S, N]    
-    """
-    setA2 = torch.sum(setA**2, dim=2, keepdim=True)                 # [B, S, 1]
-    setB2 = torch.sum(setB**2, dim=2, keepdim=True).transpose(2,1)  # [B, 1, N]
-    cross = torch.bmm(setA,setB.transpose(2,1))                     # [B, S, 3]*[B, 3, N]=[B, S, N]
-    dist2 = setA2 + setB2 - 2*cross
-
-    return dist2
-
 
 
 def gather_points_by_index(points, idx):
     """
     Fetch points/features using indices: points[batch_idx, idx, :]
 
-    input:
+    Input:
         points: [B, N, C]
         idx:    [B, S] or [B, S, K]
 
-    returns:
+    Output:
         [B, S, C]     if idx is [B, S]
         [B, S, K, C]  if idx is [B, S, K]
     """
@@ -60,61 +37,81 @@ def gather_points_by_index(points, idx):
 
 
 
+def square_distance(setA, setB):
+    """  
+    Computes pairwise squared distance between two sets of points from the same point cloud
+    distance = ||a-b||^2 = ||a||^2 +||b||^2-2*a*b
 
-def knn_point(k, points, centers):
+    Input: 
+        setA: [B, S, 3]
+        setB: [B, N, 3]
+
+    Output: 
+        distance: [B, S, N]    
+    """
+    setA2 = torch.sum(setA**2, dim=2, keepdim=True)                 # [B, S, 1]
+    setB2 = torch.sum(setB**2, dim=2, keepdim=True).transpose(2,1)  # [B, 1, N]
+    cross = torch.bmm(setA,setB.transpose(2,1))                     # [B, S, 3]*[B, 3, N]=[B, S, N]
+    dist2 = setA2 + setB2 - 2*cross
+
+    return dist2
+
+
+
+def knn_point(k, reference_points, query_points):
     """
     kNN search: 
-    For each center point, find the indices of the k nearest points in the same cloud.
+    For each query point (center), find the indices of the k nearest points in the same cloud (reference_points)
     
-    inpùt:
-        points:  [B, N, 3]
-        centers: [B, S, 3]
+    Input:
+        reference_points:  [B, N, 3]     (search space)
+        query_points:      [B, S, 3]     (points asking for neighbors)
 
-    return:
+    Output:
         idx: [B,S,K] (indices of the K nearest points)
     """
 
-    distance = square_distance(centers, points)                 # [B, S, N]
-    _, idx = torch.topk(distance, k=k, dim=2, largest=False)
+    distance = square_distance(query_points, reference_points)                 # [B, S, N]
+    _, idx = torch.topk(distance, k=k, dim=2, largest=False, sorted=False)
 
     return idx
 
 
 
-def farthest_point_sample(points, num_centers):
+def farthest_point_sample(points_xyz, num_centers):
     """
     We pick the point whose closest center is furthest
     For each point, compute the distance to the closest center. Then, once we have a collection 
     of minimum distances, we pick the furthest one (the one less represented by the centers). 
 
     Input:
-        points:      point coordinates, shape [B, N, 3]
+        points_xyz:  point coordinates, shape [B, N, 3]
         num_centers: number of centers to sample  
 
-    returns:
+    Output:
         fps_idx: indices of sampled centers, shape [B, S]
     """
 
-    device = points.device
-    B, N, _ = points.shape
-    centers_idx = torch.zeros(B, num_centers, dtype=torch.long, device=device)          # [B,S]
-    first_center_idx = torch.randint(0, N, (B,), device=device)       # [B]
+    device = points_xyz.device
+    B, N, _ = points_xyz.shape
+    centers_idx = torch.zeros(B, num_centers, dtype=torch.long, device=device)              # [B,S]
+    first_center_idx = torch.randint(0, N, (B,), device=device)                             # [B]
     centers_idx[:,0] = first_center_idx
     
     # distance from first center to all points
-    first_center_xyz = gather_points_by_index(points, first_center_idx.unsqueeze(1))    # [B,1,3] 
-    distance = square_distance(first_center_xyz, points)                                # [B,1,N]
+    first_center_xyz = gather_points_by_index(points_xyz, first_center_idx.unsqueeze(1))    # [B,1,3] 
+    distance = square_distance(first_center_xyz, points_xyz)                                # [B,1,N]
     # keep track of closest center
-    distance_closest_center = distance.squeeze(1)                                       # [B,N] 
+    distance_closest_center = distance.squeeze(1)                                           # [B,N] 
 
     for c in range(1, num_centers):
         # find point whose closest center is farthest
-        new_center_idx = torch.argmax(distance_closest_center, dim=1)                   # [B]
+        new_center_idx = torch.argmax(distance_closest_center, dim=1)                       # [B]
         centers_idx[:,c] = new_center_idx                   
         
         # distance from new center to all points
-        new_center_xyz = gather_points_by_index(points, new_center_idx.unsqueeze(1))    # [B,1,3]
-        distance = square_distance(new_center_xyz, points).squeeze(1)                   # [B,N]
+        new_center_xyz = gather_points_by_index(points_xyz, new_center_idx.unsqueeze(1))    # [B,1,3]
+        distance = square_distance(new_center_xyz, points_xyz).squeeze(1)                   # [B,N]
 
         # update closest center distance for all points
         distance_closest_center = torch.minimum(distance_closest_center, distance)
@@ -124,43 +121,80 @@ def farthest_point_sample(points, num_centers):
 
 
 
-def sample_and_group(num_centers, K, points, features=None):
+def sample_and_group(num_centers, K, points_xyz, points_features=None):
     """
     S: number of centers to sample by FPS
     K: number of neighbors per center (kNN)
-    points:      [B, N, 3]
-    features: [B, N, D] or None
+    
+    Input:
+        points_xyz:      [B, N, 3]
+        points_features: [B, N, D] or None
 
-    returns:
+    Output:
       centers_xyz: [B, S, 3]
-      new_knn_xyz: [B, S, K, 3 + D]  (if features is not None)
-               [B, S, K, 3]      (otherwise)
+      knn_data:    [B, S, K, 3 + D]  (if features is not None) (geometry + features)
+                   [B, S, K, 3]      (otherwise)
     """    
     # Sample centers (indices)
-    centers_idx = farthest_point_sample(points, num_centers)    # [B,S]
+    centers_idx = farthest_point_sample(points_xyz, num_centers)                    # [B,S]
     
     # Gather center coordinates   
-    centers_xyz = gather_points_by_index(points, centers_idx)   # [B,S,3]
+    centers_xyz = gather_points_by_index(points_xyz, centers_idx)                   # [B,S,3]
 
     # Find K neighbors for each center
-    knn_idx = knn_point(K, points=points, centers=centers_xyz)  # [B,S,K]
+    knn_idx = knn_point(K, reference_points=points_xyz, query_points=centers_xyz)   # [B,S,K]
 
     # gather neighbor coordinates
-    knn_xyz = gather_points_by_index(points, knn_idx)           # [B,S,K,3]
+    knn_xyz = gather_points_by_index(points_xyz, knn_idx)                           # [B,S,K,3]
 
     # Normalize to local coordinates (centered at each center)
-    knn_xyz_norm = knn_xyz - centers_xyz.unsqueeze(2)           # [B,S,K,3]
+    knn_xyz_norm = knn_xyz - centers_xyz.unsqueeze(2)                               # [B,S,K,3]
 
-    if features is not None:
-        knn_features = gather_points_by_index(features, knn_idx)    # [B,S,K,D]
-        knn_points = torch.cat([knn_xyz_norm, knn_features], dim=-1)# [B,S,K,3+D]
+    if points_features is not None:
+        knn_features = gather_points_by_index(points_features, knn_idx)             # [B,S,K,D]
+        knn_data = torch.cat([knn_xyz_norm, knn_features], dim=-1)                  # [B,S,K,3+D]
     else:
-        knn_points = knn_xyz_norm                               # [B,S,K,3]
+        knn_data = knn_xyz_norm                                                     # [B,S,K,3]
 
-    return centers_xyz, knn_points
+    return centers_xyz, knn_data
 
 
 
+
+def interpolate_features_3nn(target_xyz, source_xyz, source_features, eps=1e-8):
+    """
+    Interpolate features from source points to target points using 3-NN.
+
+    Input:
+        target_xyz:      [B, N, 3]   (points where we want features)
+        source_xyz:      [B, S, 3]   (points that already have features)
+        source_features: [B, S, C]
+
+    Output:
+        target_features: [B, N, C]
+    """
+    # 1) find 3 nearest source points for each target point
+    idx = knn_point(k=3, reference_points=source_xyz, query_points=target_xyz)  # [B, N, k]
+    nearest_xyz = gather_points_by_index(source_xyz, idx)                       # [B, N, k, 3]
+
+    # 2) compute distances: target - neighbour
+    diff = target_xyz.unsqueeze(2) - nearest_xyz                                # [B, N, k, 3]
+    dist2 = torch.sum(diff * diff, dim=-1)                                      # [B, N, k]
+
+    # 3) convert to inverse-distance weights and normalize them: w1+w2+w3=1
+    w = 1.0 / (torch.sqrt(dist2) + eps)                                         # [B, N, k]
+    w = w / torch.sum(w, dim=2, keepdim=True)                                   # [B, N, k]
+
+    # 4) Weighted sum of the 3 neighbor features
+    nearest_features = gather_points_by_index(source_features, idx)             # [B, N, k, C]
+    target_features = torch.sum(nearest_features * w.unsqueeze(-1), dim=2)      # [B, N, C]
+
+    return target_features
+
+
+# ----------------------------------------------------
+#             SET ABSTRACTION 
+# ----------------------------------------------------
 class PointNetSetAbstraction(nn.Module):
     """
     Single-scale Set Abstraction (SA) layer using:
@@ -189,99 +223,286 @@ class PointNetSetAbstraction(nn.Module):
         self.mlp = nn.Sequential(*layers)       
 
 
-    def forward(self, points, features=None):
+    def forward(self, xyz, features=None):
         """
         Input:
-            points:   [B, N, 3]
+            xyz:      [B, N, 3]
             features: [B, N, D] or None
         Output:
-            new_points:   [B, S, 3]        (the sampled centers xyz)
-            new_features: [B, S, C_out]    (learned features per center)
+            centers_xyz:      [B, S, 3]        (the sampled centers xyz)
+            centers_features: [B, S, C_out]    (learned features per center)
         """
-        # sample centers ans group neighbourhoods
-        centers_xyz, knn_points = sample_and_group(self.num_centers, self.K, points, features=features)
+        # sample centers and group neighbourhoods
+        centers_xyz, knn_data = sample_and_group(self.num_centers, self.K, points_xyz=xyz, points_features=features)
         # centers_xyz: [B, S, 3]
-        # knn_points:  [B, S, K, 3(+D)]
+        # knn_data:    [B, S, K, 3(+D)]
         
-        # 2) Prepare for Conv2d: [B, S, K, C] -> [B, C, S, K]
-        knn_points = knn_points.permute(0, 3, 1, 2).contiguous()      # [B, C_in, S, K]
+        # 2) Permute for Conv2d: [B, S, K, C] -> [B, C, S, K]
+        knn_data = knn_data.permute(0, 3, 1, 2).contiguous()    # [B, C_in, S, K]
 
         # 3) Local PointNet (shared MLP)
-        x = self.mlp(knn_points)                                   # [B, C_out, S, K]
+        x = self.mlp(knn_data)                                  # [B, C_out, S, K]
 
         # 4) Symmetric pooling over K neighbors
         x, _ = torch.max(x, dim=3)                              # [B, C_out, S]
 
         # 5) Back to [B, S, C_out]
-        center_feat = x.permute(0, 2, 1).contiguous()          # [B, S, C_out]
+        centers_features = x.permute(0, 2, 1).contiguous()      # [B, S, C_out]
 
-        return centers_xyz, center_feat
+        return centers_xyz, centers_features
 
 
 
-class PointNetPlusPlusBackbone(nn.Module):
-    def __init__(self):
+
+
+# ----------------------------------------------------
+#             FEATURE PROPAGATION 
+# ----------------------------------------------------
+class PointNetFeaturePropagation(nn.Module):
+    """
+    PointNet++ Feature Propagation layer.
+    Interpolates features from a sparse set (source) to a denser set (target),
+    concatenates with skip features, then applies a shared MLP.
+    """
+
+    def __init__(self, in_channels, mlp_channels):
+        """
+        in_channels: channels after concatenation (C_interp + C_skip)
+        mlp_channels: list like [256, 128] producing the final C_out=128
+        """
         super().__init__()
+        self.in_channels = in_channels
+        self.mlp_channels = mlp_channels
 
-        # SA1: no input features -> knn_points has 3 channels 
-        self.sa1 = PointNetSetAbstraction(num_centers=512, K=32, in_channels=3, mlp_channels=[64, 64, 128])
+        # Shared MLP applied on points (implemented as 1x1 Conv1d)
+        layers = []
+        in_c = in_channels
+        for out_c in mlp_channels:
+            layers.append(nn.Conv1d(in_c, out_c, kernel_size=1, bias=False))
+            layers.append(nn.BatchNorm1d(out_c))
+            layers.append(nn.ReLU(inplace=True))
+            in_c = out_c
+        # Sequential expects separated arguments, not a list. The * unpacks them   
+        self.mlp = nn.Sequential(*layers)
 
-        # SA2: features now 128 -> knn_points has 3 + 128
+    def forward(self, target_xyz, source_xyz, source_features, target_skip_features=None):
+        """
+        Input:
+            target_xyz:           [B, N, 3]   (denser)
+            source_xyz:           [B, S, 3]   (sparser)
+            source_features:      [B, S, C2]  (features at source points)
+            target_skip_features: [B, N, C1] or None
+
+        Output:
+            new_target_features: [B, N, C_out]
+        """
+        # 1) interpolate source features onto target points
+        target_features = interpolate_features_3nn(target_xyz=target_xyz, 
+                                                   source_xyz=source_xyz, 
+                                                   source_features=source_features)             # [B, N, C2]
+
+        # 2) concat skip (if available)
+        if target_skip_features is not None:
+            joined_target_features = torch.cat([target_features, target_skip_features], dim=-1) # [B, N, C2+C1]
+        else:
+            joined_target_features = target_features                                            # [B, N, C2]
+
+        # 3) shared MLP expects [B, C, N]
+        joined_target_features = joined_target_features.permute(0, 2, 1).contiguous()           # [B, C_in, N]
+        new_target_features = self.mlp(joined_target_features)                                  # [B, C_out, N]
+        new_target_features = new_target_features.permute(0, 2, 1).contiguous()                 # [B, N, C_out]
+        
+        return new_target_features
+
+
+
+# ----------------------------------------------------
+#           POINTNET++ CLASSIFICATION
+# ----------------------------------------------------
+class PointNetPlusPlusClassifier(nn.Module):
+    """
+    PointNet++ classification
+    """    
+    def __init__(self, num_classes, extra_channels=0, dropout = 0.4):
+        super().__init__()
+        self.extra_channels = extra_channels
+        self.num_classes = num_classes
+
+        # -----------------------
+        # Encoder (Set Abstraction)
+        # -----------------------
+        # input:  xyz=[B,N,3],   feat=[B,N,C-3] or None       
+        # output: xyz=[B,512,3], feat=[B,512,128]
+        self.sa1 = PointNetSetAbstraction(num_centers=512, K=32, in_channels=3 + extra_channels, mlp_channels=[64, 64, 128]) 
+        # input:  xyz=[B,512,3], feat=[B,512,128] 
+        # output: xyz=[B,128,3], feat=[B,128,256] 
         self.sa2 = PointNetSetAbstraction(num_centers=128, K=32, in_channels=3 + 128, mlp_channels=[128, 128, 256])
-
-        # SA3: features now 256 -> knn_points has 3 + 256
+        # input:  xyz=[B,128,3], feat=[B,128,256] 
+        # output: xyz=[B,32,3], feat=[B,32,1024] 
         self.sa3 = PointNetSetAbstraction(num_centers=32, K=32, in_channels=3 + 256, mlp_channels=[256, 512, 1024])
 
-    def forward(self, xyz, features=None):
-        """
-        xyz:      [B, N, 3]
-        features: [B, N, D] or None
-
-        returns: levels = [(xyz0, f0), (xyz1, f1), (xyz2, f2), (xyz3, f3)]
-        """
-        xyz0, f0 = xyz, features
-        xyz1, f1 = self.sa1(xyz0, features=f0)    # [B,512,3], [B,512,128]
-        xyz2, f2 = self.sa2(xyz1, features=f1)    # [B,128,3], [B,128,256]
-        xyz3, f3 = self.sa3(xyz2, features=f2)    # [B, 32,3], [B, 32,1024]
-
-        return (xyz0,f0), (xyz1, f1), (xyz2, f2), (xyz3, f3)
-
-
-class PointNetPlusPlusClassifier(nn.Module):
-    def __init__(self, num_classes):
-        super().__init__()
-        
-        # Backbone
-        self.backbone = PointNetPlusPlusBackbone()
-        
-        # Classification head
+        # -----------------------       
+        #   Classification head
+        # -----------------------
         self.fc1 = nn.Linear(1024, 512, bias=False)
         self.bn1 = nn.BatchNorm1d(512)
-        self.dp1 = nn.Dropout(0.4)
+        self.dp1 = nn.Dropout(p=dropout)
 
         self.fc2 = nn.Linear(512, 256, bias=False)
         self.bn2 = nn.BatchNorm1d(256)
-        self.dp2 = nn.Dropout(0.4)
+        self.dp2 = nn.Dropout(p=dropout)
 
         self.fc3 = nn.Linear(256, num_classes)
 
-    def forward(self, xyz, features=None):
+    def forward(self, points):
         """
-        xyz: [B, N, 3]
-        features: [B, N, D] or None
+        Input:
+            points: [B, N, C]  (xyz + optional features)
+        Ouput:
+            log_probs: [B, num_classes]
         """
-        _, _, _, (xyz3, f3) = self.backbone(xyz, features=features)   # features: [B,32,1024]
+        assert points.ndim == 3, f"Expected [B,N,C] tensor, got shape {points.shape}"
+        assert points.shape[2] == 3 + self.extra_channels, \
+            f"Expected {3 + self.extra_channels} channels (xyz + {self.extra_channels}), got {points.shape[2]}"
+
+        xyz0 = points[:, :, :3]
+
+        if points.shape[2] > 3:
+            feat0 = points[:, :, 3:]
+        else:
+            feat0 = None
+
+        # -------- Encoder --------
+        xyz1, feat1 = self.sa1(xyz0, feat0)             # xyz1 [B,512,3], feat1 [B,512,128]
+        xyz2, feat2 = self.sa2(xyz1, feat1)             # xyz2 [B,128,3], feat2 [B,128,256]
+        xyz3, feat3 = self.sa3(xyz2, feat2)             # xyz3 [B,32,3],  feat3 [B,32,1024]
 
         # global pooling over centers dimension S=32
-        global_features, _ = torch.max(f3, dim=1)     # [B,1024]
+        global_features, _ = torch.max(feat3, dim=1)    # [B,1024]
 
-        x = self.dp1(F.relu(self.bn1(self.fc1(global_features))))
+        x = self.dp1(F.relu(self.bn1(self.fc1(global_features))))   
         x = self.dp2(F.relu(self.bn2(self.fc2(x))))
-        logits = self.fc3(x)                                # [B,num_classes]
+        logits = self.fc3(x)                            # [B,num_classes]
         log_probs = F.log_softmax(logits, dim=1)
 
         return log_probs
     
+
+
+
+# ----------------------------------------------------
+#               POINTNET++ SEGMENTATION
+# ----------------------------------------------------
+class PointNetPlusPlusSegmentation(nn.Module):
+    """
+    PointNet++ semantic segmentation (single-scale grouping version).
+    """
+
+    def __init__(self, num_classes, extra_channels = 0, dropout = 0.5):
+        """
+        num_classes:     number of semantic classes
+        input_feat_dim:  D (extra input features per point besides xyz). If you only have xyz -> 0.
+        dropout:         dropout in the final classifier head
+        """
+        super().__init__()
+        self.extra_channels = extra_channels
+        self.num_classes = num_classes
+
+        # -----------------------
+        # Encoder (Set Abstraction)
+        # -----------------------
+        # input:  xyz=[B,N,3],   feat=[B,N,C-3] or None         
+        # output: xyz=[B,512,3], feat=[B,512,128]
+        self.sa1 = PointNetSetAbstraction(num_centers=512, K=32, in_channels=3 + extra_channels, mlp_channels=[64, 64, 128]) 
+        # input:  xyz=[B,512,3], feat=[B,512,128] 
+        # output: xyz=[B,128,3], feat=[B,128,256] 
+        self.sa2 = PointNetSetAbstraction(num_centers=128, K=32, in_channels=3 + 128, mlp_channels=[128, 128, 256])
+        # input:  xyz=[B,128,3], feat=[B,128,256] 
+        # output: xyz=[B,32,3], feat=[B,32,1024] 
+        self.sa3 = PointNetSetAbstraction(num_centers=32, K=32, in_channels=3 + 256, mlp_channels=[256, 512, 1024])
+
+        # -----------------------
+        # Decoder (Feature Propagation)
+        # -----------------------
+        # FP3: from SA3 (1024) -> SA2 (256)
+        # interpolate gives 1024, skip has 256 => in_channels=1280
+        self.fp3 = PointNetFeaturePropagation(in_channels=1024 + 256, mlp_channels=[256, 256])
+        # FP2: from SA2-level (256) -> SA1-level (128)
+        # interp 256 + skip 128 => 384
+        self.fp2 = PointNetFeaturePropagation(in_channels=256 + 128, mlp_channels=[256, 128])
+        # FP1: from SA1-level (128) -> original N points (skip is original input features)
+        # interp 128 + skip D (if any) => 128 + D
+        self.fp1 = PointNetFeaturePropagation(in_channels=128 + extra_channels, mlp_channels=[128, 128, 128])
+
+        # -----------------------
+        # Per-point classifier head
+        # -----------------------
+        self.classifier = nn.Sequential(
+            nn.Conv1d(128, 128, kernel_size=1, bias=False),
+            nn.BatchNorm1d(128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+            nn.Conv1d(128, num_classes, kernel_size=1)
+        )
+
+    def forward(self, points):
+        """
+        Input:
+            points:    [B, N, C]  (xyz + optional features)
+        Ouput:
+            log_probs: [B, num_classes, N]
+        """
+        assert points.ndim == 3, f"Expected [B,N,C] tensor, got shape {points.shape}"
+        assert points.shape[2] == 3 + self.extra_channels, \
+            f"Expected {3 + self.extra_channels} channels (xyz + {self.extra_channels}), got {points.shape[2]}"
+
+        xyz0 = points[:, :, :3]
+
+        if points.shape[2] > 3:
+            feat0 = points[:, :, 3:]
+        else:
+            feat0 = None
+
+        # -------- Encoder --------
+        xyz1, feat1 = self.sa1(xyz0, feat0)             # xyz1 [B,512,3], feat1 [B,512,128]
+        xyz2, feat2 = self.sa2(xyz1, feat1)             # xyz2 [B,128,3], feat2 [B,128,256]
+        xyz3, feat3 = self.sa3(xyz2, feat2)             # xyz3 [B,32,3],  feat3 [B,32,1024]
+
+        # -------- Decoder --------
+        # FP3: upsample from 32 -> 128
+        feat2_up = self.fp3(target_xyz=xyz2, 
+                            source_xyz=xyz3, 
+                            source_features=feat3, 
+                            target_skip_features=feat2) # [B,128,256]
+        # FP2: upsample from 128 -> 512
+        feat1_up = self.fp2(target_xyz=xyz1, 
+                            source_xyz=xyz2, 
+                            source_features=feat2_up, 
+                            target_skip_features=feat1) # [B,512,128]
+        # FP1: upsample from 512 -> N
+        feat0_up = self.fp1(target_xyz=xyz0, 
+                            source_xyz=xyz1,
+                            source_features=feat1_up, 
+                            target_skip_features=feat0) # [B,N,128]
+
+        # -------- Head --------
+        x = feat0_up.permute(0, 2, 1).contiguous()      # [B,128,N]
+        logits = self.classifier(x)                     # [B,num_classes,N]
+        log_probs = F.log_softmax(logits, dim=1)        # [B,num_classes,N]
+        
+        return log_probs
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -321,7 +542,7 @@ if __name__ == "__main__":
     val_loader   = DataLoaderGeometric(val_dataset, batch_size=32, shuffle=False) 
     test_loader  = DataLoaderGeometric(test_dataset, batch_size=32, shuffle=False)
 
-    network = PointNetPlusPlusClassifier(num_classes=10).to(device)
+    network = PointNetPlusPlusClassifier(num_classes=10, extra_channels=0).to(device)
     optimizer = optim.Adam(network.parameters(), lr=0.001)
     criterion = nn.NLLLoss()
     
