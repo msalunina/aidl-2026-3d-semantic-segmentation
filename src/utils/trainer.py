@@ -54,7 +54,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
             image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
             image = image.to(device)
         else:
-            points_BNC, labels = batch
+            points_BNC, labels, _ = batch
         
         
         points_BNC = points_BNC.to(device)
@@ -134,7 +134,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
                 image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
                 image = image.to(device)
             else:
-                points_BNC, labels = batch  # Points: [B, N, C] / labels: [B, N]  
+                points_BNC, labels, _ = batch  # Points: [B, N, C] / labels: [B, N]  
                 
             points_BNC = points_BNC.to(device)
             labels = labels.to(device) 
