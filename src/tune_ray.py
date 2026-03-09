@@ -309,7 +309,7 @@ def trainable(trial_cfg: dict):
         )
 
     def report_fn(**kwargs):
-        tune.report(**kwargs)
+        tune.report(kwargs)
 
     train_model_segmentation(
         cfg,
