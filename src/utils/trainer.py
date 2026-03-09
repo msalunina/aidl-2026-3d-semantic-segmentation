@@ -49,14 +49,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
 
         # Pointnet needs: [B, N, C]
-        if use_image: 
-            points_BNC, labels, image = batch                                   # Points: [B, N, C] / labels: [B, N]
-            image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
-            image = image.to(device)
-        else:
-            points_BNC, labels, _ = batch
-        
-        
+        points_BNC, labels, image = batch                           # Points: [B, N, C] / labels: [B, N] / image [B, H, W]       
         points_BNC = points_BNC.to(device)
         labels = labels.to(device) 
 
@@ -64,15 +57,24 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         optimizer.zero_grad()  
 
         # Forward points and image through the network  
-        if use_image:                                  
-            feature_tnet, log_probs_BCN = network(points_BNC, image)
+        if use_image:  
+            image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
+            image = image.to(device)                                
+            output = network(points_BNC, image)
         else:
-            feature_tnet, log_probs_BCN = network(points_BNC)             
+            output = network(points_BNC)  
+            
+        # Handle output depending on what model returns
+        if isinstance(output, tuple):
+            feature_tnet, log_probs_BCN = output
+            reg_loss = compute_regularizationLoss(feature_tnet)
+        else:
+            log_probs_BCN = output
+            reg_loss = torch.tensor(0.0, device=device)
         
         # Compute loss: NLLLoss(ignore_index=-1) 
         # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
-        reg_loss = compute_regularizationLoss(feature_tnet)          # compute regularization term
-        loss = criterion(log_probs_BCN, labels) + 0.001 * reg_loss   # add it to the loss  
+        loss = criterion(log_probs_BCN, labels) + 0.001 * reg_loss   
         loss_history.append(loss.item())         
         
         loss.backward()                                           
@@ -82,7 +84,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         # Compute predictions
         predictions = log_probs_BCN.argmax(dim=1)
         # Identify valid labels (-1 is not valid)
-        id_valid = labels != -1 #config.ignore_label                                     
+        id_valid = labels != config.ignore_label                                     
         valid_predictions = predictions[id_valid]
         valid_labels = labels[id_valid]
         # Accuracy
@@ -128,22 +130,24 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
         for batch in tqdm(data_loader, desc="val epoch", position=1, leave=False):
             
-            # Pointnet needs: [B, N, C] 
-            if use_image:
-                points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N]  
-                image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
-                image = image.to(device)
-            else:
-                points_BNC, labels, _ = batch  # Points: [B, N, C] / labels: [B, N]  
-                
+            # Pointnet needs: [B, N, C]   
+            points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]       
             points_BNC = points_BNC.to(device)
             labels = labels.to(device) 
 
             # Forward points through the network 
-            if use_image:                                  
-                feature_tnet, log_probs_BCN = network(points_BNC, image)
+            if use_image:  
+                image = image.unsqueeze(dim=1) #add channel dim tensor is [B, C, H, W]
+                image = image.to(device)                                
+                output = network(points_BNC, image)
             else:
-                feature_tnet, log_probs_BCN = network(points_BNC)            
+                output = network(points_BNC)   
+
+            # Handle output depending on what model returns
+            if isinstance(output, tuple):
+                feature_tnet, log_probs_BCN = output
+            else:
+                log_probs_BCN = output
 
             # Compute loss: NLLLoss(ignore_index=-1) 
             # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
@@ -154,7 +158,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             # Compute predictions
             predictions = log_probs_BCN.argmax(dim=1)
             # Identify valid labels (-1 is not valid)
-            id_valid = labels != -1 #config.ignore_label                                     
+            id_valid = labels != config.ignore_label                                     
             valid_predictions = predictions[id_valid]
             valid_labels = labels[id_valid]
             # Accuracy
@@ -228,6 +232,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         if(epoch % config.snap_interval == 0):
             checkpoint = {
                 "model_state_dict": network.cpu().state_dict(),
+                "config": config,   # save full configuration
             }
             path_to_save = os.path.join(base_path, "snapshots", config.test_name)
             if not os.path.exists(path_to_save):

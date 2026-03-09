@@ -28,6 +28,25 @@ class shapenetDataset(Dataset):
         'Table': '04379243',
     }
 
+    category_names = {
+        '02691156' : 'Airplane',
+        '02773838' : 'Bag',
+        '02954340' : 'Cap',
+        '02958343' : 'Car',
+        '03001627' : 'Chair',
+        '03261776' : 'Earphone',
+        '03467517' : 'Guitar',
+        '03624134' : 'Knife',
+        '03636649' : 'Lamp',
+        '03642806' : 'Laptop',
+        '03790512' : 'Motorbike',
+        '03797390' : 'Mug',
+        '03948459' : 'Pistol',
+        '04099429' : 'Rocket',
+        '04225987' : 'Skateboard',
+        '04379243' : 'Table',
+    }
+
     seg_classes = {
         'Airplane': [0, 1, 2, 3],
         'Bag': [4, 5],
@@ -134,6 +153,9 @@ class shapenetDataset(Dataset):
         if(rot):
             pc = self._augment_points(pc)
         
+        #add gaussian noise mean 0 and 0.02 standar dev
+        noise = np.clip(np.random.normal(0.0, 0.02, (self.pc_size,3)), -0.05, 0.05)
+        pc = pc+noise
         return pc, labels
     
     def read_txt(self, path):
@@ -148,6 +170,14 @@ class shapenetDataset(Dataset):
                 labels.append(float(label))
         
         return pointcloud,labels
+    
+    def getPartsInObject(self, labels, parts_labels):
+
+        parts_count = np.zeros(len(parts_labels)) #zero vector with len number of classes in object
+        hist = np.bincount(labels,  minlength=50)
+        endp = parts_labels[0] + len(parts_labels)
+        parts_count = hist[parts_labels[0]: endp]
+        return parts_count
 
     def __getitem__(self, index):
         
@@ -157,8 +187,26 @@ class shapenetDataset(Dataset):
         points = np.array(points, dtype=np.float32)
         labels = np.array(label, dtype=np.int64)
         
-        points, labels = self.processData(points, labels) #downsample the data
-        return np.array(points, dtype=np.float32), np.array(labels, dtype=np.int64)
+        #get the IoU offset, if a class not in the object add 1/n_class
+        #- get the object class
+        parts_count = None
+        parts_labels = None
+        class_object = 0
+        for class_id, name in self.category_names.items():
+            if class_id in file_path:
+                parts_labels = self.seg_classes[name]
+                break
+            class_object +=1
+        #adjust the data to expected size
+        points, labels = self.processData(points, labels) 
+        #get count of parts for each label
+        parts_count = self.getPartsInObject(labels, parts_labels)
+        iou_offset = 0
+        for i in parts_count:
+            if i == 0:
+                iou_offset += (1.0/len(parts_count))
+
+        return np.array(points, dtype=np.float32), np.array(labels, dtype=np.int64), np.array(iou_offset, dtype=np.float32), np.array(class_object, dtype=np.int64)
         
     
     def __len__(self):

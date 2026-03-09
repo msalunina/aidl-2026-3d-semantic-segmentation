@@ -46,7 +46,7 @@ class ConfigParser():
             type=str, 
             default=default_config['training']['model_name'], 
             help='Model name to use (options: pointnet, TBD)',
-            choices=['pointnet']  # TODO: add more options
+            choices=['pointnet', 'pointnetplusplus']  # TODO: add more options
         )
         self.parser.add_argument(
             '--num_channels', 

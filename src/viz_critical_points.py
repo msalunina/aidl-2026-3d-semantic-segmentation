@@ -5,7 +5,6 @@ import os
 import random
 from utils.config_parser import ConfigParser
 from utils.dataset import DALESDataset
-from torch.utils.data import DataLoader
 from utils.trainer import train_model_segmentation
 from pathlib import Path
 import matplotlib.pyplot as plt

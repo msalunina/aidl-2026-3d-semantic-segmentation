@@ -134,7 +134,10 @@ class PointNetBackbone(nn.Module):
 
         # Shared MLP(64, 64)
         x = F.relu(self.bn_1(self.conv_1(x)))               # [B, 64, N]
+        feat1 = x
         x = F.relu(self.bn_2(self.conv_2(x)))               # [B, 64, N]
+        feat2 = x
+       
 
         # Feature transformation
         x = x.transpose(2, 1)                               # [B, N, 64] transpose for feature transform
@@ -147,13 +150,15 @@ class PointNetBackbone(nn.Module):
 
         # Shared MLP(64, 128, 1024)
         x = F.relu(self.bn_3(self.conv_3(x)))               # [B, 64, N]
+        feat3 = x
         x = F.relu(self.bn_4(self.conv_4(x)))               # [B, 128, N]
+        feat4 = x
         x = F.relu(self.bn_5(self.conv_5(x)))               # [B, 1024, N]
 
         # Global feature (max pooling)
         global_feature = torch.max(x, 2, keepdim=True)[0]   # [B, 1024, 1] because of keepdim=True
                 
-        return feature_transform, point_features, global_feature
+        return feat1, feat2, feat3, feat4, feature_transform, point_features, global_feature
     
 
 class PointNetClassification(nn.Module):
@@ -184,7 +189,7 @@ class PointNetClassification(nn.Module):
     def forward(self, x):
         # x: [B, N, 3] or [B, N, 3+C]
         
-        feature_transform, point_features, global_feature = self.backbone(x)
+        _,_,_,_,feature_transform, point_features, global_feature = self.backbone(x)
         # global feature: [B, 1024, 1], but nn.Linear expects [B, 1024]
 
         global_feature = global_feature.view(-1, 1024)      # [B, 1024] removes the last 1 dimension 
@@ -201,10 +206,12 @@ class PointNetSegmentation(nn.Module):
     PointNet for 3D Semantic Segmentation
     """
 
-    def __init__(self, num_classes, input_channels=3, dropout=0.3):
+    def __init__(self, num_classes, input_channels=3, dropout=0.3, add_ohv=False):
         super(PointNetSegmentation, self).__init__()
         self.num_classes = num_classes
         self.input_channels = input_channels
+        self.add_ohv = add_ohv
+        self.ohv_gt = PointNetBackbone
         # OLGA: paper says there is no dropout for segmentation
         # self.dropout = nn.Dropout(p=dropout)    
 
@@ -215,7 +222,12 @@ class PointNetSegmentation(nn.Module):
 
         # Segmentation head: 
         # MLP(512, 256, 128)
-        self.conv_1 = nn.Conv1d(1088, 512, 1)                   # weight matrix: [512,64+1024]
+        conv_size = 1088 + 64 + 64 + 64 + 128
+        if self.add_ohv:
+            #hardcodded the number of object classes
+            conv_size += 16
+
+        self.conv_1 = nn.Conv1d(conv_size, 512, 1)                   # weight matrix: [512,64+1024]
         self.conv_2 = nn.Conv1d(512, 256, 1)                    # weight matrix: [256,512]
         self.conv_3 = nn.Conv1d(256, 128, 1)                    # weight matrix: [128,256]
         self.bn_1 = nn.BatchNorm1d(512)
@@ -229,18 +241,28 @@ class PointNetSegmentation(nn.Module):
         self.conv_5 = nn.Conv1d(128, num_classes, 1)            # weight matrix: [num_classes,128]
         self.bn_4 = nn.BatchNorm1d(128)
 
+    def setOneHotVectorBatch(self, ohvb):
+        self.ohv_gt = ohvb
+
     def forward(self, x):
         # x: [B, N, 3] or [B, N, 3+C]
 
-        feature_transform, point_features, global_feature = self.backbone(x)
+        f1, f2, f3, f4, feature_transform, point_features, global_feature = self.backbone(x)
         # point_features: [B, 64, N]
         # global feature: [B, 1024, 1]
         
         num_points = x.shape[1]
-        global_feature_expanded = global_feature.repeat(1, 1, num_points)   # [B, 1024, N]
+        global_feature_expanded = global_feature.repeat(1, 1, num_points)   # [B, 1024, N]                 
 
         # Concatenate point features and global feature
-        x = torch.cat([point_features, global_feature_expanded], dim=1)     # [B, 64+1024, N]
+        x = torch.cat([f1, f2, point_features, f3, f4, global_feature_expanded], dim=1)     # [B, 64+1024, N]
+
+        if( (self.ohv_gt is not None) and (self.add_ohv)):
+            #for each element in the batch, create num_points vectors each one with the one hot vector label
+            #the goal is to create a tensor of shape [B, n_classes, 1024]
+            ohv_data = F.one_hot(self.ohv_gt, num_classes=16).float() #self.ohv_gt.reshape(x.shape[0], 1) # [B, 1]
+            ohv_data = ohv_data.unsqueeze(2).repeat(1, 1, x.shape[2]).to(x.device)
+            x = torch.cat([x, ohv_data], dim=1)
 
         x = F.relu(self.bn_1(self.conv_1(x)))               # [batch, 512, nPoints]
         x = F.relu(self.bn_2(self.conv_2(x)))               # [batch, 256, nPoints]
