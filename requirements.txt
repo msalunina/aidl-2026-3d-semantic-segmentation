@@ -13,3 +13,4 @@ laspy
 open3d
 plyfile
 wandb
+ray[tune]

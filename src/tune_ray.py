@@ -39,6 +39,109 @@ def set_device():
     return torch.device("cpu")
 
 
+# ---------------------------------------------------------------------------
+# Weight-computation helpers (mirrors compute_class_frequencies.py but inline
+# to avoid module-level side effects when that file is imported by Ray workers)
+# ---------------------------------------------------------------------------
+
+def compute_focal_weights(
+    counter,
+    method: str = "sqrt_inv_freq",
+    beta: float = 0.9999,
+    num_classes: int = 5,
+) -> np.ndarray:
+    """Compute per-class weights suitable for use with FocalLoss.
+
+    Methods
+    -------
+    - 'sqrt_inv_freq': Square root of inverse frequency (recommended for Focal Loss)
+    - 'moderate': Moderate inverse frequency with clipping
+    - 'effective_num': Effective number of samples (Cui et al. 2019)
+    - 'uniform': All ones
+    """
+    if method == "uniform":
+        return np.ones(num_classes, dtype=np.float64)
+
+    freqs = np.array([counter.get(i, 0) for i in range(num_classes)], dtype=np.float64)
+    freqs = freqs / freqs.sum()
+
+    if method == "sqrt_inv_freq":
+        weights = np.sqrt(1.0 / (freqs + 1e-6))
+        weights = weights / weights.mean()
+
+    elif method == "moderate":
+        weights = 1.0 / (freqs + 1e-6)
+        weights = weights / weights.mean()
+        weights = np.clip(weights, 0.5, 5.0)
+
+    elif method == "effective_num":
+        counts = np.array([counter.get(i, 0) for i in range(num_classes)], dtype=np.float64)
+        effective_num = (1 - np.power(beta, counts)) / (1 - beta)
+        weights = 1.0 / (effective_num + 1e-6)
+        weights = weights / weights.sum() * num_classes
+
+    else:
+        raise ValueError(f"Unknown weight method: {method}")
+
+    return weights
+
+
+def precompute_class_weights(
+    data_dir: str | Path,
+    ignore_label: int,
+    num_classes: int = 5,
+) -> list[list[float]]:
+    """Scan all .npz files in *data_dir* once and return a list of weight
+    vectors (one per scheme) ready for use as tune.choice options.
+
+    Returned order
+    --------------
+    0  sqrt_inv_freq
+    1  moderate
+    2  effective_num  beta=1 - 1e-5
+    3  effective_num  beta=1 - 1e-6
+    4  effective_num  beta=1 - 1e-7
+    5  uniform
+    """
+    from collections import Counter
+
+    files = list(Path(data_dir).glob("*.npz"))
+    if not files:
+        raise RuntimeError(f"No .npz files found in {data_dir}")
+
+    counter: Counter = Counter()
+    total_points = 0
+    for f in files:
+        data = np.load(f)
+        labels = data["labels"]
+        labels = labels[labels != ignore_label]
+        total_points += labels.size
+        counter.update(labels.tolist())
+
+    print(f"[precompute_class_weights] scanned {len(files)} blocks, {total_points:,} labeled points")
+
+    schemes = [
+        ("sqrt_inv_freq", None),
+        ("moderate",      None),
+        ("effective_num", 1 - 1e-5),
+        ("effective_num", 1 - 1e-6),
+        ("effective_num", 1 - 1e-7),
+        ("uniform",       None),
+    ]
+
+    weight_options: list[list[float]] = []
+    print("\n[precompute_class_weights] computed weight options:")
+    for method, beta in schemes:
+        kw = {} if beta is None else {"beta": beta}
+        w = compute_focal_weights(counter, method=method, num_classes=num_classes, **kw)
+        label = method if beta is None else f"{method}(beta={beta})"
+        rounded = [round(float(x), 6) for x in w]
+        print(f"  {label:35s}: {rounded}")
+        weight_options.append(rounded)
+
+    return weight_options
+
+
 def load_base_config():
     """
     Loads existing YAML config via ConfigParser, and returns (cfg, repo_root_path).
@@ -72,6 +175,21 @@ def load_base_config():
 def trainable(trial_cfg: dict):
     cfg, base_path = load_base_config()
 
+    # Ensure the repo root and src/ are on sys.path so that intra-package
+    # imports like `from models.img_encoder import ...` work in Ray workers,
+    # which do not inherit the parent process's sys.path.
+    for _p in [str(base_path), str(base_path / "src")]:
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
+
+    # Resolve relative paths to absolute
+    def _abs(p: str) -> str:
+        path = Path(p)
+        return str(path if path.is_absolute() else base_path / path)
+
+    cfg.model_data_path = _abs(cfg.model_data_path)
+    cfg.image_data_path = _abs(cfg.image_data_path)
+
     # Disable W&B + snapshots inside HPO trials
     cfg.wandb_enabled = False
     cfg.save_snapshots = False
@@ -83,6 +201,10 @@ def trainable(trial_cfg: dict):
 
     focal_gamma = float(trial_cfg["focal_gamma"])
     rare_class_boost = float(trial_cfg["rare_class_boost"])
+
+    # Override loss weights if provided by the tuner
+    if "loss_weights" in trial_cfg:
+        cfg.loss_weights = list(trial_cfg["loss_weights"])
 
     # Optional: tune cosine scheduler eta_min if provided
     if getattr(cfg, "scheduler_type", None) == "cosine" and "scheduler_min_lr" in trial_cfg:
@@ -245,6 +367,15 @@ def main():
     # os.environ.setdefault("TMP", str(ray_tmp))
     # os.environ.setdefault("TEMP", str(ray_tmp))
 
+    # Pre-compute all loss-weight variants from the actual training data so
+    # every Ray trial gets consistent, data-driven options without re-scanning.
+    cfg_for_weights, repo_root_for_weights = load_base_config()
+    weight_options = precompute_class_weights(
+        data_dir=Path(cfg_for_weights.model_data_path) / "train",
+        ignore_label=cfg_for_weights.ignore_label,
+        num_classes=getattr(cfg_for_weights, "num_classes", 5),
+    )
+
     param_space = {
         "learning_rate": tune.loguniform(1e-5, 3e-3),
         "batch_size": tune.choice([8, 16, 24, 32]),
@@ -255,6 +386,10 @@ def main():
         "rotation_deg_max": tune.uniform(0.0, 20.0),
         "scale_min": tune.uniform(0.9, 1.0),
         "scale_max": tune.uniform(1.0, 1.1),
+
+        # loss_weights: one pre-computed vector per weighting scheme
+        # (sqrt_inv_freq / moderate / effective_num variants / uniform)
+        "loss_weights": tune.choice(weight_options),
 
         "num_epochs": args.max_epochs,
         "seed": 42,
@@ -277,6 +412,8 @@ def main():
             mode="max",
             num_samples=args.num_samples,
             scheduler=scheduler,
+            # Keep trial directory names short to avoid Windows MAX_PATH (260 chars)
+            trial_dirname_creator=lambda trial: f"trial_{trial.trial_id[:8]}",
         ),
         run_config=tune.RunConfig(
             name=f"dales_hpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
