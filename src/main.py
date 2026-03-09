@@ -128,8 +128,11 @@ if __name__ == '__main__':
     elif config.model_name == "pointnetplusplus":
         from models.pointnetplusplus import PointNetPlusPlusSegmentation
         model = PointNetPlusPlusSegmentation(num_classes=config.num_classes,
-                                             extra_channels=config.num_channels-3,
-                                             dropout=0.5).to(device)
+                                             extra_channels=config.num_channels - 3,
+                                             dropout=0.5,
+                                             grouping="ball",         # choose "knn" or "ball"
+                                             radius=[0.08, 0.1, 0.2, 0.4]).to(device)       
+
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
         

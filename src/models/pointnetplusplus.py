@@ -36,10 +36,9 @@ def gather_points_by_index(points, idx):
 
 
 
-
 def square_distance(setA, setB):
     """  
-    Computes pairwise squared distance between two sets of points from the same point cloud
+    Compute pairwise squared Euclidean distances between two sets of points.
     distance = ||a-b||^2 = ||a||^2 +||b||^2-2*a*b
 
     Input: 
@@ -47,34 +46,15 @@ def square_distance(setA, setB):
         setB: [B, N, 3]
 
     Output: 
-        distance: [B, S, N]    
+        dist2: [B, S, N]    
     """
     setA2 = torch.sum(setA**2, dim=2, keepdim=True)                 # [B, S, 1]
     setB2 = torch.sum(setB**2, dim=2, keepdim=True).transpose(2,1)  # [B, 1, N]
     cross = torch.bmm(setA,setB.transpose(2,1))                     # [B, S, 3]*[B, 3, N]=[B, S, N]
     dist2 = setA2 + setB2 - 2*cross
+    dist2 = torch.clamp(dist2, min=0.0)                             # avoid tiny negative
 
     return dist2
-
-
-
-def knn_point(k, reference_points, query_points):
-    """
-    kNN search: 
-    For each query point (center), find the indices of the k nearest points in the same cloud (reference_points)
-    
-    Input:
-        reference_points:  [B, N, 3]     (search space)
-        query_points:      [B, S, 3]     (points asking for neighbors)
-
-    Output:
-        idx: [B,S,K] (indices of the K nearest points)
-    """
-
-    distance = square_distance(query_points, reference_points)                 # [B, S, N]
-    _, idx = torch.topk(distance, k=k, dim=2, largest=False, sorted=False)
-
-    return idx
 
 
 
@@ -120,43 +100,123 @@ def farthest_point_sample(points_xyz, num_centers):
 
 
 
-
-def sample_and_group(num_centers, K, points_xyz, points_features=None):
+def knn_point(k, reference_points, query_points):
     """
-    S: number of centers to sample by FPS
-    K: number of neighbors per center (kNN)
+    kNN search: 
+    For each query point (center), find the indices of the k nearest points in the same cloud (reference_points)
     
+    Input:
+        reference_points:  [B, N, 3]     (search space)
+        query_points:      [B, S, 3]     (points asking for neighbors)
+
+    Output:
+        idx: [B,S,K] (indices of the K nearest points)
+    """
+
+    distance2 = square_distance(query_points, reference_points)                 # [B, S, N]
+    _, knn_idx = torch.topk(distance2, k=k, dim=2, largest=False, sorted=False)
+
+    return knn_idx
+
+
+
+def query_ball_point(radius, K, reference_points, query_points):
+    """
+    For each query point (center), find up to K reference points
+    lying inside a ball of radius 'radius'.
+
+    Assumption: query_points are sampled from reference_points,so 
+    each center is itself one of the reference points. Therefore 
+    distance(center, center) = 0 <= radius, so each neighborhood 
+    contains at least one valid point.
+
+    Input:
+        radius:            radius of the ball
+        K:                 maximum number of neighbors per center
+        reference_points:  [B, N, 3]
+        query_points:      [B, S, 3]
+
+    Output:
+        group_idx: [B, S, K]
+    """
+    if radius is None:
+        raise ValueError("radius must be provided for ball query")
+    if radius <= 0:
+        raise ValueError(f"radius must be positive, got {radius}")
+
+    # Squared distances from each center to all points in the cloud
+    distance2 = square_distance(query_points, reference_points)             # [B,S,N]
+    
+    # Points outside the radius are assigned infinite distance
+    distance2[distance2 > radius ** 2] = torch.inf                          # [B,S,N]
+
+    #  -------------- TEMPORAL  --------------
+    # valid_mask = distance2 <= radius**2
+    # num_valid = valid_mask.sum(dim=-1).float()
+    # print(
+    #     f"radius={radius} "
+    #     f"min={num_valid.min().item():.1f} "
+    #     f"mean={num_valid.mean().item():.1f} "
+    #     f"max={num_valid.max().item():.1f}")
+    #  -------------- TEMPORAL  --------------
+
+    # Take K smallest distances (closest neighbors).
+    selected_distance2, group_idx = torch.topk(distance2, K, dim=-1, largest=False) # both [B, S, K]
+
+    # Replace invalid entries with the closest valid neighbor
+    first_valid_idx = group_idx[:, :, 0].unsqueeze(-1).expand(-1, -1, K)    # [B,S]->[B,S,1]->[B,S,K]
+    invalid_mask = torch.isinf(selected_distance2)                          # [B,S,K]
+    group_idx[invalid_mask] = first_valid_idx[invalid_mask]                 # [B,S,K]
+
+    return group_idx
+
+
+def sample_and_group(num_centers, K, points_xyz, points_features=None, grouping="knn", radius=None):
+    """
+    num_centers: number of centers to sample by FPS
+    K:           number of neighbors per center (kNN), or maximum number
+                 of neighbors per center (ball query)
+
     Input:
         points_xyz:      [B, N, 3]
         points_features: [B, N, D] or None
+        grouping:        "knn" or "ball"
+        radius:          ball radius (required if grouping == "ball")
 
     Output:
       centers_xyz: [B, S, 3]
-      knn_data:    [B, S, K, 3 + D]  (if features is not None) (geometry + features)
+      group_data:  [B, S, K, 3 + D]  (if features is not None) (geometry + features)
                    [B, S, K, 3]      (otherwise)
-    """    
+    """
     # Sample centers (indices)
-    centers_idx = farthest_point_sample(points_xyz, num_centers)                    # [B,S]
-    
-    # Gather center coordinates   
-    centers_xyz = gather_points_by_index(points_xyz, centers_idx)                   # [B,S,3]
+    centers_idx = farthest_point_sample(points_xyz, num_centers)                      # [B,S]
 
-    # Find K neighbors for each center
-    knn_idx = knn_point(K, reference_points=points_xyz, query_points=centers_xyz)   # [B,S,K]
+    # Gather center coordinates
+    centers_xyz = gather_points_by_index(points_xyz, centers_idx)                     # [B,S,3]
 
-    # gather neighbor coordinates
-    knn_xyz = gather_points_by_index(points_xyz, knn_idx)                           # [B,S,K,3]
+    # Find neighbors for each center
+    if grouping == "knn":
+        group_idx = knn_point(K, reference_points=points_xyz, query_points=centers_xyz)   # [B,S,K]
+
+    elif grouping == "ball":
+        group_idx = query_ball_point(radius=radius,K=K,reference_points=points_xyz,query_points=centers_xyz) # [B,S,K]
+
+    else:
+        raise ValueError(f"Unknown grouping mode '{grouping}'. Use 'knn' or 'ball'.")
+
+    # Gather neighbor coordinates
+    group_xyz = gather_points_by_index(points_xyz, group_idx)                         # [B,S,K,3]
 
     # Normalize to local coordinates (centered at each center)
-    knn_xyz_norm = knn_xyz - centers_xyz.unsqueeze(2)                               # [B,S,K,3]
+    group_xyz_norm = group_xyz - centers_xyz.unsqueeze(2)                             # [B,S,K,3]
 
     if points_features is not None:
-        knn_features = gather_points_by_index(points_features, knn_idx)             # [B,S,K,D]
-        knn_data = torch.cat([knn_xyz_norm, knn_features], dim=-1)                  # [B,S,K,3+D]
+        group_features = gather_points_by_index(points_features, group_idx)           # [B,S,K,D]
+        group_data = torch.cat([group_xyz_norm, group_features], dim=-1)              # [B,S,K,3+D]
     else:
-        knn_data = knn_xyz_norm                                                     # [B,S,K,3]
+        group_data = group_xyz_norm                                                   # [B,S,K,3]
 
-    return centers_xyz, knn_data
+    return centers_xyz, group_data
 
 
 
@@ -199,16 +259,18 @@ class PointNetSetAbstraction(nn.Module):
     """
     Single-scale Set Abstraction (SA) layer using:
       - FPS to sample S centers
-      - kNN to group K neighbors per center
+      - local grouping around each center (kNN or ball query)
       - shared MLP (Conv2d 1x1) + maxpool over neighbors to produce a feature per center.
     """    
 
-    def __init__(self, num_centers, K, in_channels, mlp_channels):
+    def __init__(self, num_centers, K, in_channels, mlp_channels, grouping="knn", radius=None):
         super().__init__()
         self.num_centers = num_centers
         self.K = K
         self.in_channels = in_channels
         self.mlp_channels = mlp_channels
+        self.grouping = grouping
+        self.radius = radius
         
         # Shared MLP over neighborhood points (implemented as 1x1 Conv2d)
         layers = []
@@ -232,15 +294,20 @@ class PointNetSetAbstraction(nn.Module):
             centers_features: [B, S, C_out]    (learned features per center)
         """
         # sample centers and group neighbourhoods
-        centers_xyz, knn_data = sample_and_group(self.num_centers, self.K, points_xyz=xyz, points_features=features)
+        centers_xyz, group_data = sample_and_group(self.num_centers,
+                                                   self.K,
+                                                   points_xyz=xyz,
+                                                   points_features=features,
+                                                   grouping=self.grouping,
+                                                   radius=self.radius)
         # centers_xyz: [B, S, 3]
-        # knn_data:    [B, S, K, 3(+D)]
+        # group_data:  [B, S, K, 3(+D)]
         
         # 2) Permute for Conv2d: [B, S, K, C] -> [B, C, S, K]
-        knn_data = knn_data.permute(0, 3, 1, 2).contiguous()    # [B, C_in, S, K]
+        group_data = group_data.permute(0, 3, 1, 2).contiguous()    # [B, C_in, S, K]
 
         # 3) Local PointNet (shared MLP)
-        x = self.mlp(knn_data)                                  # [B, C_out, S, K]
+        x = self.mlp(group_data)                                  # [B, C_out, S, K]
 
         # 4) Symmetric pooling over K neighbors
         x, _ = torch.max(x, dim=3)                              # [B, C_out, S]
@@ -249,7 +316,7 @@ class PointNetSetAbstraction(nn.Module):
         centers_features = x.permute(0, 2, 1).contiguous()      # [B, S, C_out]
 
         return centers_xyz, centers_features
-
+    
 
 
 class PointNetSetAbstractionGlobal(nn.Module):
@@ -386,10 +453,18 @@ class PointNetPlusPlusClassifier(nn.Module):
         # -----------------------
         # input:  xyz=[B,N,3],   feat=[B,N,C-3] or None       
         # output: xyz=[B,512,3], feat=[B,512,128]
-        self.sa1 = PointNetSetAbstraction(num_centers=512, K=32, in_channels=3 + extra_channels, mlp_channels=[64, 64, 128]) 
+        self.sa1 = PointNetSetAbstraction(num_centers=512, 
+                                          K=32, 
+                                          in_channels=3 + extra_channels, 
+                                          mlp_channels=[64, 64, 128], 
+                                          grouping = "knn")
         # input:  xyz=[B,512,3], feat=[B,512,128] 
         # output: xyz=[B,128,3], feat=[B,128,256] 
-        self.sa2 = PointNetSetAbstraction(num_centers=128, K=32, in_channels=3 + 128, mlp_channels=[128, 128, 256])
+        self.sa2 = PointNetSetAbstraction(num_centers=128, 
+                                          K=32, 
+                                          in_channels=3 + 128, 
+                                          mlp_channels=[128, 128, 256],
+                                          grouping = "knn")
         # input:  xyz=[B,128,3], feat=[B,128,256] 
         # output: global_features=[B,1024] 
         self.sa3 = PointNetSetAbstractionGlobal(in_channels=3 + 256, mlp_channels=[256, 512, 1024])
@@ -451,7 +526,7 @@ class PointNetPlusPlusSegmentation(nn.Module):
     PointNet++ semantic segmentation (single-scale grouping version).
     """
 
-    def __init__(self, num_classes, extra_channels = 0, dropout = 0.5):
+    def __init__(self, num_classes, extra_channels = 0, dropout = 0.5, grouping="knn", radius=None):
         """
         num_classes:     number of semantic classes
         extra_channels:  D (extra input features per point besides xyz). If you only have xyz -> 0.
@@ -460,22 +535,50 @@ class PointNetPlusPlusSegmentation(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.extra_channels = extra_channels
+        self.grouping = grouping
+
+        # Checks for radius
+        if radius is None:
+            radius = [None, None, None, None]
+
+        if len(radius) != 4:
+            raise ValueError(f"Expected 4 radius values, got {len(radius)}")
 
         # -----------------------
         #        Encoder 
         # -----------------------
         # input:  xyz=[B,N,3],    feat=[B,N,C-3] or None
         # output: xyz=[B,1024,3], feat=[B,1024,64]
-        self.sa1 = PointNetSetAbstraction(num_centers=1024, K=32, in_channels=3 + extra_channels, mlp_channels=[32, 32, 64])
+        self.sa1 = PointNetSetAbstraction(num_centers=1024, 
+                                          K=32, 
+                                          in_channels=3 + extra_channels, 
+                                          mlp_channels=[32, 32, 64],
+                                          grouping=self.grouping,
+                                          radius=radius[0])                  
         # input:  xyz=[B,1024,3], feat=[B,1024,64]
         # output: xyz=[B,256,3],  feat=[B,256,128]
-        self.sa2 = PointNetSetAbstraction(num_centers=256, K=32, in_channels=3 + 64, mlp_channels=[64, 64, 128])
+        self.sa2 = PointNetSetAbstraction(num_centers=256, 
+                                          K=32, 
+                                          in_channels=3 + 64, 
+                                          mlp_channels=[64, 64, 128],
+                                          grouping=self.grouping,
+                                          radius=radius[1]) 
         # input:  xyz=[B,256,3], feat=[B,256,128]
         # output: xyz=[B,64,3], feat=[B,64,256]
-        self.sa3 = PointNetSetAbstraction(num_centers=64, K=32, in_channels=3 + 128, mlp_channels=[128, 128, 256])
+        self.sa3 = PointNetSetAbstraction(num_centers=64, 
+                                          K=32, 
+                                          in_channels=3 + 128, 
+                                          mlp_channels=[128, 128, 256],
+                                          grouping=self.grouping,
+                                          radius=radius[2]) 
         # input:  xyz=[B,64,3], feat=[B,64,256]
         # output: xyz=[B,16,3], feat=[B,16,512]
-        self.sa4 = PointNetSetAbstraction(num_centers=16, K=32, in_channels=3 + 256, mlp_channels=[256, 256, 512])
+        self.sa4 = PointNetSetAbstraction(num_centers=16, 
+                                          K=32, 
+                                          in_channels=3 + 256, 
+                                          mlp_channels=[256, 256, 512],
+                                          grouping=self.grouping,
+                                          radius=radius[3]) 
        
         # -----------------------
         #        Decoder 
@@ -571,8 +674,6 @@ class PointNetPlusPlusSegmentation(nn.Module):
 
 
 
-
-
 # RUN ONLY IF EXECUTED AS MAIN
 if __name__ == "__main__":
 
@@ -609,7 +710,7 @@ if __name__ == "__main__":
     val_loader   = DataLoaderGeometric(val_dataset, batch_size=32, shuffle=False) 
     test_loader  = DataLoaderGeometric(test_dataset, batch_size=32, shuffle=False)
 
-    network = PointNetPlusPlusClassifier(num_classes=10, extra_channels=0).to(device)
+    network = PointNetPlusPlusClassifier(num_classes=10, extra_channels=0, dropout=0.5).to(device)
     optimizer = optim.Adam(network.parameters(), lr=0.001)
     criterion = nn.NLLLoss()
     
