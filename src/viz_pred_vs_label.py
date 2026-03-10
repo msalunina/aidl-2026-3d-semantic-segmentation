@@ -75,6 +75,13 @@ if __name__ == '__main__':
         model_trained = IPointNetSegmentation(num_classes=config.num_classes, 
                                               input_channels=config.num_channels, 
                                               dropout=config.dropout_rate).to(device)
+    elif config.model_name == "pointnetplusplus":
+        from models.pointnetplusplus import PointNetPlusPlusSegmentation
+        model_trained = PointNetPlusPlusSegmentation(num_classes=config.num_classes,
+                                             extra_channels=config.num_channels - 3,
+                                             dropout=0.5,
+                                             grouping="ball",         # choose "knn" or "ball"
+                                             radius=[0.08, 0.1, 0.2, 0.4]).to(device)    
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
 
@@ -97,7 +104,8 @@ if __name__ == '__main__':
     print("points shape from dataset:", points_BNC.shape)   # expect [N, 6]
 
     with torch.no_grad():                       # Stops tracking gradients, saves memory
-        feature_tnet, log_probs_BCN = model_trained(points_BNC)   
+        #feature_tnet, log_probs_BCN = model_trained(points_BNC)   
+        log_probs_BCN = model_trained(points_BNC)   
 
     preds_BN = log_probs_BCN.argmax(dim=1)                  # [B, N]
     preds = preds_BN.squeeze(0).cpu().numpy().astype(int)   # [N]
