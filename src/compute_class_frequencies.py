@@ -15,15 +15,17 @@ BLOCK_DIR = Path(config.model_data_path) / "train"
 IGNORE_LABEL = config.ignore_label
 
 
-def compute_focal_weights(counter, total_points, method='sqrt_inv_freq'):
+def compute_focal_weights(counter, method='sqrt_inv_freq', beta=0.9999, num_classes=5):
     """
     Compute class weights optimized for Focal Loss.
     
     Methods:
     - 'sqrt_inv_freq': Square root of inverse frequency (recommended for Focal Loss)
     - 'moderate': Moderate inverse frequency with clipping
+    - 'effective_num': Effective number of samples (Cui et al. 2019)
+    - 'uniform': All ones
     """
-    freqs = np.array([counter.get(i, 0) for i in range(5)], dtype=np.float64)
+    freqs = np.array([counter.get(i, 0) for i in range(num_classes)], dtype=np.float64)
     freqs = freqs / freqs.sum()
     
     if method == 'sqrt_inv_freq':
@@ -37,6 +39,13 @@ def compute_focal_weights(counter, total_points, method='sqrt_inv_freq'):
         weights = weights / weights.mean()
         # Clip extreme weights to avoid instability
         weights = np.clip(weights, 0.5, 5.0)
+
+    elif method == 'effective_num':
+        # Effective number of samples (Cui et al. 2019)
+        counts = np.array([counter.get(i, 0) for i in range(num_classes)], dtype=np.float64)
+        effective_num = (1 - np.power(beta, counts)) / (1 - beta)
+        weights = 1.0 / (effective_num + 1e-6)
+        weights = weights / weights.sum() * len(freqs)
         
     else:
         raise ValueError(f"Unknown method: {method}")
@@ -80,12 +89,17 @@ def main():
     print("=" * 70)
     
     methods = [
-        ('sqrt_inv_freq', 'Square Root Inv Freq (Recommended)'),
-        ('moderate', 'Moderate Inv Freq (Clipped)')
+        ('sqrt_inv_freq', 'Square Root Inv Freq (Recommended)', None),
+        ('moderate', 'Moderate Inv Freq (Clipped)', None),
+        ('effective_num', 'Effective Number (Cui et al. 2019): beta=0.9', 0.9),
+        ('effective_num', 'Effective Number (Cui et al. 2019): beta=0.9999', 0.9999),
+        ('effective_num', 'Effective Number (Cui et al. 2019): beta=1 - 1e-5', 1 - 1e-5),
+        ('effective_num', 'Effective Number (Cui et al. 2019): beta=1 - 1e-6',  1 - 1e-6),
+        ('effective_num', 'Effective Number (Cui et al. 2019): beta=1 - 1e-7', 1 - 1e-7), 
     ]
     
-    for method_name, method_label in methods:
-        weights = compute_focal_weights(counter, total_points, method=method_name)
+    for method_name, method_label, beta in methods:
+        weights = compute_focal_weights(counter, method=method_name, beta=beta)
         
         print(f"\n{method_label}:")
         print("-" * 70)

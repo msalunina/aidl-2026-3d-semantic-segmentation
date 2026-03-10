@@ -12,6 +12,9 @@
 # ignore wandb logs
 wandb/*
 
+# ignore ray tune
+raytmp/*
+
 # ignore all png except for those in the 'figs' directory
 *.png
 !figs/*.png
