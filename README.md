@@ -41,7 +41,7 @@ Environment:
 ```bash
 conda create -n aidl-2026-project python=3.10 -y
 conda activate aidl-2026-project
-pip install -r requirements.txt
+pip install --no-cache-dir -r requirements.txt
 wandb login
 ```
 

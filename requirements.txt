@@ -5,12 +5,10 @@ torchaudio
 torch_geometric
 matplotlib
 numpy
-pathlib
-keras
-tensorflow
 pyyaml
 laspy
 open3d
 plyfile
 wandb
+tensorboard
 ray[tune]
