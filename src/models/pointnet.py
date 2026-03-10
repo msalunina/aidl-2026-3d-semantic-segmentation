@@ -206,12 +206,13 @@ class PointNetSegmentation(nn.Module):
     PointNet for 3D Semantic Segmentation
     """
 
-    def __init__(self, num_classes, input_channels=3, dropout=0.3, add_ohv=False):
+    def __init__(self, num_classes, input_channels=3, dropout=0.3, skip_conn=False, add_ohv=False):
         super(PointNetSegmentation, self).__init__()
         self.num_classes = num_classes
         self.input_channels = input_channels
         self.add_ohv = add_ohv
-        self.ohv_gt = PointNetBackbone
+        self.ohv_gt = None
+        self.skip_conn = skip_conn
         # OLGA: paper says there is no dropout for segmentation
         # self.dropout = nn.Dropout(p=dropout)    
 
@@ -222,10 +223,12 @@ class PointNetSegmentation(nn.Module):
 
         # Segmentation head: 
         # MLP(512, 256, 128)
-        conv_size = 1088 + 64 + 64 + 64 + 128
+        conv_size = 1088 
         if self.add_ohv:
-            #hardcodded the number of object classes
+            #hardcodded the number of object classes, for shapenet
             conv_size += 16
+        if self.skip_conn:
+            conv_size += (64 + 64 + 64 + 128)
 
         self.conv_1 = nn.Conv1d(conv_size, 512, 1)                   # weight matrix: [512,64+1024]
         self.conv_2 = nn.Conv1d(512, 256, 1)                    # weight matrix: [256,512]
@@ -255,13 +258,16 @@ class PointNetSegmentation(nn.Module):
         global_feature_expanded = global_feature.repeat(1, 1, num_points)   # [B, 1024, N]                 
 
         # Concatenate point features and global feature
-        x = torch.cat([f1, f2, point_features, f3, f4, global_feature_expanded], dim=1)     # [B, 64+1024, N]
+        if self.skip_conn:
+            x = torch.cat([f1, f2, point_features, f3, f4, global_feature_expanded], dim=1)     # [B, 64+1024, N]
+        else:
+            x = torch.cat([point_features, global_feature_expanded], dim=1)     # [B, 64+1024, N]
 
         if( (self.ohv_gt is not None) and (self.add_ohv)):
             #for each element in the batch, create num_points vectors each one with the one hot vector label
             #the goal is to create a tensor of shape [B, n_classes, 1024]
             ohv_data = F.one_hot(self.ohv_gt, num_classes=16).float() #self.ohv_gt.reshape(x.shape[0], 1) # [B, 1]
-            ohv_data = ohv_data.unsqueeze(2).repeat(1, 1, x.shape[2]).to(x.device)
+            ohv_data = ohv_data.unsqueeze(2).repeat(1, 1, num_points).to(x.device)
             x = torch.cat([x, ohv_data], dim=1)
 
         x = F.relu(self.bn_1(self.conv_1(x)))               # [batch, 512, nPoints]
@@ -279,10 +285,12 @@ class IPointNetSegmentation(nn.Module):
     PointNet for 3D Semantic Segmentation
     """
 
-    def __init__(self, num_classes, input_channels=3, dropout=0.3):
+    def __init__(self, num_classes, input_channels=3, dropout=0.3, skip_conn=False):
         super(IPointNetSegmentation, self).__init__()
         self.num_classes = num_classes
         self.input_channels = input_channels
+       
+        self.skip_conn = skip_conn
         # OLGA: paper says there is no dropout for segmentation
         # self.dropout = nn.Dropout(p=dropout)    
 
@@ -292,11 +300,16 @@ class IPointNetSegmentation(nn.Module):
         )
 
         #image feature extractor
-        self.img_encoder = ImageEncoder()
+        self.img_encoder = ImageEncoder(channels=(1,64,128))
 
         # Segmentation head: 
         # MLP(512, 256, 128)
-        self.conv_1 = nn.Conv1d(2112, 512, 1)                   # weight matrix: [512,64+1024+1024]
+        conv_size = 1088 + 128
+
+        if(self.skip_conn):
+            conv_size += (64 + 64 + 64 + 128)
+
+        self.conv_1 = nn.Conv1d(conv_size, 512, 1)              # weight matrix: [512,64+1024+1024]
         self.conv_2 = nn.Conv1d(512, 256, 1)                    # weight matrix: [256,512]
         self.conv_3 = nn.Conv1d(256, 128, 1)                    # weight matrix: [128,256]
         self.bn_1 = nn.BatchNorm1d(512)
@@ -313,7 +326,7 @@ class IPointNetSegmentation(nn.Module):
     def forward(self, x, img):
         # x: [B, N, 3] or [B, N, 3+C]
 
-        feature_transform, point_features, global_feature = self.backbone(x)
+        f1, f2, f3, f4, feature_transform, point_features, global_feature = self.backbone(x)
         # point_features: [B, 64, N]
         # global feature: [B, 1024, 1]
 
@@ -322,9 +335,13 @@ class IPointNetSegmentation(nn.Module):
         num_points = x.shape[1]
         global_feature_expanded = global_feature.repeat(1, 1, num_points)   # [B, 1024, N]
         image_feature_expanded = feature_vector.repeat(1, 1, num_points)
-
+        
         # Concatenate point features and global feature
-        x = torch.cat([point_features, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024, N]
+        if self.skip_conn:
+            x = torch.cat([f1, f2, point_features, f3, f4, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024+64+64+64+128+128, N]
+        else:
+            # Concatenate point features and global feature
+            x = torch.cat([point_features, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024+128, N]
 
         x = F.relu(self.bn_1(self.conv_1(x)))               # [batch, 512, nPoints]
         x = F.relu(self.bn_2(self.conv_2(x)))               # [batch, 256, nPoints]

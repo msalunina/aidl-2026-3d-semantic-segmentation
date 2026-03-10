@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 import os
-import random
 from utils.config_parser import ConfigParser
 from torch.utils.data import DataLoader
 from utils.shapenet_dataset import shapenetDataset
@@ -16,7 +15,6 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from models.pointnet import PointNetSegmentation
 
-import matplotlib.pyplot as plt
 
 
 classes_names = [ 'Airplane', 'Bag', 'Cap','Car', 
@@ -463,8 +461,7 @@ def main():
 
     model = PointNetSegmentation(num_classes=50, # 50 shape classes 
                                 input_channels=3, 
-                                dropout=0.3,
-                                add_ohv=True).to(device) #0.3 dropout
+                                dropout=0.3).to(device) #0.3 dropout
 
 
     loss_weights = torch.tensor(loss_weights, dtype=torch.float32).to(device)
@@ -478,10 +475,10 @@ def main():
             eta_min=0.00001
     )
 
-    """
+    
     #TEST 
     #iou, acc = test_iou_values(config, model, loader_eval, val_objects_count, device)
-    """
+    
     test_name = f"{config.test_name}_{config.num_epochs}"
 
     writer = SummaryWriter(log_dir=f"./logs/{test_name}_ep")
