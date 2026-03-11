@@ -147,7 +147,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         optimizer.zero_grad(set_to_none=True)
 
         # Forward pass + loss under mixed precision
-        with torch.amp.autocast('cuda'):
+        with torch.amp.autocast(device.type):
             # Forward points and image through the network
             if use_image:
                 image = image.unsqueeze(dim=1)  # add channel dim tensor is [B, C, H, W]
@@ -231,7 +231,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             labels = labels.to(device)
 
             # Forward pass + loss under mixed precision
-            with torch.amp.autocast('cuda'):
+            with torch.amp.autocast(device.type):
                 # Forward points through the network
                 if use_image:
                     image = image.unsqueeze(dim=1)  # add channel dim tensor is [B, C, H, W]
