@@ -364,29 +364,45 @@ def countObjectsSplit(path):
     return objects_per_class
 
 
-def main():
+def train_shapenet(loader_train, loader_eval, loader_test, config):
 
+    # Set device
     device = set_device()
 
-    base_path = "./data/ShapeNet/raw"
-    pc_size = 4096
+    base_path = Path(os.getcwd())
+    if "src" in base_path.parts:
+        base_path = base_path[:-1]
 
+    train_objects_count = countObjectsSplit(os.path.join(base_path, "data/ShapeNet/raw", "train_test_split","shuffled_train_file_list.json"))
+    val_objects_count = countObjectsSplit(os.path.join(base_path, "data/ShapeNet/raw", "train_test_split","shuffled_val_file_list.json"))
+    test_objects_count = countObjectsSplit(os.path.join(base_path, "data/ShapeNet/raw", "train_test_split","shuffled_test_file_list.json"))
 
-    config_parser = ConfigParser(
-        default_config_path="config/pointnet_shapenet.yaml",
-        parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
-    )
-    config = config_parser.load()
+    """
+    results_str =    "        |" 
+    total_str =     f" TOTAL  |"
+    results_train = f" TRAIN  |"
+    results_eval  = f"  EVAL  |"
+    results_test  = f"  TEST  |"
 
-    pc_size = config.train_num_points
+    for n in range(len(classes_names)):
+        total = train_objects_count[n] + val_objects_count[n] + test_objects_count[n]
+        total_str +=     f"  { total }                 |"
+        results_str +=   f"  {classes_names[n][:3]}    |"
+        results_train += f"  {train_objects_count[n]}  ({(train_objects_count[n]/total)*100.0:.2f} % )  |"
+        results_eval +=  f"  {val_objects_count[n]}  ({(val_objects_count[n]/total) *100.0:.2f} % )    |" 
+        results_test +=  f"  {test_objects_count[n]}  ({(test_objects_count[n]/total) *100.0:.2f} % ) |"   
+
+    print(len(results_str)*'*')
+    print("OBJECTS COUNT BY SPLIT\n")
+    print(results_str)
+    print(len(results_str)*'-')
+    print(results_train)
+    print(results_eval)
+    print(results_test)
+    print("\n")
+    print(len(results_str)*'*')
+    """
     
-
-    #get objects in each split
-
-    train_objects_count = countObjectsSplit(os.path.join(base_path, "train_test_split","shuffled_train_file_list.json"))
-    val_objects_count = countObjectsSplit(os.path.join(base_path, "train_test_split","shuffled_val_file_list.json"))
-    test_objects_count = countObjectsSplit(os.path.join(base_path, "train_test_split","shuffled_test_file_list.json"))
-
     train_objects_count = torch.from_numpy(train_objects_count).to(device)
     val_objects_count = torch.from_numpy(val_objects_count).to(device)
     test_objects_count = torch.from_numpy(test_objects_count).to(device)
@@ -407,7 +423,6 @@ def main():
                             3.052800e+04, 7.660800e+04, 1.951900e+04, 1.256100e+04,
                             2.949200e+04, 2.187040e+05, 1.882900e+04, 7.729973e+06,
                             2.395978e+06, 3.172600e+05])
-    
     
     offset = 0
     loss_weights = np.zeros(50)
@@ -451,21 +466,15 @@ def main():
                             0.17394373,  0.42579819], dtype=np.float32)
     """
 
-    dataset_train = shapenetDataset(base_path, "train", pc_size, 0.7)
-    dataset_eval = shapenetDataset(base_path, "eval",  pc_size, 0.7)
-    dataset_test = shapenetDataset(base_path, "test",  pc_size, 0.0)
-
-    loader_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True)
-    loader_eval = DataLoader(dataset_eval, batch_size=config.batch_size, shuffle=True)
-    loader_test = DataLoader(dataset_test, batch_size=config.batch_size, shuffle=True)
-
+   
     model = PointNetSegmentation(num_classes=50, # 50 shape classes 
                                 input_channels=3, 
-                                dropout=0.3).to(device) #0.3 dropout
+                                dropout=0.3,
+                                add_ohv=True).to(device) #0.3 dropout
 
 
     loss_weights = torch.tensor(loss_weights, dtype=torch.float32).to(device)
-    criterion = nn.NLLLoss(weight=loss_weights) #FocalLoss(alpha=loss_weights, gamma=0.5, ignore_index=config.ignore_label)
+    criterion = nn.NLLLoss()#weight=loss_weights) #FocalLoss(alpha=loss_weights, gamma=0.5, ignore_index=config.ignore_label)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     
@@ -538,8 +547,93 @@ def main():
     checkpoint = {"model_state_dict": model.cpu().state_dict()}
     path_to_save = os.path.join("./snapshots",f"shapenet_{test_name}.pt")
     torch.save(checkpoint, path_to_save)
+
+def test_shapenet(loader_train, loader_eval, loader_test, config):
     
+    base_path = Path(os.getcwd())
+    if "src" in base_path.parts:
+        base_path = base_path[:-1]
+
+    # Set device
+    device = set_device()
+
+    train_objects_count = countObjectsSplit(os.path.join(base_path, "data/ShapeNet/raw", "train_test_split","shuffled_train_file_list.json"))
+    val_objects_count = countObjectsSplit(os.path.join(base_path, "data/ShapeNet/raw","train_test_split","shuffled_val_file_list.json"))
+    test_objects_count = countObjectsSplit(os.path.join(base_path, "data/ShapeNet/raw", "train_test_split","shuffled_test_file_list.json"))
+
+    train_objects_count = torch.from_numpy(train_objects_count).to(device)
+    val_objects_count = torch.from_numpy(val_objects_count).to(device)
+    test_objects_count = torch.from_numpy(test_objects_count).to(device)
+
+    print("\n" + "="*60)
+    print("CREATING DATASETS AND DATALOADERS")
+    print("="*60)
+    
+    model_trained = PointNetSegmentation(num_classes=50, # 50 shape classes 
+                                input_channels=3, 
+                                dropout=0.3,
+                                add_ohv=True,
+                                skip_conn=True).to(device) #0.3 dropout
+
+     
+    checkpoint_path= os.path.join(base_path, "snapshots", "shapenet_PointNet_shapenet_xyz_all_50.pt")
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)    # it loads more things that weights
+
+    # UPDATE ARCHITECTURE
+    model_trained.load_state_dict(checkpoint["model_state_dict"])
+    model_trained.to(device)
+    model_trained.eval()      # changes behaviour of some layers (e.g. dropout off, batchnorm), does not strop gradient
+ 
+    train_acc_epoch, train_iou_class_epoch = test_single_epoch_segmentation(loader_train, model_trained, train_objects_count)
+
+    val_acc_epoch, val_iou_class_epoch = test_single_epoch_segmentation(loader_test, model_trained, test_objects_count)
+
+    test_acc_epoch, test_iou_class_epoch = test_single_epoch_segmentation(loader_eval, model_trained, val_objects_count)
+
+    results_str =    "        |  MEAN  |"
+    results_train = f" TRAIN  |  {(train_iou_class_epoch.sum()/len(train_iou_class_epoch)):.2f}  |"
+    results_eval  = f"  EVAL  |  {(val_iou_class_epoch.sum()/len(val_iou_class_epoch)):.2f}  |"
+    results_test  = f"  TEST  |  {(test_iou_class_epoch.sum()/len(test_iou_class_epoch)):.2f}  |"
+
+    for n in range(len(classes_names)):
+        results_str += f"   {classes_names[n][:3]}   |"
+        results_train += f"  {train_iou_class_epoch[n]:.3f}  |"
+        results_eval += f"  {val_iou_class_epoch[n]:.3f}  |" 
+        results_test += f"  {test_iou_class_epoch[n]:.3f}  |"   
+    
+    print(len(results_str)*'*')
+    print("FINAL RESULTS\n")
+    print(results_str)
+    print(len(results_str)*'-')
+    print(results_train)
+    print(results_eval)
+    print(results_test)
+    print("\n")
+    print(len(results_str)*'*')
+
 
 if __name__ == '__main__':
 
-    main()
+    base_path = "./data/ShapeNet/raw"
+
+    config_parser = ConfigParser(
+        default_config_path="config/pointnet_shapenet.yaml",
+        parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
+    )
+    config = config_parser.load()
+
+    pc_size = config.train_num_points
+
+    # Create test datasets
+    dataset_train = shapenetDataset(base_path, "train", pc_size, 0.7)
+    dataset_eval = shapenetDataset(base_path, "eval",  pc_size, 0.7)
+    dataset_test = shapenetDataset(base_path, "test",  pc_size, 0.0)
+
+    loader_train = DataLoader(dataset_train, batch_size=config.batch_size, shuffle=True)
+    loader_eval = DataLoader(dataset_eval, batch_size=config.batch_size, shuffle=True)
+    loader_test = DataLoader(dataset_test, batch_size=config.batch_size, shuffle=True)
+
+
+    train_shapenet(loader_train, loader_eval, loader_test, config)
+
+    test_shapenet(loader_train, loader_eval, loader_test, config)
