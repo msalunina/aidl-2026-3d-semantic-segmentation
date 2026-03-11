@@ -97,12 +97,12 @@ if __name__ == '__main__':
         raise ValueError(f"Model name {config.model_name} does not exist")
     
     epoch=0
-    load_dir= os.path.join(base_path, "snapshots", config.test_name)
-    checkpoint_path = os.path.join(load_dir, f"pointnet_{epoch}_epochs.pt")
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)    # it loads more things that weights
+    load_dir= os.path.join(base_path, "model_objects", f"{config.test_name}.pt")
+    # checkpoint_path = os.path.join(load_dir, f"pointnet_{epoch}_epochs.pt")
+    checkpoint = torch.load(load_dir, map_location=device, weights_only=False)    # it loads more things that weights
 
     # UPDATE ARCHITECTURE
-    model_trained.load_state_dict(checkpoint["model_state_dict"])
+    model_trained.load_state_dict(checkpoint)
     model_trained.to(device)
     model_trained.eval()      # changes behaviour of some layers (e.g. dropout off, batchnorm), does not strop gradient
 
