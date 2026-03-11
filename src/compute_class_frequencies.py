@@ -20,8 +20,9 @@ def compute_focal_weights(counter, method='sqrt_inv_freq', beta=0.9999, num_clas
     Compute class weights optimized for Focal Loss.
     
     Methods:
-    - 'sqrt_inv_freq': Square root of inverse frequency (recommended for Focal Loss)
-    - 'moderate': Moderate inverse frequency with clipping
+    - 'sqrt_inv_freq': Square root of inverse frequency
+    - 'inv_freq': Inverse frequency - more aggressive
+    - 'inv_freq_moderate': Moderate inverse frequency with clipping
     - 'effective_num': Effective number of samples (Cui et al. 2019)
     - 'uniform': All ones
     """
@@ -32,8 +33,13 @@ def compute_focal_weights(counter, method='sqrt_inv_freq', beta=0.9999, num_clas
         # Square root of inverse frequency - less aggressive
         weights = np.sqrt(1.0 / (freqs + 1e-6))
         weights = weights / weights.mean()
+
+    elif method == 'inv_freq':
+        # Inverse frequency - more aggressive
+        weights = 1.0 / (freqs + 1e-6)
+        weights = weights / weights.mean()
         
-    elif method == 'moderate':
+    elif method == 'inv_freq_moderate':
         # Inverse frequency with clipping
         weights = 1.0 / (freqs + 1e-6)
         weights = weights / weights.mean()
@@ -89,8 +95,9 @@ def main():
     print("=" * 70)
     
     methods = [
-        ('sqrt_inv_freq', 'Square Root Inv Freq (Recommended)', None),
-        ('moderate', 'Moderate Inv Freq (Clipped)', None),
+        ('sqrt_inv_freq', 'Square Root Inv Freq', None),
+        ('inv_freq', 'Inverse Freq (Aggressive)', None),
+        ('inv_freq_moderate', 'Moderate Inv Freq (Clipped)', None),
         ('effective_num', 'Effective Number (Cui et al. 2019): beta=0.9', 0.9),
         ('effective_num', 'Effective Number (Cui et al. 2019): beta=0.9999', 0.9999),
         ('effective_num', 'Effective Number (Cui et al. 2019): beta=1 - 1e-5', 1 - 1e-5),
