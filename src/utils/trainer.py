@@ -314,7 +314,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
     }
 
     # Mixed precision scaler
-    scaler = torch.amp.GradScaler('cuda')
+    scaler = torch.amp.GradScaler(device.type)
 
     for epoch in tqdm(range(config.num_epochs), desc="Looping on epochs", position=0):
         train_loss_epoch, train_acc_epoch, train_miou_epoch, train_iou_class_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, scaler, use_image)
