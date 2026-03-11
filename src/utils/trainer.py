@@ -13,6 +13,13 @@ wandb_pointcloud_table = wandb.Table(
     columns=["epoch", "GT", "Prediction", "Errors", "Uncertainty"]
 )
 
+# -----------------------------
+# W&B table for point-cloud ↔ BEV image pairing
+# -----------------------------
+wandb_pc_image_table = wandb.Table(
+    columns=["epoch", "PointCloud", "BEV_Image"]
+)
+
 
 def compute_regularizationLoss(feature_tnet):
     # REGULARIZATION: force Tnet matrix to be orthogonal (TT^t = I)
@@ -120,6 +127,46 @@ def _append_pointcloud_predictions_to_table(points_BNC, labels, predictions, log
         wandb.Object3D(pred_cloud),
         wandb.Object3D(err_cloud),
         wandb.Object3D(entropy_cloud),
+    )
+
+
+# -----------------------------
+# W&B point-cloud ↔ BEV image pairing utilities
+# -----------------------------
+def _normalize_image_for_wandb(img_np: np.ndarray) -> np.ndarray:
+    img_np = img_np.astype(np.float32)
+    img_np = np.nan_to_num(img_np, nan=0.0, posinf=0.0, neginf=0.0)
+
+    vmin = np.min(img_np)
+    vmax = np.max(img_np)
+
+    if vmax - vmin < 1e-8:
+        return np.zeros_like(img_np, dtype=np.uint8)
+
+    img_norm = ((img_np - vmin) / (vmax - vmin) * 255.0).astype(np.uint8)
+    return img_norm
+
+
+def _append_pointcloud_image_pair_to_table(points_BNC, image, epoch: int):
+    global wandb_pc_image_table
+
+    points_xyz = points_BNC[0, :, :3].detach().cpu().numpy()
+
+    # simple gray point cloud to compare geometry against the BEV image
+    gray = np.tile(np.array([[180, 180, 180]], dtype=np.float32), (points_xyz.shape[0], 1))
+    pc_cloud = np.concatenate([points_xyz.astype(np.float32), gray], axis=1)
+
+    if torch.is_tensor(image):
+        img_np = image[0].detach().cpu().numpy()
+    else:
+        img_np = image[0]
+
+    img_np = _normalize_image_for_wandb(img_np)
+
+    wandb_pc_image_table.add_data(
+        epoch + 1,
+        wandb.Object3D(pc_cloud),
+        wandb.Image(img_np, caption=f"Epoch {epoch+1} BEV z_range")
     )
 
 
@@ -263,6 +310,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             # Log visualization only for first, middle, and last epoch, using first validation batch only
             if batch_idx == 0 and epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}:
                 _append_pointcloud_predictions_to_table(points_BNC, labels, predictions, log_probs_BCN, epoch)
+                _append_pointcloud_image_pair_to_table(points_BNC, image, epoch)
             # ------------------------------------------
 
         assert nTotal > 0, "No valid points in epoch (all labels are -1)."
@@ -286,6 +334,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
 def train_model_segmentation(config, train_loader, val_loader, network, optimizer, criterion, scheduler, device, base_path):
 
     global wandb_pointcloud_table
+    global wandb_pc_image_table
 
     use_image = False
     if config.model_name == "ipointnet":
@@ -294,6 +343,11 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
     # Reset W&B visualization table for each run
     wandb_pointcloud_table = wandb.Table(
         columns=["epoch", "GT", "Prediction", "Errors", "Uncertainty"]
+    )
+
+    # Reset point-cloud ↔ BEV image table for each run
+    wandb_pc_image_table = wandb.Table(
+        columns=["epoch", "PointCloud", "BEV_Image"]
     )
 
     metrics = {
@@ -372,7 +426,8 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         break
         """
 
-    # Log the full accumulated visualization table once at the end
+    # Log the full accumulated visualization tables once at the end
     wandb.log({"Segmentation_Visualization": wandb_pointcloud_table})
+    wandb.log({"Point Cloud & Images": wandb_pc_image_table})
 
     return metrics
