@@ -107,9 +107,12 @@ if __name__ == '__main__':
     train_loader = DataLoader(
         train_dataset, 
         batch_size=config.batch_size, 
-        sampler=train_sampler  # Use sampler instead of shuffle
+        sampler=train_sampler, # Use sampler instead of shuffle
+        num_workers=4,
+        pin_memory=True,
+        persistent_workers=True
     )
-    val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
     print("\n" + "="*60)
     print("INITIALIZING MODEL, LOSS and OPTIMIZER")

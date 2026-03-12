@@ -173,7 +173,7 @@ def _append_pointcloud_image_pair_to_table(points_BNC, image, epoch: int):
 # ----------------------------------------------------
 #    TRAINING EPOCH FUNCTION (SEGMENTATION)
 # ----------------------------------------------------
-def train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, use_image=False):
+def train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, scaler, use_image=False):
 
     device = next(network.parameters()).device  # guarantee that we are using the same device than the model
     network.train()                             # Activate the train=True flag inside the model
@@ -191,31 +191,36 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         labels = labels.to(device)
 
         # Set network gradients to 0
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
-        # Forward points and image through the network
-        if use_image:
-            image = image.unsqueeze(dim=1)  # add channel dim tensor is [B, C, H, W]
-            image = image.to(device)
-            output = network(points_BNC, image)
-        else:
-            output = network(points_BNC)
+        # Forward pass + loss under mixed precision
+        with torch.amp.autocast(device.type):
+            # Forward points and image through the network
+            if use_image:
+                image = image.unsqueeze(dim=1)  # add channel dim tensor is [B, C, H, W]
+                image = image.to(device)
+                output = network(points_BNC, image)
+            else:
+                output = network(points_BNC)
 
-        # Handle output depending on what model returns
-        if isinstance(output, tuple):
-            feature_tnet, log_probs_BCN = output
-            reg_loss = compute_regularizationLoss(feature_tnet)
-        else:
-            log_probs_BCN = output
-            reg_loss = torch.tensor(0.0, device=device)
+            # Handle output depending on what model returns
+            if isinstance(output, tuple):
+                feature_tnet, log_probs_BCN = output
+                reg_loss = compute_regularizationLoss(feature_tnet)
+            else:
+                log_probs_BCN = output
+                reg_loss = torch.tensor(0.0, device=device)
 
-        # Compute loss: NLLLoss(ignore_index=-1)
-        # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
-        loss = criterion(log_probs_BCN, labels) + 0.001 * reg_loss
+            # Compute loss: NLLLoss(ignore_index=-1)
+            # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
+            loss = criterion(log_probs_BCN, labels) + 0.001 * reg_loss
+
         loss_history.append(loss.item())
 
-        loss.backward()
-        optimizer.step()
+        # Mixed precision backward and optimizer step
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         # ----------- COMPUTE METRICS -------------
         # Compute predictions
@@ -272,23 +277,26 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             points_BNC = points_BNC.to(device)
             labels = labels.to(device)
 
-            # Forward points through the network
-            if use_image:
-                image = image.unsqueeze(dim=1)  # add channel dim tensor is [B, C, H, W]
-                image = image.to(device)
-                output = network(points_BNC, image)
-            else:
-                output = network(points_BNC)
+            # Forward pass + loss under mixed precision
+            with torch.amp.autocast(device.type):
+                # Forward points through the network
+                if use_image:
+                    image = image.unsqueeze(dim=1)  # add channel dim tensor is [B, C, H, W]
+                    image = image.to(device)
+                    output = network(points_BNC, image)
+                else:
+                    output = network(points_BNC)
 
-            # Handle output depending on what model returns
-            if isinstance(output, tuple):
-                feature_tnet, log_probs_BCN = output
-            else:
-                log_probs_BCN = output
+                # Handle output depending on what model returns
+                if isinstance(output, tuple):
+                    feature_tnet, log_probs_BCN = output
+                else:
+                    log_probs_BCN = output
 
-            # Compute loss: NLLLoss(ignore_index=-1)
-            # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
-            loss = criterion(log_probs_BCN, labels)
+                # Compute loss: NLLLoss(ignore_index=-1)
+                # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
+                loss = criterion(log_probs_BCN, labels)
+
             loss_history.append(loss.item())
 
             # ----------- COMPUTE METRICS -------------
@@ -359,8 +367,11 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         "val_miou": []
     }
 
+    # Mixed precision scaler
+    scaler = torch.amp.GradScaler(device.type)
+
     for epoch in tqdm(range(config.num_epochs), desc="Looping on epochs", position=0):
-        train_loss_epoch, train_acc_epoch, train_miou_epoch, train_iou_class_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, use_image)
+        train_loss_epoch, train_acc_epoch, train_miou_epoch, train_iou_class_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, scaler, use_image)
 
         val_loss_epoch, val_acc_epoch, val_miou_epoch, val_iou_class_epoch = eval_single_epoch_segmentation(
             config, val_loader, network, criterion, use_image, epoch=epoch
@@ -387,7 +398,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
 
         if(epoch % config.snap_interval == 0):
             checkpoint = {
-                "model_state_dict": network.cpu().state_dict(),
+                "model_state_dict": network.state_dict(),
                 "config": config,   # save full configuration
             }
             path_to_save = os.path.join(base_path, "snapshots", config.test_name)
@@ -395,7 +406,6 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
                 os.makedirs(path_to_save)
             path_to_save = os.path.join(path_to_save, f"pointnet_{epoch}_epochs.pt")
             torch.save(checkpoint, path_to_save)
-            network.to(device)
 
         # Class names for DALES dataset
         class_names = ["Ground", "Vegetation", "Buildings", "Vehicle", "Utility"]
