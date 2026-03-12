@@ -13,7 +13,7 @@ def main():
     
     # LOAD CHECKPOINT
     # RUN_NAME = "ClassPointNet_ShapeNet_1024pts_1epochs"
-    RUN_NAME = "ClassPointNet_ModelNet_1024pts_10epochs"
+    RUN_NAME = "ClassPointNet_ModelNet_1024pts_30epochs"
     # RUN_NAME = "ClassPointNetSmall_ShapeNet_1024pts_1epochs"
     # RUN_NAME = "ClassPointNetSmall_ModelNet_1024pts_30epochs"
     run_dir = Path("runs") / RUN_NAME
