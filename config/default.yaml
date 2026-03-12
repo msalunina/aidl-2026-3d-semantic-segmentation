@@ -59,7 +59,7 @@ dataset:
     # - scan_angle_rank        # Scan angle rank (1 channel)
 
 training:
-  test_name: MSL_PointNet_SQRTINV
+  test_name: MSL_PointNet_ENS_0_99999_FOCAL
   snap_interval: 5
   model_name: pointnet
   num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)
@@ -67,8 +67,9 @@ training:
   batch_size: 32
   num_epochs: 50
   learning_rate: 0.01
-  dropout_rate: 0.3
+  dropout_rate: 0
   optimizer: adam
+  loss_function: focal_loss # focal_loss / nll_loss
   
   # Learning rate scheduler
   scheduler_type: cosine  # cosine decay scheduler
@@ -76,11 +77,11 @@ training:
   
   # Loss weights optimized for Focal Loss (gamma=2.0)
   loss_weights:
-    - 0.2553
-    - 0.3465
-    - 0.4482
-    - 1.8602
-    - 2.0897
+    - 0.9894
+    - 0.9894
+    - 0.9894
+    - 1.0049
+    - 1.0270
 
 wandb:
   enabled: true
