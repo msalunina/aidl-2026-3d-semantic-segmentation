@@ -25,20 +25,21 @@
     - [Implementation (`src/models/pointnet.py`)](#implementation-srcmodelspointnetpy)
   - [Data Augmentation](#data-augmentation)
     - [Hypothesis](#hypothesis)
-    - [Experiment Setup](#experiment-setup)
+    - [Implementation (`src/models/dataset.py`)](#implementation-srcmodelsdatasetpy)
+    - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added)
     - [Results (TO BE ADDED)](#results-to-be-added)
     - [Conclusions (TO BE REVISED)](#conclusions-to-be-revised)
   - [Focal Loss](#focal-loss)
     - [Hypothesis](#hypothesis-1)
     - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
-    - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added)
+    - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added-1)
     - [Results (TO BE ADDED)](#results-to-be-added-1)
     - [Conclusions (TO BE ADDED)](#conclusions-to-be-added)
   - [Optimizer and Learning Rate](#optimizer-and-learning-rate)
     - [Configuration](#configuration-1)
   - [Class Weight Strategies](#class-weight-strategies)
     - [Hypothesis](#hypothesis-2)
-    - [Experiment Setup](#experiment-setup-1)
+    - [Experiment Setup](#experiment-setup)
     - [Results](#results)
     - [Conclusions](#conclusions)
   - [Future Work](#future-work)
@@ -313,7 +314,7 @@ Aerial LiDAR scans are captured from above, so the same object (house, tree, car
 
 Random scaling simulates the variation in point density across tiles caused by differences in scan overlap.
 
-### Experiment Setup
+### Implementation (`src/models/dataset.py`)
 
 Augmentation is applied only at training time (disabled for validation and test splits). It is implemented in `src/utils/dataset.py` and controlled through `config/default.yaml`:
 
@@ -329,6 +330,8 @@ Two transforms are applied per sample:
 
 - **Random Z-axis rotation**: a rotation angle $\theta \sim \mathcal{U}(-180°, +180°)$ is sampled and applied to the XYZ coordinates only. Return number, and number-of-returns channels are unaffected.
 - **Random isotropic scaling**: a scale factor $s \sim \mathcal{U}(0.9, 1.1)$ is applied to XYZ. This preserves the relative geometry of the point cloud while simulating density variation.
+
+### Experiment Setup (TO BE ADDED)
 
 ### Results (TO BE ADDED)
 
