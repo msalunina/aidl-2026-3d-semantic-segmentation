@@ -25,25 +25,31 @@
     - [Implementation (`src/models/pointnet.py`)](#implementation-srcmodelspointnetpy)
   - [Optimizer and Learning Rate](#optimizer-and-learning-rate)
     - [Configuration](#configuration-1)
-  - [Class Balancing Strategies (INTRO TO BE REVISED AFTER THE EXPERIMENTS)](#class-balancing-strategies-intro-to-be-revised-after-the-experiments)
-    - [Focal Loss vs NLL Loss](#focal-loss-vs-nll-loss)
-      - [Hypothesis](#hypothesis)
-      - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
-    - [Class Weight Strategies](#class-weight-strategies)
-      - [Hypothesis](#hypothesis-1)
-      - [Implementation](#implementation)
-    - [Class Balanced Sampler](#class-balanced-sampler)
-      - [Hypothesis](#hypothesis-2)
-      - [Implementation (`src/utils/sampler.py`)](#implementation-srcutilssamplerpy)
+  - [Input Feature Selection](#input-feature-selection)
+    - [Hypothesis](#hypothesis)
+    - [Implementation (`config/default.yaml`)](#implementation-configdefaultyaml)
     - [Experiment Setup](#experiment-setup)
     - [Results (TO BE ADDED)](#results-to-be-added)
     - [Conclusions (TO BE ADDED)](#conclusions-to-be-added)
-  - [Data Augmentation](#data-augmentation)
-    - [Hypothesis](#hypothesis-3)
-    - [Implementation (`src/models/dataset.py`)](#implementation-srcmodelsdatasetpy)
-    - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added)
+  - [Class Balancing Strategies (INTRO TO BE REVISED AFTER THE EXPERIMENTS)](#class-balancing-strategies-intro-to-be-revised-after-the-experiments)
+    - [Focal Loss vs NLL Loss](#focal-loss-vs-nll-loss)
+      - [Hypothesis](#hypothesis-1)
+      - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
+    - [Class Weight Strategies](#class-weight-strategies)
+      - [Hypothesis](#hypothesis-2)
+      - [Implementation](#implementation)
+    - [Class Balanced Sampler](#class-balanced-sampler)
+      - [Hypothesis](#hypothesis-3)
+      - [Implementation (`src/utils/sampler.py`)](#implementation-srcutilssamplerpy)
+    - [Experiment Setup](#experiment-setup-1)
     - [Results (TO BE ADDED)](#results-to-be-added-1)
     - [Conclusions (TO BE ADDED)](#conclusions-to-be-added-1)
+  - [Data Augmentation](#data-augmentation)
+    - [Hypothesis](#hypothesis-4)
+    - [Implementation (`src/models/dataset.py`)](#implementation-srcmodelsdatasetpy)
+    - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added)
+    - [Results (TO BE ADDED)](#results-to-be-added-2)
+    - [Conclusions (TO BE ADDED)](#conclusions-to-be-added-2)
   - [Future Work](#future-work)
 
 ---
@@ -327,6 +333,51 @@ training:
   scheduler_min_lr: 0.00001    # Floor LR (eta_min in CosineAnnealingLR)
   num_epochs: 50               # Also used as T_max for the scheduler
 ```
+
+---
+
+## Input Feature Selection
+
+### Hypothesis
+
+PointNet's input is a per-point feature vector. The minimal version uses only XYZ coordinates (3 channels), which captures geometry alone. DALES LiDAR data also provides per-point return metadata: `return_number` (which echo this point came from) and `number_of_returns` (how many echoes the pulse produced). These carry information about vertical structure: a single-return point likely hit a hard surface (ground, rooftop), while a multi-return point passed through vegetation or hit a wire. This signal is complementary to geometry and may help the model distinguish classes that are spatially similar but structurally different, such as low vegetation vs. ground, or utility lines vs. building edges.
+
+The hypothesis is that adding return metadata (XYZ + return_number + number_of_returns, 5 channels) improves segmentation performance, particularly on classes where geometry alone is ambiguous, doing so without meaningful additional compute cost, since PointNet's shared MLP scales with channel count but the increase from 3 to 5 is marginal.
+
+### Implementation (`config/default.yaml`)
+
+Feature selection is controlled in the config under `dataset.use_features`. The preprocessing step (`convert_las_to_blocks.py`) extracts all requested features into the NPZ blocks; the dataset loader then selects the subset specified at training time. The number of input channels (`num_channels`) is computed automatically from the selected features.
+
+!!!!!!!!!!!!!!!! TODO: add notes about implementation in PoitNet
+
+XYZ-only (3 channels):
+```yaml
+dataset:
+  use_features:
+    - xyz
+```
+
+XYZ + return data (5 channels):
+```yaml
+dataset:
+  use_features:
+    - xyz
+    - return_number
+    - number_of_returns
+```
+
+### Experiment Setup
+
+| Run | Input Features | Channels | Purpose |
+|---|---|---|---|
+| 1 | XYZ | 3 | Geometry-only baseline |
+| 2 | XYZ + return_number + number_of_returns | 5 | Geometry + return metadata |
+
+All other hyperparameters are held constant: NLL loss, ENS 0.99999 weights, sampler off, no augmentation, 50 epochs, batch size 32, learning rate 0.01 with cosine annealing.
+
+### Results (TO BE ADDED)
+
+### Conclusions (TO BE ADDED)
 
 
 ---
