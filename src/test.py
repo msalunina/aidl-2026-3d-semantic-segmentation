@@ -95,6 +95,14 @@ if __name__ == '__main__':
         model_trained = IPointNetSegmentation(num_classes=config.num_classes, 
                                               input_channels=config.num_channels, 
                                               dropout=config.dropout_rate).to(device)
+    elif config.model_name == "pointnetplusplus":
+        from models.pointnetplusplus import PointNetPlusPlusSegmentation
+        model_trained = PointNetPlusPlusSegmentation(num_classes=config.num_classes,
+                                             extra_channels=config.num_channels - 3,
+                                             dropout=config.dropout_rate,
+                                             grouping="knn",    # choose "knn" or "ball-closest" or "ball-random"
+                                             K=[32,32,64,64],               
+                                             radius=[0.08, 0.1, 0.2, 0.4]).to(device)       
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
     
