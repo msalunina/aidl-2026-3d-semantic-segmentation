@@ -1,17 +1,25 @@
+
+# METRICS: IoU
+
+
 # POINTNET++
 
 ## ARCHITECTURE
 
-## Neighborhood definition in PointNet++
+## SA layers
+## FP layers
+
+## Neighborhood selection
 
 In PointNet++, local geometric features are learned by grouping neighboring points around a set of sampled centers obtained via **Farthest Point Sampling (FPS)**.  
 The strategy used to select neighbors determines the **spatial support of the local patch**, which directly influences the type of geometric structures the network can capture.
 
-In this work, three grouping strategies are compared:
+Three grouping strategies are compared:
 
-- **k-nearest neighbors (`kNN`)**
-- **radius-based grouping selecting the closest neighbors (`ball_closest`)**
-- **radius-based grouping with random sampling (`ball_random`)**
+- k-nearest neighbors (`knn`)
+- radius-based grouping
+    - selecting the closest neighbors (`ball_closest`)
+    - Random sampling (`ball_random`)
 
 ---
 
@@ -70,11 +78,13 @@ Two strategies were implemented to select these **K neighbors**.
 
 # Summary
 
-| Method | Spatial Support | Effective Receptive Field | Density Dependence |
-|------|------|------|------|
-| **knn** | Variable | Variable | High |
-| **ball_closest** | Fixed (radius) | May shrink in dense regions | Moderate |
-| **ball_random** | Fixed (radius) | Approximately equal to radius | Low |
+
+| Method        | Spatial Support | Effective Receptive Field        | Density Sensitivity |
+|---------------|-----------------|-----------------------------------|---------------------|
+| **kNN**       | Variable (no limit)      | Variable                          | High                |
+| **ball_closest** |Fixed (radius cap)      | May shrink in dense regions (center-biased sampling)      | Moderate            |
+| **ball_random**  | Fixed (radius cap)    | Tends to span the ball (random sampling)     | Lower               |
+
 
 ---
 
@@ -127,13 +137,48 @@ grouping options:
 
 ## EXPERIMENTS
 
-| PointNet++|      test     |    grouping    | dropout |  K neighbours |              channels                |
-|:---------:|:-------------:|:--------------:|:-------:|:-------------:|:------------------------------------:|
-|     1     |  baseline     |      "knn"     |    0.5  | [32,32,32,32] | [xyz,return_number,number_of_returns]|
-|     2     | test dropout  |      "knn"     |    0.3  | [32,32,32,32] | [xyz,return_number,number_of_returns]|
-|     3     | test K        |      "knn"     |    0.5  | [32,32,64,64] | [xyz,return_number,number_of_returns]|
-|     4     | test grouping | "ball_closest" |    0.5  | [32,32,32,32] | [xyz,return_number,number_of_returns]|
-|     5     | test grouping | "ball_random"  |    0.5  | [32,32,32,32] | [xyz,return_number,number_of_returns]|
-|     6     | test channels |      "knn"     |    0.5  | [32,32,32,32] | [xyz]                                |
+| PointNet++|      test     |    grouping    | dropout |      K  neighbours      |       radius       |               channels               |
+|:---------:|:-------------:|:--------------:|:-------:|:-----------------------:|-------------------:|:------------------------------------:|
+|     1     |  baseline     |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz,return_number,number_of_returns]| olga
+|     2     | test dropout  |      "knn"     |    0.3  | [32,32,32,32] (exact K) |         -          | [xyz,return_number,number_of_returns]| edu
+|     3     | test K        |      "knn"     |    0.5  | [32,32,64,64] (exact K) |         -          | [xyz,return_number,number_of_returns]| corriendo
+|     4     | test grouping | "ball_closest" |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]| edu
+|     5     | test grouping | "ball_random"  |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]|
+|     6     | test channels |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz]                                | 
+
+
+
+
+| Metric | 1 - baseline<br>(train/val/test) | 2 - dropout<br>(train/val) | 4 - ball_closest<br>(train/val) |
+|------|------|------|------|
+| mIoU | 0.781 / 0.766 / 0.752 | 0.785 / 0.768 | 0.776 / **0.771** |
+| Accuracy | 0.953 / 0.951 / 0.956 | 0.954 / 0.950 | 0.952 / **0.952** |
+| Loss | 0.019 / 0.019 / 0.047 | 0.018 / 0.021 | 0.020 / **0.018** |
+| IoU Buildings | 0.950 / 0.947 / 0.933 | 0.950 / 0.942 | 0.943 / **0.948** |
+| IoU Ground | 0.947 / 0.942 / 0.956 | 0.947 / 0.940 | 0.946 / **0.943** |
+| IoU Utility | 0.537 / 0.526 / 0.448 | 0.544 / **0.541** | 0.531 / 0.515 |
+| IoU Vegetation | 0.853 / 0.849 / 0.861 | 0.856 / 0.845 | 0.851 / **0.855** |
+| IoU Vehicle | 0.619 / 0.567 / 0.561 | 0.626 / 0.570 | 0.610 / **0.595** |
+
+
+"knn" vs "ball_closest"/"ball_random" is not a fair comparison because:
+With kNN:
+- you always get exactly K points
+- the spatial radius is variable (no limit)
+- neighborhood effective size expands or shrinks depending on density
+
+With ball query:
+- you fix the maximum spatial radius 
+- the number of points is variable (up to max K)
+- the neighborhood effective size 
+    - closest: biased toward center when many points exist (may shrink)
+    - random: tends to sample the full ball more uniformly
+
+knn is robust in sparse areas (always enough points), but spatial neighborhood varies a lot
+ball has a consistent geometric scale (bounding), but may contain very few points.
+If very dense areas:
+ball_closest → biased toward center 
+ball_random  → more spatially uniform sampling
+
 
 ### RESULTS:
