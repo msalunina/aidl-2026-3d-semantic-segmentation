@@ -23,25 +23,27 @@
   - [PointNet Architecture](#pointnet-architecture)
     - [Why PointNet for aerial LiDAR?](#why-pointnet-for-aerial-lidar)
     - [Implementation (`src/models/pointnet.py`)](#implementation-srcmodelspointnetpy)
-  - [Data Augmentation](#data-augmentation)
-    - [Hypothesis](#hypothesis)
-    - [Implementation (`src/models/dataset.py`)](#implementation-srcmodelsdatasetpy)
-    - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added)
-    - [Results (TO BE ADDED)](#results-to-be-added)
-    - [Conclusions (TO BE REVISED)](#conclusions-to-be-revised)
-  - [Focal Loss](#focal-loss)
-    - [Hypothesis](#hypothesis-1)
-    - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
-    - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added-1)
-    - [Results (TO BE ADDED)](#results-to-be-added-1)
-    - [Conclusions (TO BE ADDED)](#conclusions-to-be-added)
   - [Optimizer and Learning Rate](#optimizer-and-learning-rate)
     - [Configuration](#configuration-1)
-  - [Class Weight Strategies](#class-weight-strategies)
-    - [Hypothesis](#hypothesis-2)
+  - [Class Balancing Strategies (INTRO TO BE REVISED AFTER THE EXPERIMENTS)](#class-balancing-strategies-intro-to-be-revised-after-the-experiments)
+    - [Focal Loss vs NLL Loss](#focal-loss-vs-nll-loss)
+      - [Hypothesis](#hypothesis)
+      - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
+    - [Class Weight Strategies](#class-weight-strategies)
+      - [Hypothesis](#hypothesis-1)
+      - [Implementation](#implementation)
+    - [Class Balanced Sampler](#class-balanced-sampler)
+      - [Hypothesis](#hypothesis-2)
+      - [Implementation (`src/utils/sampler.py`)](#implementation-srcutilssamplerpy)
     - [Experiment Setup](#experiment-setup)
-    - [Results](#results)
-    - [Conclusions](#conclusions)
+    - [Results (TO BE ADDED)](#results-to-be-added)
+    - [Conclusions (TO BE ADDED)](#conclusions-to-be-added)
+  - [Data Augmentation](#data-augmentation)
+    - [Hypothesis](#hypothesis-3)
+    - [Implementation (`src/models/dataset.py`)](#implementation-srcmodelsdatasetpy)
+    - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added)
+    - [Results (TO BE ADDED)](#results-to-be-added-1)
+    - [Conclusions (TO BE REVISED)](#conclusions-to-be-revised)
   - [Future Work](#future-work)
 
 ---
@@ -306,6 +308,205 @@ The key difference from the segmentation head is the input: classification uses 
 
 ---
 
+## Optimizer and Learning Rate
+
+For training, we selected standard **Adam** optimizer (`torch.optim.Adam`) initialized with the `learning_rate` from config. By default this is `0.01`.
+
+We also implemented a **cosine annealing** scheduler (`CosineAnnealingLR`) which decays the learning rate from the initial value down to a floor (`scheduler_min_lr`) following a cosine curve over the full training run:
+
+![Learning Rate Scheduler](figs/learning_rate.png)
+
+This avoids manually tuning step-decay milestones: the learning rate decreases smoothly to near zero by the final epoch, helping the model settle into a stable minimum.
+
+### Configuration
+
+```yaml
+training:
+  learning_rate: 0.01          # Initial LR passed to Adam
+  scheduler_type: cosine       # Only supported option currently
+  scheduler_min_lr: 0.00001    # Floor LR (eta_min in CosineAnnealingLR)
+  num_epochs: 50               # Also used as T_max for the scheduler
+```
+
+
+---
+
+## Class Balancing Strategies (INTRO TO BE REVISED AFTER THE EXPERIMENTS)
+
+The DALES class imbalance can be attacked at three levels: the loss function (how the gradient is shaped), the loss weights (how much each class contributes), and the sampler (which blocks the model trains on). These are not simply additive — they interact, and stacking all three does not guarantee the best result. In our experiments, the most effective strategy turned out to be the simplest: near-uniform weights with a class-balanced sampler, using standard NLL loss. The sections below document each strategy independently, the reasoning behind it, and what the results revealed about how they interact.
+
+### Focal Loss vs NLL Loss
+
+#### Hypothesis
+
+DALES has severe class imbalance: Ground (53% of points), Vegetation (29%), and Buildings (17%) vastly outnumber Vehicle (<1%) and Utility (<1%). Standard NLL loss treats every point equally, so the gradient is dominated by abundant, easy-to-classify Ground and Vegetation points. Focal Loss addresses this by applying a modulating factor that dynamically down-weights points the model already classifies confidently, focusing the gradient on hard, ambiguous examples, which tend to be the rare classes.
+
+The expectation is that Focal Loss should improve rare-class IoU compared to NLL under the same weight strategy, at some possible cost to overall IoU on the dominant classes.
+
+#### Implementation (`src/utils/focal_loss.py`)
+
+![Focal Loss](figs/focal_loss.png)
+
+Based on [Lin et al., 2017 — Focal Loss for Dense Object Detection](https://arxiv.org/abs/1708.02002):
+
+$$\text{FL}(p_t) = -\alpha_t \cdot (1 - p_t)^{\gamma} \cdot \log(p_t)$$
+
+| Parameter | Role |
+|---|---|
+| $\alpha_t$ | Per-class weight (passed as a 5-element tensor). Controls baseline class importance independently of prediction confidence. |
+| $\gamma$ | Focusing parameter (default: 2.0). When $\gamma = 0$, reduces to weighted cross-entropy. Higher $\gamma$ suppresses the contribution of easy, confidently classified examples and forces the loss gradient to come from hard misclassifications. |
+| `ignore_index=-1` | Points with label `-1` (unknown/unlabeled) are masked out and excluded from loss computation entirely. |
+
+
+Selected in config with:
+```yaml
+training:
+  loss_function: focal_loss  # alternative: nll_loss
+```
+
+---
+
+### Class Weight Strategies
+
+#### Hypothesis
+
+Both Focal Loss and NLL accept a per-class weight vector $\alpha_t$​ that scales each class's contribution to the total loss. An equal-weight vector leaves the frequency imbalance uncorrected at the loss level, while aggressive inverse-frequency weights can destabilize training by amplifying noisy gradients from the small number of rare-class points. The goal is to find the weight vector that maximizes rare-class IoU without degrading performance on the majority classes.
+
+Because the weight vector interacts with the loss function (Focal Loss already down-weights easy examples, so adding aggressive class weights on top may over-correct), the optimal weights may differ between NLL and Focal Loss.
+
+#### Implementation
+
+Both loss functions accept a per-class weight vector $\alpha_t$ that scales each class's contribution to the total loss. We explored several weighting strategies before selecting the Effective Number of Samples (ENS) family for our experiments.
+
+**Class frequencies:**
+
+| Class | Index | Approx. frequency |
+|---|---|---|
+| Ground | 0 | 53% |
+| Vegetation | 1 | 29% |
+| Buildings | 2 | 17% |
+| Vehicle | 3 | <1% |
+| Utility | 4 | <1% |
+
+**Strategies considered:**
+
+1. **Square Root Inverse Frequency (`SQRT_INV_FREQ`)**: $w_c = 1 / \sqrt{f_c}$, then normalized. Mild correction that reduces dominance of common classes without completely suppressing them.
+
+2. **Inverse Frequency (`INV_FREQ`)**: $w_c = 1 / f_c$, normalized. Stronger correction; rare classes receive much higher weights. Risks instability when class imbalance is extreme.
+
+3. **Inverse Frequency Moderate (`INV_FREQ_MODERATE`)**: A capped version of inverse frequency where weights are clipped, preventing extremely small or large weights.
+
+4. **Effective Number of Samples (`ENS_α`)**: Based on [Cui et al., 2019 — Class-Balanced Loss Based on Effective Number of Samples](https://arxiv.org/abs/1901.05555). Weight $= (1 - \alpha) / (1 - \alpha^{f_c})$. Parameter $\alpha$ controls how aggressively rare samples are up-weighted.
+
+**Selected for experiments:** We carried forward only the ENS family with three $\alpha$ values: $\alpha \in \{0.99999,\ 0.999999,\ 0.9999999\}$. By varying a single parameter, ENS spans the full correction spectrum — from near-uniform (0.99999) through moderate (0.999999) to aggressive (0.9999999) — covering the same range as the heuristic strategies above without mixing different weighting philosophies across runs.
+
+| Strategy | Ground | Vegetation | Buildings | Vehicle | Utility |
+|---|:---:|:---:|:---:|:---:|:---:|
+| ENS 0.99999 | 0.9894 | 0.9894 | 0.9894 | 1.0049 | 1.0270 |
+| ENS 0.999999 | 0.5272 | 0.5272 | 0.5276 | 1.5454 | 1.8727 |
+| ENS 0.9999999 | 0.0940 | 0.1197 | 0.1633 | 2.0487 | 2.5743 |
+
+Weights can be modified in `config/default.yaml`:
+```yaml
+loss_weights:
+  - 0.9894   # Ground
+  - 0.9894   # Vegetation
+  - 0.9894   # Buildings
+  - 1.0049   # Vehicle
+  - 1.0270   # Utility
+```
+
+<!-- All other hyperparameters (learning rate, batch size, epochs, optimizer) were held constant across strategy runs to isolate the effect of the weights.
+
+Below are the exact class weights computed for each strategy on our dataset. We did not test uniform weighting separately, as ENS 0.99999 already approximates it closely (weights range from 0.99 to 1.03).
+
+| Strategy | Buildings | Ground | Utility | Vegetation | Vehicle |
+|---|:---:|:---:|:---:|:---:|:---:|
+| SQRT_INV_FREQ | 0.2553 | 0.3465 | 0.4482 | 1.8602 | 2.0897 |
+| INV_FREQ | 0.0397 | 0.0731 | 0.1223 | 2.1066 | 2.6584 |
+| INV_FREQ_MODERATE | 0.5000 | 0.5000 | 0.5000 | 2.1066 | 2.6584 |
+| ENS 0.99999 | 0.9894 | 0.9894 | 0.9894 | 1.0049 | 1.0270 |
+| ENS 0.999999 | 0.5272 | 0.5272 | 0.5276 | 1.5454 | 1.8727 |
+| ENS 0.9999999 | 0.0940 | 0.1197 | 0.1633 | 2.0487 | 2.5743 |
+
+#### Results
+
+The below results are provided for the holdout Test sample.
+
+| Strategy | mIoU | IoU/Buildings | IoU/Ground | IoU/Utility | IoU/Vegetation | IoU/Vehicle |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| SQRT_INV_FREQ | 0.61 | 0.82 | 0.94 | 0.27 | 0.75 | 0.28 |
+| INV_FREQ | 0.54 | 0.82 | 0.93 | $\color{red}{0.15}$ | 0.71 | $\color{red}{0.18}$ |
+| INV_FREQ_MODERATE | 0.61 | 0.81 | 0.94 | 0.27 | 0.75 | 0.28 |
+| ENS 0.99999 | $\color{green}{0.63}$ | $\color{green}{0.84}$ | $\color{green}{0.95}$ | 0.27 | $\color{green}{0.78}$ | $\color{green}{0.31}$ |
+| ENS 0.999999 | 0.62 | 0.82 | 0.94 | $\color{green}{0.29}$ | 0.76 | 0.30 |
+| ENS 0.9999999 | 0.58 | 0.82 | 0.94 | 0.19 | 0.73 | 0.23 |
+
+#### Conclusions
+
+ENS 0.99999 achieves the best mIoU (0.63) and leads in four out of five classes. Its near-uniform weights suggest that aggressively upweighting rare classes is not necessary here and a gentle rebalancing is enough provided the focal loss implementation.
+
+INV_FREQ performs worst overall (0.54), with the lowest scores on Utility and Vehicle. Its extreme weight ratio (~67× between Vehicle and Buildings) likely destabilizes training, hurting performance even on the rare classes it is meant to help.
+
+SQRT_INV_FREQ and INV_FREQ_MODERATE produce identical mIoU (0.61) despite different weight distributions, indicating that moderate rebalancing strategies plateau at similar performance.
+
+Utility remains the hardest class across all strategies (best: 0.29). -->
+
+### Class Balanced Sampler
+
+#### Hypothesis
+
+Loss weights and Focal Loss both operate at the point level — they reweight individual point contributions within whatever batch the model happens to see. But in DALES, rare classes are spatially concentrated: most blocks contain only Ground, Vegetation, and Buildings, while Vehicle and Utility points appear in a small subset of blocks. Under standard uniform shuffling, the model may go many consecutive batches without encountering a single rare-class point, regardless of how the loss is configured.
+
+The Class Balanced Sampler addresses this at the data-loading level by oversampling blocks that contain at least one rare-class point. This ensures that every batch is likely to include rare-class geometry, providing a consistent gradient signal for those classes throughout training. Unlike loss-level corrections, the sampler changes what the model sees rather than how it scores what it sees.
+
+A key implication is that the sampler may reduce the need for aggressive loss-level rebalancing. If the model already encounters rare-class blocks frequently, the loss function does not need to overcompensate for their absence, near-uniform weights may suffice because the data distribution itself has been corrected.
+
+#### Implementation (`src/utils/sampler.py`)
+
+The sampler assigns a sampling weight to every block in the training set. For each block, it loads the label array and checks whether any point belongs to a rare class (by default Vehicle and Utility, indices 3 and 4). Blocks containing at least one rare-class point receive a weight of rare_class_boost (default: 3.0); all other blocks receive a weight of 1.0. At each epoch, `torch.multinomial` draws `len(dataset)` indices with replacement according to these weights, so rare-class blocks are approximately 3× more likely to appear than majority-only blocks.
+
+Because sampling is with replacement, some rare-class blocks will appear multiple times per epoch while some majority-only blocks may not appear at all. This is intentional: it trades off slight overfitting risk on rare-class blocks for a substantially more balanced class distribution per epoch.
+
+Selected in config with:
+
+```yaml
+training:
+  use_sampler: true   # Enable class-balanced sampling
+```
+
+When use_sampler: true, the DataLoader uses the sampler instead of random shuffling (shuffle and sampler are mutually exclusive in PyTorch). The sampler is applied only to the training set; validation always uses sequential loading.
+
+### Experiment Setup
+
+All experiments use the same base configuration: PointNet, Adam optimizer, cosine annealing scheduler (LR 0.01 → 0.00001), batch size 32, 50 epochs, 4096 points per block. Only the loss function, class weights, and sampler vary across runs (no data augmentation).
+
+**Phase 1: Loss function × weight strategy (sampler off)**
+
+| Run | Loss | Weights | Sampler | Purpose |
+|---|---|---|---|---|
+| 1 | NLL | ENS 0.99999 | Off | NLL with near-uniform weights |
+| 2 | NLL | ENS 0.999999 | Off | NLL with moderate correction |
+| 3 | NLL | ENS 0.9999999 | Off | NLL with moderate correction |
+| 4 | Focal | ENS 0.99999 | Off | Focal with near-uniform weights |
+| 5 | Focal | ENS 0.999999 | Off | Focal with moderate correction |
+| 6 | Focal | ENS 0.9999999 | Off | Focal with strong correction |
+
+**Phase 2: Adding the class-balanced sampler**
+
+| Run | Loss | Weights | Sampler | Purpose |
+|---|---|---|---|---|
+| 7 | NLL | ENS 0.99999 | On (3×)| Sampler + NLL near-uniform |
+| 8 | NLL | ENS 0.999999 | On (3×) | Sampler + NLL moderate weights |
+| 9 | Focal | ENS 0.99999 | On (3×) | Sampler + Focal near-uniform |
+| 10 | Focal | ENS 0.999999 | On (3×) | Sampler + Focal moderate weights |
+
+### Results (TO BE ADDED)
+
+### Conclusions (TO BE ADDED)
+
+---
+
 ## Data Augmentation
 
 ### Hypothesis
@@ -338,141 +539,6 @@ Two transforms are applied per sample:
 ### Conclusions (TO BE REVISED)
 
 Z-rotation is the main augmentation for this dataset, it's cheap and directly matches the rotational symmetry of overhead scanning. It was kept on for all experiments.
-
----
-
-## Focal Loss
-
-### Hypothesis
-
-DALES has severe class imbalance: Ground (53% of points), Vegetation (29%), and Buildings (17%) vastly outnumber Vehicle (<1%) and Utility (<1%). Standard NLL loss minimizes average per-point loss, so the gradient is dominated by easy, abundant Ground and Vegetation points. The model learns to classify those well while largely ignoring the rare classes. Focal Loss addresses this by dynamically down-weighting easy examples during training.
-
-### Implementation (`src/utils/focal_loss.py`)
-
-![Focal Loss](figs/focal_loss.png)
-
-Based on [Lin et al., 2017 — Focal Loss for Dense Object Detection](https://arxiv.org/abs/1708.02002):
-
-$$\text{FL}(p_t) = -\alpha_t \cdot (1 - p_t)^{\gamma} \cdot \log(p_t)$$
-
-| Parameter | Role |
-|---|---|
-| $\alpha_t$ | Per-class weight (passed as a 5-element tensor). Controls baseline class importance independently of prediction confidence. |
-| $\gamma$ | Focusing parameter (default: 2.0). When $\gamma = 0$, reduces to weighted cross-entropy. Higher $\gamma$ suppresses the contribution of easy, confidently classified examples and forces the loss gradient to come from hard misclassifications. |
-| `ignore_index=-1` | Points with label `-1` (unknown/unlabeled) are masked out and excluded from loss computation entirely. |
-
-
-Selected in config with:
-```yaml
-training:
-  loss_function: focal_loss  # alternative: nll_loss
-```
-### Experiment Setup (TO BE ADDED)
-
-### Results (TO BE ADDED)
-
-### Conclusions (TO BE ADDED)
-
----
-
-## Optimizer and Learning Rate
-
-For training, we selected standard **Adam** optimizer (`torch.optim.Adam`) initialized with the `learning_rate` from config. By default this is `0.01`.
-
-We also implemented a **cosine annealing** scheduler (`CosineAnnealingLR`) which decays the learning rate from the initial value down to a floor (`scheduler_min_lr`) following a cosine curve over the full training run:
-
-![Learning Rate Scheduler](figs/learning_rate.png)
-
-This avoids manually tuning step-decay milestones: the learning rate decreases smoothly to near zero by the final epoch, helping the model settle into a stable minimum.
-
-### Configuration
-
-```yaml
-training:
-  learning_rate: 0.01          # Initial LR passed to Adam
-  scheduler_type: cosine       # Only supported option currently
-  scheduler_min_lr: 0.00001    # Floor LR (eta_min in CosineAnnealingLR)
-  num_epochs: 50               # Also used as T_max for the scheduler
-```
-
----
-
-## Class Weight Strategies
-
-### Hypothesis
-
-Even with Focal Loss, the $\alpha_t$ weights need to be set deliberately. An equal weight vector leaves the imbalance partially uncorrected, while an extreme inverse-frequency vector can destabilize training. The goal of these experiments is to find the weight strategy that achieves the best balance between overall IoU (dominated by Ground and Vegetation) and per-class IoU on the rare classes (Vehicle, Utility).
-
-### Experiment Setup
-
-Five weight strategies were evaluated, all producing a 5-element weight vector applied as $\alpha_t$ in Focal Loss (and as `weight` when using NLL Loss):
-
-**Class frequencies:**
-
-| Class | Index | Approx. frequency |
-|---|---|---|
-| Ground | 0 | 53% |
-| Vegetation | 1 | 29% |
-| Buildings | 2 | 17% |
-| Vehicle | 3 | <1% |
-| Utility | 4 | <1% |
-
-**Strategies:**
-
-1. **Square Root Inverse Frequency (`SQRT_INV_FREQ`)**: $w_c = 1 / \sqrt{f_c}$, then normalized. Mild correction that reduces dominance of common classes without completely suppressing them.
-
-2. **Inverse Frequency (`INV_FREQ`)**: $w_c = 1 / f_c$, normalized. Stronger correction; rare classes receive much higher weights. Risks instability when class imbalance is extreme.
-
-3. **Inverse Frequency Moderate (`INV_FREQ_MODERATE`)**: A capped version of inverse frequency where weights are clipped, preventing extremely small or large weights.
-
-4. **Effective Number of Samples (`ENS_α`)**: Based on [Cui et al., 2019 — Class-Balanced Loss Based on Effective Number of Samples](https://arxiv.org/abs/1901.05555). Weight $= (1 - \alpha) / (1 - \alpha^{f_c})$. Parameter $\alpha$ controls how aggressively rare samples are up-weighted. Three values were tested: $\alpha \in \{0.99999,\ 0.999999,\ 0.9999999\}$. Higher $\alpha$ gives a larger boost to rarer classes.
-
-Example weight vector for ENS 0.99999 (used as default in `config/default.yaml`):
-
-```yaml
-loss_weights:
-  - 0.0940   # Ground
-  - 0.1197   # Vegetation
-  - 0.1633   # Buildings
-  - 2.0487   # Vehicle
-  - 2.5743   # Utility
-```
-
-All other hyperparameters (learning rate, batch size, epochs, optimizer) were held constant across strategy runs to isolate the effect of the weights.
-
-Below are the exact class weights computed for each strategy on our dataset. We did not test uniform weighting separately, as ENS 0.99999 already approximates it closely (weights range from 0.99 to 1.03).
-
-| Strategy | Buildings | Ground | Utility | Vegetation | Vehicle |
-|---|:---:|:---:|:---:|:---:|:---:|
-| SQRT_INV_FREQ | 0.2553 | 0.3465 | 0.4482 | 1.8602 | 2.0897 |
-| INV_FREQ | 0.0397 | 0.0731 | 0.1223 | 2.1066 | 2.6584 |
-| INV_FREQ_MODERATE | 0.5000 | 0.5000 | 0.5000 | 2.1066 | 2.6584 |
-| ENS 0.99999 | 0.9894 | 0.9894 | 0.9894 | 1.0049 | 1.0270 |
-| ENS 0.999999 | 0.5272 | 0.5272 | 0.5276 | 1.5454 | 1.8727 |
-| ENS 0.9999999 | 0.0940 | 0.1197 | 0.1633 | 2.0487 | 2.5743 |
-
-### Results
-
-The below results are provided for the holdout Test sample.
-
-| Strategy | mIoU | IoU/Buildings | IoU/Ground | IoU/Utility | IoU/Vegetation | IoU/Vehicle |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| SQRT_INV_FREQ | 0.61 | 0.82 | 0.94 | 0.27 | 0.75 | 0.28 |
-| INV_FREQ | 0.54 | 0.82 | 0.93 | $\color{red}{0.15}$ | 0.71 | $\color{red}{0.18}$ |
-| INV_FREQ_MODERATE | 0.61 | 0.81 | 0.94 | 0.27 | 0.75 | 0.28 |
-| ENS 0.99999 | $\color{green}{0.63}$ | $\color{green}{0.84}$ | $\color{green}{0.95}$ | 0.27 | $\color{green}{0.78}$ | $\color{green}{0.31}$ |
-| ENS 0.999999 | 0.62 | 0.82 | 0.94 | $\color{green}{0.29}$ | 0.76 | 0.30 |
-| ENS 0.9999999 | 0.58 | 0.82 | 0.94 | 0.19 | 0.73 | 0.23 |
-
-### Conclusions
-
-ENS 0.99999 achieves the best mIoU (0.63) and leads in four out of five classes. Its near-uniform weights suggest that aggressively upweighting rare classes is not necessary here and a gentle rebalancing is enough provided the focal loss implementation.
-
-INV_FREQ performs worst overall (0.54), with the lowest scores on Utility and Vehicle. Its extreme weight ratio (~67× between Vehicle and Buildings) likely destabilizes training, hurting performance even on the rare classes it is meant to help.
-
-SQRT_INV_FREQ and INV_FREQ_MODERATE produce identical mIoU (0.61) despite different weight distributions, indicating that moderate rebalancing strategies plateau at similar performance.
-
-Utility remains the hardest class across all strategies (best: 0.29).
 
 ---
 
