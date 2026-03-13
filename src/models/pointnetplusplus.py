@@ -120,7 +120,8 @@ def knn_point(k, reference_points, query_points):
 
 
 
-def query_ball_point(radius, K, reference_points, query_points):
+
+def query_ball_point_closest(radius, K, reference_points, query_points):
     """
     For each query point (center), find up to K reference points
     lying inside a ball of radius 'radius'.
@@ -150,17 +151,7 @@ def query_ball_point(radius, K, reference_points, query_points):
     # Points outside the radius are assigned infinite distance
     distance2[distance2 > radius ** 2] = torch.inf                          # [B,S,N]
 
-    #  -------------- TEMPORAL  --------------
-    # valid_mask = distance2 <= radius**2
-    # num_valid = valid_mask.sum(dim=-1).float()
-    # print(
-    #     f"radius={radius} "
-    #     f"min={num_valid.min().item():.1f} "
-    #     f"mean={num_valid.mean().item():.1f} "
-    #     f"max={num_valid.max().item():.1f}")
-    #  -------------- TEMPORAL  --------------
-
-    # Take K smallest distances (closest neighbors).
+    # Take K smallest distances = K closest valid neighbors
     selected_distance2, group_idx = torch.topk(distance2, K, dim=-1, largest=False) # both [B, S, K]
 
     # Replace invalid entries with the closest valid neighbor
@@ -169,6 +160,61 @@ def query_ball_point(radius, K, reference_points, query_points):
     group_idx[invalid_mask] = first_valid_idx[invalid_mask]                 # [B,S,K]
 
     return group_idx
+
+
+
+def query_ball_point_random(radius, K, reference_points, query_points):
+    """
+    For each query point (center), find up to K reference points
+    lying inside a ball of radius 'radius'.
+
+    If more than K points fall inside the ball, K of them are randomly chosen.
+
+    Assumption: query_points are sampled from reference_points, so 
+    each center is itself one of the reference points. Therefore 
+    distance(center, center) = 0 <= radius, so each neighborhood 
+    contains at least one valid point.
+
+    Input:
+        radius:            radius of the ball
+        K:                 maximum number of neighbors per center
+        reference_points:  [B, N, 3]
+        query_points:      [B, S, 3]
+
+    Output:
+        group_idx: [B, S, K]
+    """
+
+    if radius is None:
+        raise ValueError("radius must be provided for ball query")
+    if radius <= 0:
+        raise ValueError(f"radius must be positive, got {radius}")
+
+    device = reference_points.device
+    B, S, _ = query_points.shape
+    N = reference_points.shape[1]
+
+    # Squared distances from each center to all points in the cloud
+    distance2 = square_distance(query_points, reference_points)                     # [B,S,N]
+
+    # Assign a random score between 0 and 1 to each candidate neighbor
+    # Change score to inf to those points outside the radius, so they are 
+    # pushed to the end when choosing topk
+    random_score = torch.rand(B, S, N, device=device)                               # [B,S,N]
+    random_score[distance2 > radius ** 2] = torch.inf                               # [B,S,N]
+
+    # Take K smallest scores = K random valid neighbors
+    selected_score, group_idx = torch.topk(random_score, K, dim=-1, largest=False)  # [B,S,K]
+
+    # Replace invalid entries with the first valid neighbor
+    first_valid_idx = group_idx[:, :, 0].unsqueeze(-1).expand(-1, -1, K)            # [B,S,K]
+    invalid_mask = torch.isinf(selected_score)                                      # [B,S,K]
+    group_idx[invalid_mask] = first_valid_idx[invalid_mask]
+
+    return group_idx
+
+
+
 
 
 def sample_and_group(num_centers, K, points_xyz, points_features=None, grouping="knn", radius=None):
@@ -198,11 +244,14 @@ def sample_and_group(num_centers, K, points_xyz, points_features=None, grouping=
     if grouping == "knn":
         group_idx = knn_point(K, reference_points=points_xyz, query_points=centers_xyz)   # [B,S,K]
 
-    elif grouping == "ball":
-        group_idx = query_ball_point(radius=radius,K=K,reference_points=points_xyz,query_points=centers_xyz) # [B,S,K]
+    elif grouping == "ball_closest":
+        group_idx = query_ball_point_closest(radius=radius,K=K,reference_points=points_xyz,query_points=centers_xyz) # [B,S,K]
+    
+    elif grouping == "ball_random":
+        group_idx = query_ball_point_random(radius=radius,K=K,reference_points=points_xyz,query_points=centers_xyz) # [B,S,K]
 
     else:
-        raise ValueError(f"Unknown grouping mode '{grouping}'. Use 'knn' or 'ball'.")
+        raise ValueError(f"Unknown grouping mode '{grouping}'. Use 'knn', 'ball_closest' or 'ball_random'.")
 
     # Gather neighbor coordinates
     group_xyz = gather_points_by_index(points_xyz, group_idx)                         # [B,S,K,3]
@@ -526,7 +575,7 @@ class PointNetPlusPlusSegmentation(nn.Module):
     PointNet++ semantic segmentation (single-scale grouping version).
     """
 
-    def __init__(self, num_classes, extra_channels = 0, dropout = 0.5, grouping="knn", radius=None):
+    def __init__(self, num_classes, extra_channels = 0, dropout = 0.5, grouping="knn", K = None, radius=None):
         """
         num_classes:     number of semantic classes
         extra_channels:  D (extra input features per point besides xyz). If you only have xyz -> 0.
@@ -543,6 +592,16 @@ class PointNetPlusPlusSegmentation(nn.Module):
 
         if len(radius) != 4:
             raise ValueError(f"Expected 4 radius values, got {len(radius)}")
+        
+        # Checks for K
+        if K is None:
+            K = [32, 32, 32, 32]
+
+        if len(K) != 4:
+            raise ValueError(f"Expected 4 K values, got {len(K)}")
+        
+        self.K = K
+        self.radius = radius
 
         # -----------------------
         #        Encoder 
@@ -550,35 +609,35 @@ class PointNetPlusPlusSegmentation(nn.Module):
         # input:  xyz=[B,N,3],    feat=[B,N,C-3] or None
         # output: xyz=[B,1024,3], feat=[B,1024,64]
         self.sa1 = PointNetSetAbstraction(num_centers=1024, 
-                                          K=32, 
+                                          K=self.K[0], 
                                           in_channels=3 + extra_channels, 
                                           mlp_channels=[32, 32, 64],
                                           grouping=self.grouping,
-                                          radius=radius[0])                  
+                                          radius=self.radius[0])                  
         # input:  xyz=[B,1024,3], feat=[B,1024,64]
         # output: xyz=[B,256,3],  feat=[B,256,128]
         self.sa2 = PointNetSetAbstraction(num_centers=256, 
-                                          K=32, 
+                                          K=self.K[1], 
                                           in_channels=3 + 64, 
                                           mlp_channels=[64, 64, 128],
                                           grouping=self.grouping,
-                                          radius=radius[1]) 
+                                          radius=self.radius[1]) 
         # input:  xyz=[B,256,3], feat=[B,256,128]
         # output: xyz=[B,64,3], feat=[B,64,256]
         self.sa3 = PointNetSetAbstraction(num_centers=64, 
-                                          K=32, 
+                                          K=self.K[2], 
                                           in_channels=3 + 128, 
                                           mlp_channels=[128, 128, 256],
                                           grouping=self.grouping,
-                                          radius=radius[2]) 
+                                          radius=self.radius[2]) 
         # input:  xyz=[B,64,3], feat=[B,64,256]
         # output: xyz=[B,16,3], feat=[B,16,512]
         self.sa4 = PointNetSetAbstraction(num_centers=16, 
-                                          K=32, 
+                                          K=self.K[3], 
                                           in_channels=3 + 256, 
                                           mlp_channels=[256, 256, 512],
                                           grouping=self.grouping,
-                                          radius=radius[3]) 
+                                          radius=self.radius[3]) 
        
         # -----------------------
         #        Decoder 

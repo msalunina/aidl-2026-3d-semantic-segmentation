@@ -214,7 +214,7 @@ class PointNetSegmentation(nn.Module):
         self.ohv_gt = None
         self.skip_conn = skip_conn
         # OLGA: paper says there is no dropout for segmentation
-        # self.dropout = nn.Dropout(p=dropout)    
+        self.dropout = nn.Dropout(p=dropout)    
 
         # Feature extraction backbone
         self.backbone = PointNetBackbone(
@@ -275,6 +275,7 @@ class PointNetSegmentation(nn.Module):
         x = F.relu(self.bn_3(self.conv_3(x)))               # [batch, 128, nPoints]
         # This line can be commented if we simplify the extra 128 layer.
         x = F.relu(self.bn_4(self.conv_4(x)))               # [batch, 128, nPoints] 
+        x = self.dropout(x)
         log_probs = F.log_softmax(self.conv_5(x), dim=1)    # [batch, num_classes, nPoints]
 
         return feature_transform, log_probs

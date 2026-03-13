@@ -11,6 +11,8 @@ from utils.evaluator import test_model_segmentation
 from pathlib import Path
 import wandb
 
+from utils.focal_loss import FocalLoss
+
 def set_device():
     if torch.cuda.is_available(): 
         device = torch.device("cuda")
@@ -93,11 +95,20 @@ if __name__ == '__main__':
         model_trained = IPointNetSegmentation(num_classes=config.num_classes, 
                                               input_channels=config.num_channels, 
                                               dropout=config.dropout_rate).to(device)
+    elif config.model_name == "pointnetplusplus":
+        from models.pointnetplusplus import PointNetPlusPlusSegmentation
+        model_trained = PointNetPlusPlusSegmentation(num_classes=config.num_classes,
+                                             extra_channels=config.num_channels - 3,
+                                             dropout=config.dropout_rate,
+                                             grouping="knn",    # choose "knn" or "ball-closest" or "ball-random"
+                                             K=[32,32,64,64],               
+                                             radius=[0.08, 0.1, 0.2, 0.4]).to(device)       
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
     
     epoch=0
     load_dir= os.path.join(base_path, "model_objects", f"{config.test_name}.pt")
+    print(f"\nLoading model from: {load_dir}")
     # checkpoint_path = os.path.join(load_dir, f"pointnet_{epoch}_epochs.pt")
     checkpoint = torch.load(load_dir, map_location=device, weights_only=False)    # it loads more things that weights
 
@@ -111,7 +122,12 @@ if __name__ == '__main__':
     # We use NLLLoss because 'pointnet' outputs log-probabilities (log_softmax)
     # ignore_index = -1: when label is -1, do not include it in the loss
     loss_weights = torch.tensor(config.loss_weights, dtype=torch.float32).to(device)
-    criterion = torch.nn.NLLLoss(weight=loss_weights, ignore_index=config.ignore_label)         
+    if config.loss_function == "focal_loss":
+        criterion = FocalLoss(alpha=loss_weights, gamma=2.0, ignore_index=config.ignore_label)
+        print("Using Focal Loss with gamma=2.0 and class weights")         
+    elif config.loss_function == "nll_loss":
+        criterion = torch.nn.NLLLoss(weight=loss_weights, ignore_index=config.ignore_label)
+        print("Using NLL Loss with class weights")       
 
 
     # TODO: measure metrics on test set

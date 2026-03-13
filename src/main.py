@@ -96,22 +96,33 @@ if __name__ == '__main__':
         seed=config.dataset_seed
     )
 
-    # Create DataLoader with class-balanced sampling for training
-    print("\nSetting up class-balanced sampling for training...")
-    train_sampler = ClassBalancedSampler(
-        train_dataset, 
-        rare_classes=[3, 4],  # Vehicle and Utility classes
-        rare_class_boost=3.0,  # Blocks with rare classes are 3x more likely to be sampled
-        verbose=True
-    )
-    train_loader = DataLoader(
-        train_dataset, 
-        batch_size=config.batch_size, 
-        sampler=train_sampler, # Use sampler instead of shuffle
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True
-    )
+    if config.use_sampler:
+        # Create DataLoader with class-balanced sampling for training
+        print("\nSetting up class-balanced sampling for training...")
+        train_sampler = ClassBalancedSampler(
+            train_dataset, 
+            rare_classes=[3, 4],  # Vehicle and Utility classes
+            rare_class_boost=3.0,  # Blocks with rare classes are 3x more likely to be sampled
+            verbose=True
+        )
+        train_loader = DataLoader(
+            train_dataset, 
+            batch_size=config.batch_size, 
+            sampler=train_sampler, # Use sampler instead of shuffle
+            num_workers=4,
+            pin_memory=True,
+            persistent_workers=True
+        )
+    else:
+        # Create standard DataLoader for training
+        train_loader = DataLoader(
+            train_dataset, 
+            batch_size=config.batch_size, 
+            shuffle=True, 
+            num_workers=4, 
+            pin_memory=True, 
+            persistent_workers=True
+        )
     val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
     print("\n" + "="*60)
@@ -132,9 +143,10 @@ if __name__ == '__main__':
         from models.pointnetplusplus import PointNetPlusPlusSegmentation
         model = PointNetPlusPlusSegmentation(num_classes=config.num_classes,
                                              extra_channels=config.num_channels - 3,
-                                             dropout=0.5,
-                                             grouping="ball",         # choose "knn" or "ball"
-                                             radius=[0.08, 0.1, 0.2, 0.4]).to(device)       
+                                             dropout=config.dropout_rate,
+                                             grouping=config.grouping,          
+                                             K=config.k_neighbors,                  
+                                             radius=config.radius).to(device)   
 
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
@@ -143,8 +155,12 @@ if __name__ == '__main__':
     # We use Focal Loss to better handle class imbalance
     # Focal Loss down-weights easy examples and focuses on hard examples
     loss_weights = torch.tensor(config.loss_weights, dtype=torch.float32).to(device)
-    criterion = FocalLoss(alpha=loss_weights, gamma=2.0, ignore_index=config.ignore_label)
-    print("Using Focal Loss with gamma=2.0 and class weights")         
+    if config.loss_function == "focal_loss":
+        criterion = FocalLoss(alpha=loss_weights, gamma=2.0, ignore_index=config.ignore_label)
+        print("Using Focal Loss with gamma=2.0 and class weights")         
+    elif config.loss_function == "nll_loss":
+        criterion = torch.nn.NLLLoss(weight=loss_weights, ignore_index=config.ignore_label)
+        print("Using NLL Loss with class weights")
     if config.optimizer == "adam":
         optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     else:
