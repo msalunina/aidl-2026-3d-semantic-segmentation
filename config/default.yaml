@@ -70,6 +70,7 @@ training:
   dropout_rate: 0
   optimizer: adam
   loss_function: focal_loss # focal_loss / nll_loss
+  use_sampler: false
   
   # Learning rate scheduler
   scheduler_type: cosine  # cosine decay scheduler

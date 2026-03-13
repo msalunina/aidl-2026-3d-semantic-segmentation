@@ -96,22 +96,33 @@ if __name__ == '__main__':
         seed=config.dataset_seed
     )
 
-    # Create DataLoader with class-balanced sampling for training
-    print("\nSetting up class-balanced sampling for training...")
-    train_sampler = ClassBalancedSampler(
-        train_dataset, 
-        rare_classes=[3, 4],  # Vehicle and Utility classes
-        rare_class_boost=3.0,  # Blocks with rare classes are 3x more likely to be sampled
-        verbose=True
-    )
-    train_loader = DataLoader(
-        train_dataset, 
-        batch_size=config.batch_size, 
-        sampler=train_sampler, # Use sampler instead of shuffle
-        num_workers=4,
-        pin_memory=True,
-        persistent_workers=True
-    )
+    if config.use_sampler:
+        # Create DataLoader with class-balanced sampling for training
+        print("\nSetting up class-balanced sampling for training...")
+        train_sampler = ClassBalancedSampler(
+            train_dataset, 
+            rare_classes=[3, 4],  # Vehicle and Utility classes
+            rare_class_boost=3.0,  # Blocks with rare classes are 3x more likely to be sampled
+            verbose=True
+        )
+        train_loader = DataLoader(
+            train_dataset, 
+            batch_size=config.batch_size, 
+            sampler=train_sampler, # Use sampler instead of shuffle
+            num_workers=4,
+            pin_memory=True,
+            persistent_workers=True
+        )
+    else:
+        # Create standard DataLoader for training
+        train_loader = DataLoader(
+            train_dataset, 
+            batch_size=config.batch_size, 
+            shuffle=True, 
+            num_workers=4, 
+            pin_memory=True, 
+            persistent_workers=True
+        )
     val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=4, pin_memory=True, persistent_workers=True)
 
     print("\n" + "="*60)
