@@ -31,23 +31,23 @@
     - [Experiment Setup](#experiment-setup)
     - [Results (TO BE ADDED)](#results-to-be-added)
     - [Conclusions (TO BE ADDED)](#conclusions-to-be-added)
-  - [Class Balancing Strategies (INTRO TO BE REVISED AFTER THE EXPERIMENTS)](#class-balancing-strategies-intro-to-be-revised-after-the-experiments)
-    - [Focal Loss vs NLL Loss](#focal-loss-vs-nll-loss)
-      - [Hypothesis](#hypothesis-1)
-      - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
-    - [Class Weight Strategies](#class-weight-strategies)
-      - [Hypothesis](#hypothesis-2)
-      - [Implementation](#implementation)
-    - [Class Balanced Sampler](#class-balanced-sampler)
-      - [Hypothesis](#hypothesis-3)
-      - [Implementation (`src/utils/sampler.py`)](#implementation-srcutilssamplerpy)
-    - [Experiment Setup](#experiment-setup-1)
-    - [Results (TO BE ADDED)](#results-to-be-added-1)
-    - [Conclusions (TO BE ADDED)](#conclusions-to-be-added-1)
   - [Data Augmentation](#data-augmentation)
-    - [Hypothesis](#hypothesis-4)
+    - [Hypothesis](#hypothesis-1)
     - [Implementation (`src/models/dataset.py`)](#implementation-srcmodelsdatasetpy)
     - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added)
+    - [Results (TO BE ADDED)](#results-to-be-added-1)
+    - [Conclusions (TO BE ADDED)](#conclusions-to-be-added-1)
+  - [Class Balancing Strategies (INTRO TO BE REVISED AFTER THE EXPERIMENTS)](#class-balancing-strategies-intro-to-be-revised-after-the-experiments)
+    - [Focal Loss vs NLL Loss](#focal-loss-vs-nll-loss)
+      - [Hypothesis](#hypothesis-2)
+      - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
+    - [Class Weight Strategies](#class-weight-strategies)
+      - [Hypothesis](#hypothesis-3)
+      - [Implementation](#implementation)
+    - [Class Balanced Sampler](#class-balanced-sampler)
+      - [Hypothesis](#hypothesis-4)
+      - [Implementation (`src/utils/sampler.py`)](#implementation-srcutilssamplerpy)
+    - [Experiment Setup](#experiment-setup-1)
     - [Results (TO BE ADDED)](#results-to-be-added-2)
     - [Conclusions (TO BE ADDED)](#conclusions-to-be-added-2)
   - [Future Work](#future-work)
@@ -379,6 +379,41 @@ All other hyperparameters are held constant: NLL loss, ENS 0.99999 weights, samp
 
 ### Conclusions (TO BE ADDED)
 
+---
+
+## Data Augmentation
+
+### Hypothesis
+
+Aerial LiDAR scans are captured from above, so the same object (house, tree, car) can appear at any horizontal rotation depending on the flight path. Without augmentation, the model may learn orientation-specific patterns instead of actual shape.
+
+Random scaling simulates the variation in point density across tiles caused by differences in scan overlap.
+
+### Implementation (`src/models/dataset.py`)
+
+Augmentation is applied only at training time (disabled for validation and test splits). It is implemented in `src/utils/dataset.py` and controlled through `config/default.yaml`:
+
+```yaml
+dataset:
+  augmentation: true
+  rotation_deg_max: 180.0    # Uniform sample from [-180°, +180°]
+  scale_min: 0.9             # Uniform isotropic scale factor range
+  scale_max: 1.1
+```
+
+Two transforms are applied per sample:
+
+- **Random Z-axis rotation**: a rotation angle $\theta \sim \mathcal{U}(-180°, +180°)$ is sampled and applied to the XYZ coordinates only. Return number, and number-of-returns channels are unaffected.
+- **Random isotropic scaling**: a scale factor $s \sim \mathcal{U}(0.9, 1.1)$ is applied to XYZ. This preserves the relative geometry of the point cloud while simulating density variation.
+
+### Experiment Setup (TO BE ADDED)
+
+(Idea is simply to add data_augmentation to the best candidate from the previous experiments and show the improvement)
+
+### Results (TO BE ADDED)
+
+### Conclusions (TO BE ADDED)
+
 
 ---
 
@@ -551,41 +586,6 @@ All experiments use the same base configuration: PointNet, Adam optimizer, cosin
 | 8 | NLL | ENS 0.999999 | On (3×) | Sampler + NLL moderate weights |
 | 9 | Focal | ENS 0.99999 | On (3×) | Sampler + Focal near-uniform |
 | 10 | Focal | ENS 0.999999 | On (3×) | Sampler + Focal moderate weights |
-
-### Results (TO BE ADDED)
-
-### Conclusions (TO BE ADDED)
-
----
-
-## Data Augmentation
-
-### Hypothesis
-
-Aerial LiDAR scans are captured from above, so the same object (house, tree, car) can appear at any horizontal rotation depending on the flight path. Without augmentation, the model may learn orientation-specific patterns instead of actual shape.
-
-Random scaling simulates the variation in point density across tiles caused by differences in scan overlap.
-
-### Implementation (`src/models/dataset.py`)
-
-Augmentation is applied only at training time (disabled for validation and test splits). It is implemented in `src/utils/dataset.py` and controlled through `config/default.yaml`:
-
-```yaml
-dataset:
-  augmentation: true
-  rotation_deg_max: 180.0    # Uniform sample from [-180°, +180°]
-  scale_min: 0.9             # Uniform isotropic scale factor range
-  scale_max: 1.1
-```
-
-Two transforms are applied per sample:
-
-- **Random Z-axis rotation**: a rotation angle $\theta \sim \mathcal{U}(-180°, +180°)$ is sampled and applied to the XYZ coordinates only. Return number, and number-of-returns channels are unaffected.
-- **Random isotropic scaling**: a scale factor $s \sim \mathcal{U}(0.9, 1.1)$ is applied to XYZ. This preserves the relative geometry of the point cloud while simulating density variation.
-
-### Experiment Setup (TO BE ADDED)
-
-(Idea is simply to add data_augmentation to the best candidate from the previous experiments and show the improvement)
 
 ### Results (TO BE ADDED)
 
