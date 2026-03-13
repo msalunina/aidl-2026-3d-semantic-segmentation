@@ -82,7 +82,7 @@ def find_matching_bev_path_from_metadata(block_npz, block_path: Path, project_ro
       2) bev_key (+ suffix)
     """
     split = block_path.parent.name
-    bev_dir = project_root / "data" / "dales_blocks_BEV" / split
+    bev_dir = project_root / "data" / "dales_las_BEV_FULL" / split
 
     if not bev_dir.exists():
         raise FileNotFoundError(f"BEV directory not found: {bev_dir}")
@@ -123,7 +123,7 @@ def find_matching_bev_path_fallback(block_path: Path, project_root: Path, rng: r
     If multiple candidates are found for the same tile prefix, pick one randomly.
     """
     split = block_path.parent.name
-    bev_dir = project_root / "data" / "dales_blocks_BEV" / split
+    bev_dir = project_root / "data" / "dales_las_BEV_FULL" / split
     if not bev_dir.exists():
         raise FileNotFoundError(f"BEV directory not found: {bev_dir}")
 
