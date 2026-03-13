@@ -141,10 +141,10 @@ grouping options:
 |:---------:|:-------------:|:--------------:|:-------:|:-----------------------:|-------------------:|:------------------------------------:|
 |     1     |  baseline     |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz,return_number,number_of_returns]| olga
 |     2     | test dropout  |      "knn"     |    0.3  | [32,32,32,32] (exact K) |         -          | [xyz,return_number,number_of_returns]| edu
-|     3     | test K        |      "knn"     |    0.5  | [32,32,64,64] (exact K) |         -          | [xyz,return_number,number_of_returns]| corriendo
+|     3     | test K        |      "knn"     |    0.5  | [32,32,64,64] (exact K) |         -          | [xyz,return_number,number_of_returns]| olga
 |     4     | test grouping | "ball_closest" |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]| edu
-|     5     | test grouping | "ball_random"  |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]|
-|     6     | test channels |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz]                                | 
+|     5     | test grouping | "ball_random"  |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]| running
+|     6     | test channels |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz]                                | running
 
 
 
@@ -159,6 +159,17 @@ grouping options:
 | IoU Utility | 0.537 / 0.526 / 0.448 | 0.544 / **0.541** | 0.531 / 0.515 |
 | IoU Vegetation | 0.853 / 0.849 / 0.861 | 0.856 / 0.845 | 0.851 / **0.855** |
 | IoU Vehicle | 0.619 / 0.567 / 0.561 | 0.626 / 0.570 | 0.610 / **0.595** |
+
+| Metric | 1 - baseline<br>(train/val/test) | 2 - dropout<br>(train/val) | 3 - K<br>(train/val) | 4 - ball_closest<br>(train/val) |
+|------|------|------|------|------|
+| mIoU | 0.781 / 0.766 / 0.752 | 0.785 / 0.768 | 0.782 / 0.769 | 0.776 / **0.771** |
+| Accuracy | 0.953 / 0.951 / 0.956 | 0.954 / 0.950 | 0.954 / 0.952 | 0.952 / **0.952** |
+| Loss | 0.019 / 0.019 / 0.047 | 0.018 / 0.021 | 0.019 / 0.019 | 0.020 / **0.018** |
+| IoU Buildings | 0.950 / 0.947 / 0.933 | 0.950 / 0.942 | 0.950 / 0.948 | 0.943 / **0.948** |
+| IoU Ground | 0.947 / 0.942 / 0.956 | 0.947 / 0.940 | 0.947 / 0.943 | 0.946 / **0.943** |
+| IoU Utility | 0.537 / 0.526 / 0.448 | 0.544 / **0.541** | 0.538 / 0.541 | 0.531 / 0.515 |
+| IoU Vegetation | 0.853 / 0.849 / 0.861 | 0.856 / 0.845 | 0.854 / 0.851 | 0.851 / **0.855** |
+| IoU Vehicle | 0.619 / 0.567 / 0.561 | 0.626 / 0.570 | 0.622 / 0.560 | 0.610 / **0.595** |
 
 
 "knn" vs "ball_closest"/"ball_random" is not a fair comparison because:

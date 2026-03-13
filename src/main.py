@@ -144,9 +144,9 @@ if __name__ == '__main__':
         model = PointNetPlusPlusSegmentation(num_classes=config.num_classes,
                                              extra_channels=config.num_channels - 3,
                                              dropout=config.dropout_rate,
-                                             grouping="knn",    # choose "knn" or "ball-closest" or "ball-random"
-                                             K=[32,32,64,64],               
-                                             radius=[0.08, 0.1, 0.2, 0.4]).to(device)       
+                                             grouping=config.grouping,          
+                                             K=config.k_neighbors,                  
+                                             radius=config.radius).to(device)   
 
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
