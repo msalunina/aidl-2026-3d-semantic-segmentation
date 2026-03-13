@@ -402,7 +402,7 @@ def train_shapenet(loader_train, loader_eval, loader_test, config):
     print("\n")
     print(len(results_str)*'*')
     """
-    
+
     train_objects_count = torch.from_numpy(train_objects_count).to(device)
     val_objects_count = torch.from_numpy(val_objects_count).to(device)
     test_objects_count = torch.from_numpy(test_objects_count).to(device)
@@ -470,6 +470,7 @@ def train_shapenet(loader_train, loader_eval, loader_test, config):
     model = PointNetSegmentation(num_classes=50, # 50 shape classes 
                                 input_channels=3, 
                                 dropout=0.3,
+                                skip_conn=True,
                                 add_ohv=True).to(device) #0.3 dropout
 
 
@@ -636,4 +637,4 @@ if __name__ == '__main__':
 
     train_shapenet(loader_train, loader_eval, loader_test, config)
 
-    test_shapenet(loader_train, loader_eval, loader_test, config)
+    #test_shapenet(loader_train, loader_eval, loader_test, config)
