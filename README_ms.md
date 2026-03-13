@@ -43,7 +43,7 @@
     - [Implementation (`src/models/dataset.py`)](#implementation-srcmodelsdatasetpy)
     - [Experiment Setup (TO BE ADDED)](#experiment-setup-to-be-added)
     - [Results (TO BE ADDED)](#results-to-be-added-1)
-    - [Conclusions (TO BE REVISED)](#conclusions-to-be-revised)
+    - [Conclusions (TO BE ADDED)](#conclusions-to-be-added-1)
   - [Future Work](#future-work)
 
 ---
@@ -333,13 +333,13 @@ training:
 
 ## Class Balancing Strategies (INTRO TO BE REVISED AFTER THE EXPERIMENTS)
 
-The DALES class imbalance can be attacked at three levels: the loss function (how the gradient is shaped), the loss weights (how much each class contributes), and the sampler (which blocks the model trains on). These are not simply additive — they interact, and stacking all three does not guarantee the best result. In our experiments, the most effective strategy turned out to be the simplest: near-uniform weights with a class-balanced sampler, using standard NLL loss. The sections below document each strategy independently, the reasoning behind it, and what the results revealed about how they interact.
+DALES has severe class imbalance: Ground (53% of points), Vegetation (29%), and Buildings (17%) vastly outnumber Vehicle (<1%) and Utility (<1%). This class imbalance can be attacked at three levels: the loss function (how the gradient is shaped), the loss weights (how much each class contributes), and the sampler (which blocks the model trains on). These are not simply additive - they interact, and stacking all three does not guarantee the best result. In our experiments, the most effective strategy turned out to be the simplest: near-uniform weights with a class-balanced sampler, using standard NLL loss. The sections below document each strategy independently, the reasoning behind it, and what the results revealed about how they interact.
 
 ### Focal Loss vs NLL Loss
 
 #### Hypothesis
 
-DALES has severe class imbalance: Ground (53% of points), Vegetation (29%), and Buildings (17%) vastly outnumber Vehicle (<1%) and Utility (<1%). Standard NLL loss treats every point equally, so the gradient is dominated by abundant, easy-to-classify Ground and Vegetation points. Focal Loss addresses this by applying a modulating factor that dynamically down-weights points the model already classifies confidently, focusing the gradient on hard, ambiguous examples, which tend to be the rare classes.
+Standard NLL loss treats every point equally, so the gradient is dominated by abundant, easy-to-classify Ground and Vegetation points. Focal Loss addresses this by applying a scaling factor that dynamically down-weights points the model already classifies confidently, focusing the gradient on hard, ambiguous examples, which tend to be the rare classes.
 
 The expectation is that Focal Loss should improve rare-class IoU compared to NLL under the same weight strategy, at some possible cost to overall IoU on the dominant classes.
 
@@ -396,9 +396,9 @@ Both loss functions accept a per-class weight vector $\alpha_t$ that scales each
 
 3. **Inverse Frequency Moderate (`INV_FREQ_MODERATE`)**: A capped version of inverse frequency where weights are clipped, preventing extremely small or large weights.
 
-4. **Effective Number of Samples (`ENS_α`)**: Based on [Cui et al., 2019 — Class-Balanced Loss Based on Effective Number of Samples](https://arxiv.org/abs/1901.05555). Weight $= (1 - \alpha) / (1 - \alpha^{f_c})$. Parameter $\alpha$ controls how aggressively rare samples are up-weighted.
+4. **Effective Number of Samples (`ENS_β`)**: Based on [Cui et al., 2019 — Class-Balanced Loss Based on Effective Number of Samples](https://arxiv.org/abs/1901.05555). Weight $= (1 - \beta) / (1 - \beta^{f_c})$. Parameter $\beta$ controls how aggressively rare samples are up-weighted.
 
-**Selected for experiments:** We carried forward only the ENS family with three $\alpha$ values: $\alpha \in \{0.99999,\ 0.999999,\ 0.9999999\}$. By varying a single parameter, ENS spans the full correction spectrum — from near-uniform (0.99999) through moderate (0.999999) to aggressive (0.9999999) — covering the same range as the heuristic strategies above without mixing different weighting philosophies across runs.
+**Selected for experiments:** We carried forward only the ENS family with three $\beta$ values: $\beta \in \{0.99999,\ 0.999999,\ 0.9999999\}$. By varying a single parameter, ENS spans the full correction spectrum — from near-uniform (0.99999) through moderate (0.999999) to aggressive (0.9999999) — covering the same range as the heuristic strategies above without mixing different weighting philosophies across runs.
 
 | Strategy | Ground | Vegetation | Buildings | Vehicle | Utility |
 |---|:---:|:---:|:---:|:---:|:---:|
@@ -456,7 +456,7 @@ Utility remains the hardest class across all strategies (best: 0.29). -->
 
 #### Hypothesis
 
-Loss weights and Focal Loss both operate at the point level — they reweight individual point contributions within whatever batch the model happens to see. But in DALES, rare classes are spatially concentrated: most blocks contain only Ground, Vegetation, and Buildings, while Vehicle and Utility points appear in a small subset of blocks. Under standard uniform shuffling, the model may go many consecutive batches without encountering a single rare-class point, regardless of how the loss is configured.
+Loss weights and Focal Loss both operate at the point level, they reweight individual point contributions within whatever batch the model happens to see. But in DALES, rare classes are spatially concentrated: most blocks contain only Ground, Vegetation, and Buildings, while Vehicle and Utility points appear in a small subset of blocks. Under standard uniform shuffling, the model may go many consecutive batches without encountering a single rare-class point, regardless of how the loss is configured.
 
 The Class Balanced Sampler addresses this at the data-loading level by oversampling blocks that contain at least one rare-class point. This ensures that every batch is likely to include rare-class geometry, providing a consistent gradient signal for those classes throughout training. Unlike loss-level corrections, the sampler changes what the model sees rather than how it scores what it sees.
 
@@ -475,7 +475,7 @@ training:
   use_sampler: true   # Enable class-balanced sampling
 ```
 
-When use_sampler: true, the DataLoader uses the sampler instead of random shuffling (shuffle and sampler are mutually exclusive in PyTorch). The sampler is applied only to the training set; validation always uses sequential loading.
+When `use_sampler: true`, the DataLoader uses the sampler instead of random shuffling (shuffle and sampler are mutually exclusive in PyTorch). The sampler is applied only to the training set; validation always uses sequential loading.
 
 ### Experiment Setup
 
@@ -487,7 +487,7 @@ All experiments use the same base configuration: PointNet, Adam optimizer, cosin
 |---|---|---|---|---|
 | 1 | NLL | ENS 0.99999 | Off | NLL with near-uniform weights |
 | 2 | NLL | ENS 0.999999 | Off | NLL with moderate correction |
-| 3 | NLL | ENS 0.9999999 | Off | NLL with moderate correction |
+| 3 | NLL | ENS 0.9999999 | Off | NLL with strong correction |
 | 4 | Focal | ENS 0.99999 | Off | Focal with near-uniform weights |
 | 5 | Focal | ENS 0.999999 | Off | Focal with moderate correction |
 | 6 | Focal | ENS 0.9999999 | Off | Focal with strong correction |
@@ -534,11 +534,11 @@ Two transforms are applied per sample:
 
 ### Experiment Setup (TO BE ADDED)
 
+(Idea is simply to add data_augmentation to the best candidate from the previous experiments and show the improvement)
+
 ### Results (TO BE ADDED)
 
-### Conclusions (TO BE REVISED)
-
-Z-rotation is the main augmentation for this dataset, it's cheap and directly matches the rotational symmetry of overhead scanning. It was kept on for all experiments.
+### Conclusions (TO BE ADDED)
 
 ---
 
