@@ -17,7 +17,14 @@ wandb_pointcloud_table = wandb.Table(
 # W&B table for point-cloud ↔ BEV image pairing
 # -----------------------------
 wandb_pc_image_table = wandb.Table(
-    columns=["epoch", "PointCloud", "BEV_Image"]
+    columns=[
+        "epoch",
+        "PointCloud",
+        "BEV image density",
+        "BEV image z_max",
+        "BEV image z_mean",
+        "BEV image z_range",
+    ]
 )
 
 
@@ -147,26 +154,41 @@ def _normalize_image_for_wandb(img_np: np.ndarray) -> np.ndarray:
     return img_norm
 
 
-def _append_pointcloud_image_pair_to_table(points_BNC, image, epoch: int):
+def _append_pointcloud_image_pair_to_table(points_BNC, labels, image, epoch: int):
     global wandb_pc_image_table
 
     points_xyz = points_BNC[0, :, :3].detach().cpu().numpy()
+    gt = labels[0].detach().cpu().numpy()
 
-    # simple gray point cloud to compare geometry against the BEV image
-    gray = np.tile(np.array([[180, 180, 180]], dtype=np.float32), (points_xyz.shape[0], 1))
-    pc_cloud = np.concatenate([points_xyz.astype(np.float32), gray], axis=1)
+    valid_mask = gt != -1
+    points_xyz = points_xyz[valid_mask]
+    gt = gt[valid_mask]
+
+    # color point cloud using ground-truth classes
+    pc_cloud = _make_colored_point_cloud(points_xyz, gt)
 
     if torch.is_tensor(image):
-        img_np = image[0,3,:,:].detach().cpu().numpy() # get the 4th channel z_range
+        img_np = image[0].detach().cpu().numpy()   # expected [C, H, W]
     else:
         img_np = image[0]
 
-    img_np = _normalize_image_for_wandb(img_np)
-    
+    if img_np.ndim != 3 or img_np.shape[0] < 4:
+        raise ValueError(
+            f"Expected BEV image with shape [C,H,W] and at least 4 channels, got {img_np.shape}"
+        )
+
+    density = _normalize_image_for_wandb(img_np[0])
+    z_max = _normalize_image_for_wandb(img_np[1])
+    z_mean = _normalize_image_for_wandb(img_np[2])
+    z_range = _normalize_image_for_wandb(img_np[3])
+
     wandb_pc_image_table.add_data(
         epoch + 1,
         wandb.Object3D(pc_cloud),
-        wandb.Image(img_np, caption=f"Epoch {epoch+1} BEV z_range")
+        wandb.Image(density, caption=f"Epoch {epoch+1} density"),
+        wandb.Image(z_max, caption=f"Epoch {epoch+1} z_max"),
+        wandb.Image(z_mean, caption=f"Epoch {epoch+1} z_mean"),
+        wandb.Image(z_range, caption=f"Epoch {epoch+1} z_range"),
     )
 
 
@@ -327,7 +349,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             if batch_idx == 0 and epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}:
                 _append_pointcloud_predictions_to_table(points_BNC, labels, predictions, log_probs_BCN, epoch)
                 if(use_image):
-                    _append_pointcloud_image_pair_to_table(points_BNC, image, epoch)
+                    _append_pointcloud_image_pair_to_table(points_BNC, labels, image, epoch)
             # ------------------------------------------
 
         assert nTotal > 0, "No valid points in epoch (all labels are -1)."
@@ -364,7 +386,14 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
 
     # Reset point-cloud ↔ BEV image table for each run
     wandb_pc_image_table = wandb.Table(
-        columns=["epoch", "PointCloud", "BEV_Image"]
+        columns=[
+            "epoch",
+            "PointCloud",
+            "BEV image density",
+            "BEV image z_max",
+            "BEV image z_mean",
+            "BEV image z_range",
+        ]
     )
 
     metrics = {
