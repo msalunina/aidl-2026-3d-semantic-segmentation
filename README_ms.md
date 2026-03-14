@@ -373,7 +373,7 @@ dataset:
 | 1 | XYZ | 3 | Geometry-only baseline |
 | 2 | XYZ + return_number + number_of_returns | 5 | Geometry + return metadata |
 
-All other hyperparameters are held constant: NLL loss, ENS 0.99999 weights, sampler off, no augmentation, 50 epochs, batch size 32, learning rate 0.01 with cosine annealing.
+All other hyperparameters are held constant: NLL loss, uniform weights, sampler off, no augmentation, 50 epochs, batch size 32, learning rate 0.01 with cosine annealing.
 
 ### Results (TO BE ADDED)
 
