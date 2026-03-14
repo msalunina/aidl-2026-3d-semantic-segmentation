@@ -137,40 +137,52 @@ grouping options:
 
 ## EXPERIMENTS
 
-| PointNet++|      test     |    grouping    | dropout |      K  neighbours      |       radius       |               channels               |
+| PointNet++|      test     |    grouping    | dropout |      K  neighbours      |       radius       |               channels               | 
 |:---------:|:-------------:|:--------------:|:-------:|:-----------------------:|-------------------:|:------------------------------------:|
-|     1     |  baseline     |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz,return_number,number_of_returns]| olga
-|     2     | test dropout  |      "knn"     |    0.3  | [32,32,32,32] (exact K) |         -          | [xyz,return_number,number_of_returns]| edu
-|     3     | test K        |      "knn"     |    0.5  | [32,32,64,64] (exact K) |         -          | [xyz,return_number,number_of_returns]| olga
-|     4     | test grouping | "ball_closest" |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]| edu
-|     5     | test grouping | "ball_random"  |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]| running
-|     6     | test channels |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz]                                | running
+|     1     |  baseline     |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz,return_number,number_of_returns]|
+|     2     | test dropout  |      "knn"     |    0.3  | [32,32,32,32] (exact K) |         -          | [xyz,return_number,number_of_returns]|
+|     3     | test K        |      "knn"     |    0.5  | [32,32,64,64] (exact K) |         -          | [xyz,return_number,number_of_returns]| 
+|     4     | test grouping | "ball_closest" |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]| 
+|     5     | test grouping | "ball_random"  |    0.5  | [32,32,32,32] (max K)   | [0.08,0.1,0.2,0.4] | [xyz,return_number,number_of_returns]| 
+|     6     | test channels |      "knn"     |    0.5  | [32,32,32,32] (exact K) |         -          | [xyz]                                | 
+
+- old: focal loss + [0.2553, 0.3465, 0.4482, 1.8602, 2.0897]
+- new: nll loss + [0.9894, 0.9894, 0.9894, 1.0049, 1.0270]
+
+
+
+**Table 1. PointNet++ experiments: Focal loss + class weighting + class-aware sampler.<br>
+Values are reported as train / validation. Bold values indicate the best validation score.<br>
+weights: [0.2553, 0.3465, 0.4482, 1.8602, 2.0897]**
+
+| Metric | 1 - baseline<br>olga | 1 - baseline<br>edu | 2 - dropout<br>edu | 3 - K neighbors<br>olga | 4 - ball_closest<br>edu | 5 - ball_random<br>olga | 6 - xyz only<br>edu |
+|------|------|------|------|------|------|------|------|
+| mIoU | 0.781 / 0.766 | 0.783 / 0.768 | 0.785 / 0.768 | 0.782 / 0.769 | 0.776 / **0.771** | runnnig | 0.767 / 0.754 |
+| Accuracy | 0.953 / 0.951 | 0.954 / 0.951 | 0.954 / 0.950 | 0.954 / **0.952** | 0.952 / **0.952** | - | 0.949 / 0.948 |
+| Loss | 0.019 / 0.019 | 0.019 / 0.019 | 0.018 / 0.021 | 0.019 / 0.019 | 0.020 / **0.018** | - | 0.021 / 0.020 |
+| IoU Buildings | 0.950 / 0.947 | 0.950 / 0.947 | 0.950 / 0.942 | 0.950 / **0.948** | 0.943 / **0.948** | - | 0.945 / 0.947 |
+| IoU Ground | 0.947 / 0.942 | 0.947 / 0.942 | 0.947 / 0.940 | 0.947 / **0.943** | 0.946 / **0.943** | - | 0.941 / 0.938 |
+| IoU Utility | 0.537 / 0.526 | 0.543 / **0.551** | 0.544 / 0.541 | 0.538 / 0.541 | 0.531 / 0.515 | - | 0.511 / 0.501 |
+| IoU Vegetation | 0.853 / 0.849 | 0.854 / 0.849 | 0.856 / 0.845 | 0.854 / 0.851 | 0.851 / **0.855** | - | 0.844 / 0.843 |
+| IoU Vehicle | 0.619 / 0.567 | 0.621 / 0.551 | 0.626 / 0.570 | 0.622 / 0.560 | 0.610 / **0.595** | - | 0.591 / 0.543 |
 
 
 
 
-| Metric | 1 - baseline<br>(train/val/test) | 2 - dropout<br>(train/val) | 4 - ball_closest<br>(train/val) |
-|------|------|------|------|
-| mIoU | 0.781 / 0.766 / 0.752 | 0.785 / 0.768 | 0.776 / **0.771** |
-| Accuracy | 0.953 / 0.951 / 0.956 | 0.954 / 0.950 | 0.952 / **0.952** |
-| Loss | 0.019 / 0.019 / 0.047 | 0.018 / 0.021 | 0.020 / **0.018** |
-| IoU Buildings | 0.950 / 0.947 / 0.933 | 0.950 / 0.942 | 0.943 / **0.948** |
-| IoU Ground | 0.947 / 0.942 / 0.956 | 0.947 / 0.940 | 0.946 / **0.943** |
-| IoU Utility | 0.537 / 0.526 / 0.448 | 0.544 / **0.541** | 0.531 / 0.515 |
-| IoU Vegetation | 0.853 / 0.849 / 0.861 | 0.856 / 0.845 | 0.851 / **0.855** |
-| IoU Vehicle | 0.619 / 0.567 / 0.561 | 0.626 / 0.570 | 0.610 / **0.595** |
+**Table 2. PointNet++ experiments: NLL loss + near-uniform class weighting + class-aware sampler.<br>
+Values are reported as train / validation. Bold values indicate the best validation score.<br>
+weights: [0.9894, 0.9894, 0.9894, 1.0049, 1.0270]**
 
-| Metric | 1 - baseline<br>(train/val/test) | 2 - dropout<br>(train/val) | 3 - K<br>(train/val) | 4 - ball_closest<br>(train/val) |
-|------|------|------|------|------|
-| mIoU | 0.781 / 0.766 / 0.752 | 0.785 / 0.768 | 0.782 / 0.769 | 0.776 / **0.771** |
-| Accuracy | 0.953 / 0.951 / 0.956 | 0.954 / 0.950 | 0.954 / 0.952 | 0.952 / **0.952** |
-| Loss | 0.019 / 0.019 / 0.047 | 0.018 / 0.021 | 0.019 / 0.019 | 0.020 / **0.018** |
-| IoU Buildings | 0.950 / 0.947 / 0.933 | 0.950 / 0.942 | 0.950 / 0.948 | 0.943 / **0.948** |
-| IoU Ground | 0.947 / 0.942 / 0.956 | 0.947 / 0.940 | 0.947 / 0.943 | 0.946 / **0.943** |
-| IoU Utility | 0.537 / 0.526 / 0.448 | 0.544 / **0.541** | 0.538 / 0.541 | 0.531 / 0.515 |
-| IoU Vegetation | 0.853 / 0.849 / 0.861 | 0.856 / 0.845 | 0.854 / 0.851 | 0.851 / **0.855** |
-| IoU Vehicle | 0.619 / 0.567 / 0.561 | 0.626 / 0.570 | 0.622 / 0.560 | 0.610 / **0.595** |
-
+| Metric | 1 - baseline| 2 - dropout| 3 - K neighbors| 4 - ball_closest| 5 - ball_random| 6 - xyz only |
+|------|------|------|------|------|------|------|
+| mIoU | — | — | — | — | **0.805 / 0.808** | — |
+| Accuracy | — | — | — | — | **0.957 / 0.957** | — |
+| Loss | — | — | — | — | 0.121 / 0.116 | — |
+| IoU Buildings | — | — | — | — | **0.947 / 0.951** | — |
+| IoU Ground | — | — | — | — | **0.949 / 0.945** | — |
+| IoU Utility | — | — | — | — | **0.597 / 0.605** | — |
+| IoU Vegetation | — | — | — | — | **0.864 / 0.867** | — |
+| IoU Vehicle | — | — | — | — | **0.671 / 0.670** | — |
 
 "knn" vs "ball_closest"/"ball_random" is not a fair comparison because:
 With kNN:
