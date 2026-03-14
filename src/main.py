@@ -162,8 +162,8 @@ if __name__ == '__main__':
     # Focal Loss down-weights easy examples and focuses on hard examples
     loss_weights = torch.tensor(config.loss_weights, dtype=torch.float32).to(device)
     if config.loss_function == "focal_loss":
-        criterion = FocalLoss(alpha=loss_weights, gamma=2.0, ignore_index=config.ignore_label)
-        print("Using Focal Loss with gamma=2.0 and class weights")         
+        criterion = FocalLoss(alpha=loss_weights, gamma=1.0, ignore_index=config.ignore_label)
+        print("Using Focal Loss with gamma=1.0 and class weights")         
     elif config.loss_function == "nll_loss":
         criterion = torch.nn.NLLLoss(weight=loss_weights, ignore_index=config.ignore_label)
         print("Using NLL Loss with class weights")
