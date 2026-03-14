@@ -301,7 +301,7 @@ class IPointNetSegmentation(nn.Module):
         )
 
         #image feature extractor
-        self.img_encoder = ImageEncoder(channels=(1,64,128))
+        self.img_encoder = ImageEncoder(channels=(4,64,128))
 
         # Segmentation head: 
         # MLP(512, 256, 128)

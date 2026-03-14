@@ -46,6 +46,10 @@ if __name__ == '__main__':
     config = config_parser.load()
     config_parser.display()
 
+    use_image = False
+    if config.model_name == "ipointnet":
+        use_image = True
+
     # Initialize W&B
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     run_name = f"{config.test_name}_{timestamp}"
@@ -73,6 +77,7 @@ if __name__ == '__main__':
         data_dir=f"{config.model_data_path}/train",
         images_dir=f"{config.image_data_path}/train",
         split='train',
+        use_images=use_image,
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
@@ -88,6 +93,7 @@ if __name__ == '__main__':
         data_dir=f"{config.model_data_path}/train",
         images_dir=f"{config.image_data_path}/train",
         split='val',
+        use_images=use_image,
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,

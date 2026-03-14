@@ -7,6 +7,7 @@ import torch
 from pathlib import Path
 from torch.utils.data import Dataset
 from typing import Literal
+import os
 
 
 class DALESDataset(Dataset):
@@ -40,7 +41,8 @@ class DALESDataset(Dataset):
     def __init__(
         self, 
         data_dir: str,
-        images_dir: str,
+        images_dir: str = "",
+        use_images: bool = False,
         split: Literal['train', 'val', 'test'] = 'train',
         use_features: list = None,
         num_points: int = None,
@@ -55,6 +57,7 @@ class DALESDataset(Dataset):
         seed: int = 42
     ):
         self.data_dir = Path(data_dir)
+        self.images_dir = Path(images_dir)
         self.split = split
         self.num_points = num_points
         self.normalize = normalize
@@ -63,6 +66,7 @@ class DALESDataset(Dataset):
         self.rotation_deg_max = rotation_deg_max
         self.scale_min = scale_min
         self.scale_max = scale_max
+        self.use_images = use_images
 
         if self.scale_min <= 0:
             raise ValueError(f"scale_min must be > 0, got {self.scale_min}")
@@ -70,7 +74,6 @@ class DALESDataset(Dataset):
             raise ValueError(f"scale_max ({self.scale_max}) must be >= scale_min ({self.scale_min})")
 
         #add the path for the images
-        self.images_dir = Path(images_dir)
         
         # Feature selection configuration
         if use_features is None:
@@ -82,7 +85,6 @@ class DALESDataset(Dataset):
         
         # Load all block file paths
         self.block_files = sorted(self.data_dir.glob('**/*.npz'))
-        self.image_files = sorted(self.images_dir.glob('**/*.npz'))
         
         if len(self.block_files) == 0:
             raise ValueError(f"No .npz files found in {self.data_dir}")
@@ -111,7 +113,6 @@ class DALESDataset(Dataset):
                 raise ValueError(f"Invalid split: {split}. Must be 'train', 'val', or 'test'")
             
             self.block_files = [self.block_files[i] for i in split_indices]
-            self.image_files = [self.image_files[i] for i in split_indices]
             
             print(f"Loaded {len(self.block_files)} blocks for {split} split")
     
@@ -150,15 +151,23 @@ class DALESDataset(Dataset):
                 f"(rotation_deg_max={self.rotation_deg_max}, scale=[{self.scale_min}, {self.scale_max}])"
             )
     
-    def _load_image(self, file_path: Path):
+    def _load_image(self, file_path):
         """
         Load a single image from a .npz file 
         Returns
             image: numpy array 256,256 with range z values
         """
         data = np.load(file_path)
-        zrange = data['z_range'].astype(np.float32)
-        return zrange
+        c1 = data['density'].astype(np.float32)
+        c1 = (c1 - c1.min()) / (c1.max() - c1.min())
+        c2 = data['z_max'].astype(np.float32)
+        c2 = (c2 - c2.min()) / (c2.max() - c2.min())
+        c3 = data['z_mean'].astype(np.float32)
+        c3 = (c3 - c3.min()) / (c3.max() - c3.min())
+        c4 = data['z_range'].astype(np.float32)
+        c4 = (c4 - c4.min()) / (c4.max() - c4.min())
+
+        return np.stack([c1, c2, c3, c4], axis=-1) 
 
     def _load_block(self, file_path: Path):
         """
@@ -174,8 +183,9 @@ class DALESDataset(Dataset):
         
         # Select only the configured channels
         points = points[:, self.channel_indices]        # Shape: (N, num_selected_channels)
+        image_name = data['bev_filename'].item()
         
-        return points, labels
+        return points, labels, image_name
     
     def _downsample_points(self, points: np.ndarray, labels: np.ndarray):
         """
@@ -266,8 +276,9 @@ class DALESDataset(Dataset):
             labels: Tensor of shape (num_points,) or (N,) if num_points is None
         """
         # Load block
-        points, labels = self._load_block(self.block_files[idx])
-        image = self._load_image(self.image_files[idx])
+        points, labels, image_name = self._load_block(self.block_files[idx])
+        if self.use_images:
+            image = self._load_image(Path(os.path.join(self.images_dir, image_name)))
         # Downsample if needed
         if self.num_points is not None:
             points, labels = self._downsample_points(points, labels)
@@ -283,5 +294,8 @@ class DALESDataset(Dataset):
         # Convert to torch tensors
         points = torch.from_numpy(points).float()
         labels = torch.from_numpy(labels).long()
-        
-        return points, labels, image
+
+        if self.use_images:
+            return points, labels, image
+        else:
+            return points, labels

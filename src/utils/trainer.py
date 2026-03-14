@@ -157,12 +157,12 @@ def _append_pointcloud_image_pair_to_table(points_BNC, image, epoch: int):
     pc_cloud = np.concatenate([points_xyz.astype(np.float32), gray], axis=1)
 
     if torch.is_tensor(image):
-        img_np = image[0].detach().cpu().numpy()
+        img_np = image[0,3,:,:].detach().cpu().numpy() # get the 4th channel z_range
     else:
         img_np = image[0]
 
     img_np = _normalize_image_for_wandb(img_np)
-
+    
     wandb_pc_image_table.add_data(
         epoch + 1,
         wandb.Object3D(pc_cloud),
@@ -186,7 +186,11 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
 
         # Pointnet needs: [B, N, C]
-        points_BNC, labels, image = batch                           # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+        if(use_image):
+            points_BNC, labels, image = batch                           # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+        else:
+            points_BNC, labels = batch                           # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+
         points_BNC = points_BNC.to(device)
         labels = labels.to(device)
 
@@ -197,7 +201,7 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         with torch.amp.autocast(device.type):
             # Forward points and image through the network
             if use_image:
-                image = image.unsqueeze(dim=1)  # add channel dim tensor is [B, C, H, W]
+                image = image.permute(0,3,1,2)  #change [B, H, W, C] -> [B. C. H. W]
                 image = image.to(device)
                 output = network(points_BNC, image)
             else:
@@ -273,7 +277,11 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         for batch_idx, batch in enumerate(tqdm(data_loader, desc="val epoch", position=1, leave=False)):
 
             # Pointnet needs: [B, N, C]
-            points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+            if(use_image):
+                points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+            else:
+                points_BNC, labels = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+            
             points_BNC = points_BNC.to(device)
             labels = labels.to(device)
 
@@ -281,7 +289,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             with torch.amp.autocast(device.type):
                 # Forward points through the network
                 if use_image:
-                    image = image.unsqueeze(dim=1)  # add channel dim tensor is [B, C, H, W]
+                    image = image.permute(0,3,1,2) #change [B, H, W, C] -> [B. C. H. W]
                     image = image.to(device)
                     output = network(points_BNC, image)
                 else:
@@ -318,7 +326,8 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             # Log visualization only for first, middle, and last epoch, using first validation batch only
             if batch_idx == 0 and epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}:
                 _append_pointcloud_predictions_to_table(points_BNC, labels, predictions, log_probs_BCN, epoch)
-                _append_pointcloud_image_pair_to_table(points_BNC, image, epoch)
+                if(use_image):
+                    _append_pointcloud_image_pair_to_table(points_BNC, image, epoch)
             # ------------------------------------------
 
         assert nTotal > 0, "No valid points in epoch (all labels are -1)."
