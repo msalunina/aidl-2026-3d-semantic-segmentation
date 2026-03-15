@@ -100,13 +100,35 @@ def _entropy_to_rgb(entropy_np: np.ndarray) -> np.ndarray:
     return np.stack([r, g, b], axis=1)
 
 
-def _append_pointcloud_predictions_to_table(points_BNC, labels, predictions, log_probs_BCN, epoch: int):
+def _select_richest_sample_idx(labels: torch.Tensor, ignore_label: int = -1) -> int:
+    """
+    Select the sample in the batch with the richest set of valid classes.
+    Used only for W&B visualization.
+    """
+    labels_np = labels.detach().cpu().numpy()
+
+    best_idx = 0
+    best_num_classes = -1
+
+    for b in range(labels_np.shape[0]):
+        lbl = labels_np[b]
+        valid_lbl = lbl[lbl != ignore_label]
+        present_classes = np.unique(valid_lbl)
+
+        if len(present_classes) > best_num_classes:
+            best_num_classes = len(present_classes)
+            best_idx = b
+
+    return best_idx
+
+
+def _append_pointcloud_predictions_to_table(points_BNC, labels, predictions, log_probs_BCN, epoch: int, sample_idx: int = 0):
     global wandb_pointcloud_table
 
-    points_xyz = points_BNC[0, :, :3].detach().cpu().numpy()
-    gt = labels[0].detach().cpu().numpy()
-    pred = predictions[0].detach().cpu().numpy()
-    entropy = _compute_entropy(log_probs_BCN)[0].detach().cpu().numpy()
+    points_xyz = points_BNC[sample_idx, :, :3].detach().cpu().numpy()
+    gt = labels[sample_idx].detach().cpu().numpy()
+    pred = predictions[sample_idx].detach().cpu().numpy()
+    entropy = _compute_entropy(log_probs_BCN)[sample_idx].detach().cpu().numpy()
 
     valid_mask = gt != -1
     points_xyz = points_xyz[valid_mask]
@@ -154,11 +176,11 @@ def _normalize_image_for_wandb(img_np: np.ndarray) -> np.ndarray:
     return img_norm
 
 
-def _append_pointcloud_image_pair_to_table(points_BNC, labels, image, epoch: int):
+def _append_pointcloud_image_pair_to_table(points_BNC, labels, image, epoch: int, sample_idx: int = 0):
     global wandb_pc_image_table
 
-    points_xyz = points_BNC[0, :, :3].detach().cpu().numpy()
-    gt = labels[0].detach().cpu().numpy()
+    points_xyz = points_BNC[sample_idx, :, :3].detach().cpu().numpy()
+    gt = labels[sample_idx].detach().cpu().numpy()
 
     valid_mask = gt != -1
     points_xyz = points_xyz[valid_mask]
@@ -168,9 +190,9 @@ def _append_pointcloud_image_pair_to_table(points_BNC, labels, image, epoch: int
     pc_cloud = _make_colored_point_cloud(points_xyz, gt)
 
     if torch.is_tensor(image):
-        img_np = image[0].detach().cpu().numpy()   # expected [C, H, W]
+        img_np = image[sample_idx].detach().cpu().numpy()   # expected [C, H, W]
     else:
-        img_np = image[0]
+        img_np = image[sample_idx]
 
     if img_np.ndim != 3 or img_np.shape[0] < 4:
         raise ValueError(
@@ -347,9 +369,15 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
 
             # Log visualization only for first, middle, and last epoch, using first validation batch only
             if batch_idx == 0 and epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}:
-                _append_pointcloud_predictions_to_table(points_BNC, labels, predictions, log_probs_BCN, epoch)
+                sample_idx = _select_richest_sample_idx(labels, ignore_label=config.ignore_label)
+
+                _append_pointcloud_predictions_to_table(
+                    points_BNC, labels, predictions, log_probs_BCN, epoch, sample_idx=sample_idx
+                )
                 if(use_image):
-                    _append_pointcloud_image_pair_to_table(points_BNC, labels, image, epoch)
+                    _append_pointcloud_image_pair_to_table(
+                        points_BNC, labels, image, epoch, sample_idx=sample_idx
+                    )
             # ------------------------------------------
 
         assert nTotal > 0, "No valid points in epoch (all labels are -1)."
