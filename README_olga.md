@@ -148,35 +148,64 @@ that can be selected within the ball. The effective size of the neighborhood is 
 These values were selected based on preliminary exploratory tests.
 
 
+### Focal loss + class weighting 
 
-Table 2. Comparison of PointNet++ configurations: Focal loss + class weighting + class-aware sampler (weights: [0.2553, 0.3465, 0.4482, 1.8602, 2.0897])<br>
-Values are reported as train / validation. Bold values indicate the best validation score.
+| Metric | 1. baseline<br>olga | 1. baseline<br>edu | 1. baseline<br>dygiro |
+|------|------|------|------|
+| **Overall metrics** |||||||
+| mIoU | 0.781 / 0.766 | 0.783 / 0.768 | 0.781 / **0.771** |
+| Loss | 0.019 / **0.019** | 0.019 / **0.019** | 0.019 / 0.020 |
+| Accuracy | 0.953 / 0.951 | 0.954 / 0.951 | 0.953 / 0.951 |
+| **Class IoU** |||||||
+| Ground | 0.947 / **0.942** | 0.947 / **0.942** | 0.947 / **0.942** |
+| Vegetation | 0.853 / 0.849 | 0.854 / 0.849 | 0.854 / **0.851** |
+| Buildings | 0.950 / **0.947** | 0.950 / **0.947** | 0.950 / 0.944 |
+| Vehicle | 0.619 / 0.567 | 0.621 / 0.551 | 0.615 / **0.569** |
+| Utility | 0.537 / 0.526 | 0.543 / **0.551** | 0.538 / 0.547 |
 
-| Metric | 1 - baseline<br>olga | 1 - baseline<br>edu | 2 - dropout<br>edu | 3 - K-neighbors<br>olga | 4 - ball_closest<br>edu | 5 - ball_random<br>olga | 6 - xyz only<br>edu |
-|------|------|------|------|------|------|------|------|
-| mIoU | 0.781 / 0.766 | 0.783 / 0.768 | 0.785 / 0.768 | 0.782 / 0.769 | 0.776 / **0.771** | runnnig | 0.767 / 0.754 |
-| Accuracy | 0.953 / 0.951 | 0.954 / 0.951 | 0.954 / 0.950 | 0.954 / **0.952** | 0.952 / **0.952** | - | 0.949 / 0.948 |
-| Loss | 0.019 / 0.019 | 0.019 / 0.019 | 0.018 / 0.021 | 0.019 / 0.019 | 0.020 / **0.018** | - | 0.021 / 0.020 |
-| IoU Buildings | 0.950 / 0.947 | 0.950 / 0.947 | 0.950 / 0.942 | 0.950 / **0.948** | 0.943 / **0.948** | - | 0.945 / 0.947 |
-| IoU Ground | 0.947 / 0.942 | 0.947 / 0.942 | 0.947 / 0.940 | 0.947 / **0.943** | 0.946 / **0.943** | - | 0.941 / 0.938 |
-| IoU Utility | 0.537 / 0.526 | 0.543 / **0.551** | 0.544 / 0.541 | 0.538 / 0.541 | 0.531 / 0.515 | - | 0.511 / 0.501 |
-| IoU Vegetation | 0.853 / 0.849 | 0.854 / 0.849 | 0.856 / 0.845 | 0.854 / 0.851 | 0.851 / **0.855** | - | 0.844 / 0.843 |
-| IoU Vehicle | 0.619 / 0.567 | 0.621 / 0.551 | 0.626 / 0.570 | 0.622 / 0.560 | 0.610 / **0.595** | - | 0.591 / 0.543 |
+**Table 1**. Comparing baseline on different machines. Focal loss + class weighting [0.2553, 0.3465, 0.4482, 1.8602, 2.0897].<br>
+All experiments use class-aware sampler. Values are reported as train / validation. Bold values indicate the best validation score.
 
 
-Table 3. Comparison of PointNet++ configurations: NLL loss + near-uniform class weighting + class-aware sampler (weights: [0.9894, 0.9894, 0.9894, 1.0049, 1.0270])<br>
-Values are reported as train / validation. Bold values indicate the best validation score.
-
-| Metric | 1 - baseline| 2 - dropout| 3 - K-neighbors| 4 - ball_closest| 5 - ball_random| 6 - xyz only |
+| Metric | 1 - baseline<br>olga | 2 - dropout<br>edu | 3 - K-neighbors<br>olga | 4 - ball_closest<br>edu | 5 - ball_random<br>olga | 6 - xyz only<br>edu |
 |------|------|------|------|------|------|------|
-| mIoU | — | — | — | — | **0.805 / 0.808** | — |
-| Accuracy | — | — | — | — | **0.957 / 0.957** | — |
-| Loss | — | — | — | — | 0.121 / 0.116 | — |
-| IoU Buildings | — | — | — | — | **0.947 / 0.951** | — |
-| IoU Ground | — | — | — | — | **0.949 / 0.945** | — |
-| IoU Utility | — | — | — | — | **0.597 / 0.605** | — |
-| IoU Vegetation | — | — | — | — | **0.864 / 0.867** | — |
-| IoU Vehicle | — | — | — | — | **0.671 / 0.670** | — |
+| **Overall metrics** |||||||
+| mIoU | 0.781 / 0.766 | 0.785 / 0.768 | 0.782 / 0.769 | 0.776 / **0.771** | 0.772 / 0.766 | 0.767 / 0.754 |
+| Loss | 0.019 / 0.019 | 0.018 / 0.021 | 0.019 / 0.019 | 0.020 / **0.018** | 0.021 / 0.019 | 0.021 / 0.020 |
+| Accuracy | 0.953 / 0.951 | 0.954 / 0.950 | 0.954 / **0.952** | 0.952 / **0.952** | 0.951 / 0.951 | 0.949 / 0.948 |
+| **Class IoU** |||||||
+| Ground | 0.947 / 0.942 | 0.947 / 0.940 | 0.947 / **0.943** | 0.946 / **0.943** | 0.944 / 0.942 | 0.941 / 0.938 |
+| Vegetation | 0.853 / 0.849 | 0.856 / 0.845 | 0.854 / 0.851 | 0.851 / **0.855** | 0.849 / 0.852 | 0.844 / 0.843 |
+| Buildings | 0.950 / 0.947 | 0.950 / 0.942 | 0.950 / **0.948** | 0.943 / **0.948** | 0.943 / 0.947 | 0.945 / 0.947 |
+| Vehicle | 0.619 / 0.567 | 0.626 / 0.570 | 0.622 / 0.560 | 0.610 / **0.595** | 0.599 / 0.584 | 0.591 / 0.543 |
+| Utility | 0.537 / 0.526 | 0.544 / 0.541 | 0.538 / 0.541 | 0.531 / 0.515 | 0.525 / 0.503 | 0.511 / 0.501 |
+
+**Table 2**. Comparison of PointNet++ configurations: Focal loss + class weighting [0.2553, 0.3465, 0.4482, 1.8602, 2.0897]. 
+<br>All experiments use class-aware sampler. Values are reported as train / validation. Bold values indicate the best validation score.
+
+### NLL loss + near-uniform class weighting 
+
+| Metric | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5b - ball_random | 6 - xyz only |
+|------|------|------|------|------|------|------|
+| **Overall metrics** |||||||
+| mIoU | 0.813 / 0.796 | 0.816 / 0.804 | 0.813 / 0.803 | 0.806 / **0.811** | 0.804 / 0.805 | 0.795 / 0.796 |
+| Loss | 0.116 / 0.122 | 0.114 / 0.120 | 0.115 / 0.122 | 0.120 / **0.116** | 0.122 / 0.117 | 0.126 / 0.124 |
+| Accuracy | 0.959 / 0.956 | 0.959 / 0.956 | 0.959 / 0.956 | 0.957 / **0.957** | 0.957 / **0.957** | 0.955 / 0.954 |
+| **Class IoU** |||||||
+| Ground | 0.950 / 0.944 | 0.950 / 0.944 | 0.950 / 0.943 | 0.949 / **0.945** | 0.948 / **0.945** | 0.945 / 0.939 |
+| Vegetation | 0.868 / 0.861 | 0.869 / 0.862 | 0.868 / 0.860 | 0.864 / **0.867** | 0.863 / 0.866 | 0.857 / 0.858 |
+| Buildings | 0.952 / 0.949 | 0.953 / 0.949 | 0.952 / 0.948 | 0.946 / 0.950 | 0.946 / **0.952** | 0.948 / 0.948 |
+| Vehicle | 0.680 / 0.640 | 0.688 / 0.654 | 0.682 / 0.654 | 0.672 / **0.675** | 0.666 / 0.665 | 0.646 / 0.646 |
+| Utility | 0.615 / 0.586 | 0.618 / 0.611 | 0.612 / 0.611 | 0.600 / **0.617** | 0.596 / 0.599 | 0.582 / 0.592 |
+
+
+**Table 3**. Comparison of PointNet++ configurations: NLL loss + near-uniform class weighting [0.9894, 0.9894, 0.9894, 1.0049, 1.0270]
+<br>All experiments use class-aware sampler. Values are reported as train / validation. Bold values indicate the best validation score.
+
+
+
+
+
 
 "knn" vs "ball_closest"/"ball_random" is not a fair comparison because:
 With kNN:
