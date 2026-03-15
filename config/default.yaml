@@ -59,9 +59,9 @@ dataset:
     # - scan_angle_rank        # Scan angle rank (1 channel)
 
 training:
-  test_name: PointNetPlusPlus_knn
+  test_name: PasteName
   snap_interval: 5
-  model_name: pointnetplusplus
+  model_name: pointnet
   num_channels: auto  # Auto-calculated from use_features (xyz=3, intensity=1, return_number=1, number_of_returns=1)
   num_points: 4096
   batch_size: 32
@@ -81,11 +81,11 @@ training:
   
   # Loss weights optimized for Focal Loss (gamma=2.0)
   loss_weights:
-    - 0.9894
-    - 0.9894
-    - 0.9894
-    - 1.0049
-    - 1.0270
+    - 0.5272
+    - 0.5272
+    - 0.5276
+    - 1.5454
+    - 1.8727
 
 wandb:
   enabled: true
