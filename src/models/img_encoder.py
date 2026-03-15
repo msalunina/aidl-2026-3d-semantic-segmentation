@@ -8,7 +8,7 @@ import torch
 
 class Block(nn.Module):
     def __init__(self, inChannels, outChannels):
-        super().__init__()
+        super(Block, self).__init__()
         self.conv1 = Conv2d(inChannels, outChannels, kernel_size=3, stride=1, padding=1)
         self.bn1 = nn.BatchNorm2d(outChannels)
         self.conv2 = Conv2d(outChannels, outChannels, kernel_size=3, stride=1, padding=1)

@@ -36,12 +36,6 @@ class TransformationNet(nn.Module):
         self.fc_2 = nn.Linear(512, 256)                 # weight matrix: [256,512]
         self.fc_3 = nn.Linear(256, self.output_dim * self.output_dim)   # weight matrix: [output_dim x output_dim, 256]
 
-        # OLGA: I added this on mine:
-        # Weird fix to initialize last layers params to 0 and force an identity matrix as start.
-        # The initial value for the 3x3 (64x64) is x+identity, but x is not 0 by default so it may add something
-        # even if small. Forcing params to 0, guarantees that it will start with identity.
-        # nn.init.zeros_(self.fc_3.weight)
-        # nn.init.zeros_(self.fc_3.bias)
 
     def forward(self, x):
         # x: [B, N, C]
@@ -57,8 +51,6 @@ class TransformationNet(nn.Module):
 
         # Max pooling
         x = nn.MaxPool1d(num_points)(x)                 # [B, 1024, 1]
-        # TODO: update to accomodate batch size 1
-        # Actual problem is BatchNorm, it cant estimate variance with 1 sample!!!!!
         x = x.view(-1, 1024)                            # [B, 1024] (removes dimensions of 1)
 
         # Fully connected layers
@@ -66,10 +58,6 @@ class TransformationNet(nn.Module):
         x = F.relu(self.bn_5(self.fc_2(x)))             # [B, 256]
         x = self.fc_3(x)                                # [B, output_dim x output_dim]
 
-        # identity_matrix = torch.eye(self.output_dim)    # [output_dim, output_dim]
-        # if torch.cuda.is_available():
-        #     identity_matrix = identity_matrix.cuda()
-        # OLGA: instead of the 3 lines above,
         # create identity matrix directly on the device of x
         identity_matrix = torch.eye(self.output_dim, device=x.device).unsqueeze(0)  # [1, output_dim, output_dim]         
         x = x.view(-1, self.output_dim, self.output_dim) + identity_matrix          # [B, output_dim, output_dim]
@@ -80,9 +68,6 @@ class PointNetBackbone(nn.Module):
     """
     PointNet feature extraction backbone
     """
-
-    # TODO: add concatenation of additional channels if input_channels > 3
-    # after input transformation! DONE!
 
     def __init__(self, input_channels=3):
         super(PointNetBackbone, self).__init__()
@@ -213,7 +198,6 @@ class PointNetSegmentation(nn.Module):
         self.add_ohv = add_ohv
         self.ohv_gt = None
         self.skip_conn = skip_conn
-        # OLGA: paper says there is no dropout for segmentation
         self.dropout = nn.Dropout(p=dropout)    
 
         # Feature extraction backbone
@@ -238,7 +222,7 @@ class PointNetSegmentation(nn.Module):
         self.bn_3 = nn.BatchNorm1d(128)
 
         # MLP(128,num_classes)
-        # OLGA: according to Fig 2 in the paper, the Segmentation head has
+        # according to Fig 2 in the paper, the Segmentation head has
         # one extra 128 layer (self.conv_4 + self.bn_4) before num_classes
         self.conv_4 = nn.Conv1d(128, 128, 1)                    # weight matrix: [128,128]         
         self.conv_5 = nn.Conv1d(128, num_classes, 1)            # weight matrix: [num_classes,128]
@@ -292,7 +276,6 @@ class IPointNetSegmentation(nn.Module):
         self.input_channels = input_channels
        
         self.skip_conn = skip_conn
-        # OLGA: paper says there is no dropout for segmentation
         self.dropout = nn.Dropout(p=dropout)    
 
         # Feature extraction backbone
@@ -323,7 +306,7 @@ class IPointNetSegmentation(nn.Module):
         self.bn_3 = nn.BatchNorm1d(128)
 
         # MLP(128,num_classes)
-        # OLGA: according to Fig 2 in the paper, the Segmentation head has
+        # according to Fig 2 in the paper, the Segmentation head has
         # one extra 128 layer (self.conv_4 + self.bn_4) before num_classes
         self.conv_4 = nn.Conv1d(128, 128, 1)                    # weight matrix: [128,128]         
         self.conv_5 = nn.Conv1d(128, num_classes, 1)            # weight matrix: [num_classes,128]
