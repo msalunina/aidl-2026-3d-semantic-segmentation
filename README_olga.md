@@ -1,5 +1,72 @@
 
-# METRICS: IoU
+# METRICS
+
+Evaluating the performance of a semantic segmentation model requires metrics that measure how well the predicted labels match the ground truth labels for each element in the input. In the case of point cloud segmentation, the task consists of assigning a semantic class to every point in the cloud. While classification accuracy measures the proportion of correctly labeled points, it is often not a reliable metric for segmentation tasks because datasets are usually highly imbalanced. For example, in LiDAR datasets large portions of the scene may correspond to dominant classes such as ground or vegetation, while other classes such as vehicles or utilities appear much less frequently.
+
+In such situations, a model could achieve high accuracy simply by predicting the dominant classes, even if it fails to correctly segment rare classes. For this reason, Intersection over Union (IoU) is widely used as a more robust metric for segmentation evaluation.
+
+## Intersection over Union (IoU)
+Intersection over Union ($IoU$) measures the overlap between the predicted region for a class and the corresponding ground truth region. The $IoU$ for a class is defined as
+
+$$
+IoU = \frac{TP}{TP + FP + FN}
+$$
+
+where:
+
+- **TP (True Positives):** points that belong to the given class and are correctly predicted by the model ("correct predictions")
+
+- **FP (False Positives):** points that the model predicts as belonging to the given class, but whose true label is different ("incorrect predictions")
+
+- **FN (False Negatives):** points that belong to the given class, but are incorrectly predicted by the model ("missed detections")
+
+
+Example: _IoU for building_
+- TP: a point labeled as _building_ that is also predicted as _building_
+- FP: a point labeled as _vegetation_ that is predicted as _building_
+- FN: a point labeled as _building_ that is predicted as _vegetation_
+
+This formula can also be interpreted as the ratio between the **intersection** and the **union** of the predicted and ground truth sets of points:
+
+- the **intersection** corresponds to the points correctly predicted as belonging to the class (TP)
+
+- the **union** corresponds to all points that belong to the class either in the prediction or in the ground truth (TP + FP + FN)
+
+
+
+The $IoU$ value ranges from 0 to 1, where:
+
+- 1 indicates perfect overlap between prediction and ground truth
+- 0 indicates no overlap
+
+## Mean Intersection over Union (mIoU)
+
+In semantic segmentation tasks, $IoU$ is computed independently for each class. To obtain an overall measure of segmentation performance across all classes, the mean Intersection over Union ($mIoU$) is used.
+The $mIoU$ is defined as the average $IoU$ over all classes:
+$$
+mIoU = \frac{1}{C} \sum_{c=1}^{C} IoU_c
+$$
+
+where:
+- $C$ is the number of classes
+- $IoU_c$ is the IoU for class $c$
+
+By averaging over classes, mIoU ensures that all classes contribute equally to the evaluation, preventing dominant classes from disproportionately influencing the metric. This makes mIoU particularly suitable for segmentation tasks in datasets with class imbalance, such as LiDAR point cloud datasets.
+
+Unlike accuracy, which can be dominated by frequent classes, mIoU evaluates segmentation performance independently for each class and therefore provides a more reliable measure of overall segmentation quality.
+
+
+
+## IoU Implementation
+
+Intersection and union for each class are accumulated for all batches across the entire epoch and one final value is obtained per epoch and class:
+
+$$
+IoU_c = \frac{\sum intersection_c}{\sum union_c}
+$$
+
+where the $\sum$ represents all batches. Then, the average of all $IoU_c$ is computed to obtain $mIoU$
+
 
 
 # POINTNET++
@@ -202,6 +269,22 @@ All experiments use class-aware sampler. Values are reported as train / validati
 **Table 3**. Comparison of PointNet++ configurations: NLL loss + near-uniform class weighting [0.9894, 0.9894, 0.9894, 1.0049, 1.0270]
 <br>All experiments use class-aware sampler. Values are reported as train / validation. Bold values indicate the best validation score.
 
+
+
+### FINAL CONFIG (optimal for PoinNet)
+
+| Metric | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only | 7 - experiment |
+|------|------|------|------|------|------|------|------|
+| **Overall metrics** ||||||||
+| mIoU | — | — | — | — | — | — | 0.806 / 0.799 |
+| Loss | — | — | — | — | — | — | 0.131 / 0.130 |
+| Accuracy | — | — | — | — | — | — | 0.957 / 0.956 |
+| **Class IoU** ||||||||
+| Ground | — | — | — | — | — | — | 0.949 / 0.945 |
+| Vegetation | — | — | — | — | — | — | 0.864 / 0.863 |
+| Buildings | — | — | — | — | — | — | 0.948 / 0.950 |
+| Vehicle | — | — | — | — | — | — | 0.675 / 0.657 |
+| Utility | — | — | — | — | — | — | 0.594 / 0.578 |
 
 
 
