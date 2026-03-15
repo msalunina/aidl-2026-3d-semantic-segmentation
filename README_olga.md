@@ -200,13 +200,13 @@ By stacking several Feature Propagation layers, the decoder progressively recons
 
 Each Set Abstraction (SA) layer samples centers using FPS, groups K neighbors around each center, applies a shared MLP to the grouped features, and aggregates the neighborhood using max pooling.
 
-| Layer | Input (xyz / features)  | Centers | Grouped neighbors | After shared MLP | After max pooling | Output (xyz / features) |
-|:------:|:--------------------------|:--------:|:------------------|:-----------------|:------------------|:------------------------|
-| **SA** (generic) | `[B,N,3]`/`[B,N,C]` |  -   | `[B,S,K,3+C]`      |    `[B,C_out,S,K]`  |     `[B,C_out,S]`    | `[B,S,3]`/`[B,S,C_out]` |                       
-| **SA1** | `[B,N,3]`/<br>`None` | 1024 | `[B,1024,32,3]` | `[B,64,1024,32]` | `[B,64,1024]` | `[B,1024,3]`/<br>`[B,1024,64]` |
-| **SA2** | `[B,1024,3]`/<br>`[B,1024,64]` | 256 | `[B,256,32,67]` | `[B,128,256,32]` | `[B,128,256]` | `[B,256,3]`/<br>`[B,256,128]` |
-| **SA3** | `[B,256,3]`/<br>`[B,256,128]` | 64 | `[B,64,32,131]` | `[B,256,64,32]` | `[B,256,64]` | `[B,64,3]`/<br>`[B,64,256]` |
-| **SA4** | `[B,64,3]`/<br>`[B,64,256]` | 16 | `[B,16,32,259]` | `[B,512,16,32]` | `[B,512,16]` | `[B,16,3]`/<br>`[B,16,512]` |
+| Layer | Input (xyz / features)  |  Grouped neighbors | After shared MLP | After max pooling | Output (xyz / features) |
+|:------:|:--------------------------|:------------------|:-----------------|:------------------|:------------------------|
+| **SA** (generic) | `[B,N,3]`/`[B,N,C]`  | `[B,S,K,3+C]`      |    `[B,C_out,S,K]`  |     `[B,C_out,S]`    | `[B,S,3]`/`[B,S,C_out]` |                       
+| **SA1** | `[B,N,3]`/<br>`None`           | `[B,1024,32,3]` | `[B,64,1024,32]` | `[B,64,1024]` | `[B,1024,3]`/<br>`[B,1024,64]` |
+| **SA2** | `[B,1024,3]`/<br>`[B,1024,64]` | `[B,256,32,67]` | `[B,128,256,32]` | `[B,128,256]` | `[B,256,3]`/<br>`[B,256,128]` |
+| **SA3** | `[B,256,3]`/<br>`[B,256,128]`  | `[B,64,32,131]` | `[B,256,64,32]` | `[B,256,64]` | `[B,64,3]`/<br>`[B,64,256]` |
+| **SA4** | `[B,64,3]`/<br>`[B,64,256]`    | `[B,16,32,259]` | `[B,512,16,32]` | `[B,512,16]` | `[B,16,3]`/<br>`[B,16,512]` |
 
 where:
 - B: batch size
