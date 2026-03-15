@@ -392,7 +392,7 @@ All other hyperparameters are held constant: NLL loss, uniform weights, sampler 
 
 *Values shown as Train / Val.*
 
-> **[Figure placeholder]** 
+![pn_exp_channels](figs/pn_exp_channels.png)
 
 ### Conclusions
 
@@ -556,7 +556,11 @@ All experiments use the same base configuration: PointNet, Adam optimizer, cosin
 
 *Values shown as Train / Val.*
 
-> **[Figure placeholder]** 
+![pn_exp_nll_sampler_off](figs/pn_exp_nll_sampler_off.png)
+*Validation mIoU for NLL loss across weight strategies (sampler off).*
+
+![pn_exp_focal_sampler_off](figs/pn_exp_focal_sampler_off.png)
+*Validation mIoU for Focal loss across weight strategies and gamma settings (sampler off).*
 
 **Phase 2: Adding the class-balanced sampler**
 
@@ -568,7 +572,8 @@ All experiments use the same base configuration: PointNet, Adam optimizer, cosin
 
 *Values shown as Train / Val.*
 
-> **[Figure placeholder]** 
+![pn_exp_sampler_on](figs/pn_exp_sampler_on.png)
+*Validation mIoU for across loss x weight strategies with sampler on.*
 
 ### Conclusions
 
@@ -620,7 +625,7 @@ To isolate the effect of data augmentation, we compare the best configuration fr
 
 *Values shown as Train / Val.*
 
-> **[Figure placeholder]** 
+![pn_exp_data_aug](figs/pn_exp_data_aug.png)
 
 ### Conclusions
 
@@ -667,7 +672,7 @@ Starting from the best balancing configuration with augmentation enabled (Run 15
 
 *Values shown as Train / Val.*
 
-> **[Figure placeholder]** .
+![pn_exp_dropout](figs/pn_exp_dropout.png)
 
 ### Conclusions
 
