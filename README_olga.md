@@ -77,6 +77,14 @@ The architecture consists of two main components:
 - Encoder (Set Abstraction layers, SA) – extracts hierarchical features from the input point cloud.
 - Decoder (Feature Propagation layers, FP) – propagates the learned features back to the original points for dense prediction tasks such as semantic segmentation.
 
+Next Figure shows the PointNet++ architecture 
+
+![PointNet++ architecture](figs/pnpp_architecture.png)
+(from "PointNet++: Deep Hierarchical Feature Learning on Point Sets in a Metric Space" (Qi et al., 2017).)
+
+
+
+
 ## ENCODER
 The encoder builds a hierarchical representation of the point cloud through successive **Set Abstraction (SA)** layers. Each SA layer applies sequentially:
 
@@ -200,7 +208,7 @@ By stacking several Feature Propagation layers, the decoder progressively recons
 
 Each Set Abstraction (SA) layer samples centers using FPS, groups K neighbors around each center, applies a shared MLP to the grouped features, and aggregates the neighborhood using max pooling.
 
-| Layer | Input (xyz / features)  |  Grouped neighbors | After shared MLP | After max pooling | Output (xyz / features) |
+| Layer | Input<br>(xyz / features)  |  Grouped neighbors | After shared MLP | After max pooling | Output<br>(xyz / features) |
 |:------:|:--------------------------|:------------------|:-----------------|:------------------|:------------------------|
 | **SA** (generic) | `[B,N,3]`/`[B,N,C]`  | `[B,S,K,3+C]`      |    `[B,C_out,S,K]`  |     `[B,C_out,S]`    | `[B,S,3]`/`[B,S,C_out]` |                       
 | **SA1** | `[B,N,3]`/<br>`None`           | `[B,1024,32,3]` | `[B,64,1024,32]` | `[B,64,1024]` | `[B,1024,3]`/<br>`[B,1024,64]` |
@@ -261,10 +269,6 @@ where:
 
 
 ## EXPERIMENTS
-
-
-All Set Abstraction layers use a maximum of K = 32 neighbors per center. In some experiments this value was increased in deeper layers to enlarge the receptive field and analyze the effect of neighborhood size on feature learning. 
-
 
 
 Table 1. Summary of the PointNet++ experiment configurations. Each experiment modifies a specific component of the baseline model: the dropout rate, the number of neighbors, the grouping strategy or the input feature channels
@@ -350,32 +354,56 @@ Classes are ordered by decreasing frequency in the dataset.
 | Metric | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |------|------|------|------|------|------|------|
 | **Overall metrics<br>(last epoch)** |||||||
-| mIoU | 0.812 / 0.804 | 0.814 / **0.805** | 0.811 / 0.804 | 0.805 / 0.799 | 0.803 / 0.796 | — |
-| Loss | 0.128 / 0.126 | 0.125 / **0.125** | 0.128 / 0.126 | 0.133 / 0.129 | 0.135 / 0.131 | — |
-| Accuracy | 0.958 / **0.957** | 0.959 / **0.957** | 0.958 / **0.957** | 0.957 / 0.956 | 0.956 / 0.956 | — |
+| mIoU | 0.812 / 0.804 | 0.814 / **0.805** | 0.811 / 0.804 | 0.805 / 0.799 | 0.803 / 0.796 | 0.796 / 0.782 |
+| Loss | 0.128 / 0.126 | 0.125 / **0.125** | 0.128 / 0.126 | 0.133 / 0.129 | 0.135 / 0.131 | 0.140 / 0.139 |
+| Accuracy | 0.958 / **0.957** | 0.959 / **0.957** | 0.958 / **0.957** | 0.957 / 0.956 | 0.956 / 0.956 | 0.955 / 0.952 |
 | **Class IoU<br>(last epoch)** |||||||
-| Ground | 0.950 / **0.946** | 0.951 / **0.946** | 0.950 / **0.946** | 0.950 / 0.945 | 0.949 / 0.945 | — |
-| Vegetation | 0.866 / 0.865 | 0.867 / **0.866** | 0.866 / **0.866** | 0.863 / 0.863 | 0.862 / 0.862 | — |
-| Buildings | 0.954 / **0.955** | 0.954 / **0.955** | 0.953 / **0.955** | 0.948 / 0.950 | 0.947 / 0.950 | — |
-| Vehicle | 0.686 / 0.667 | 0.691 / **0.669** | 0.684 / 0.665 | 0.675 / 0.653 | 0.670 / 0.648 | — |
-| Utility | 0.605 / 0.588 | 0.607 / **0.589** | 0.602 / **0.589** | 0.590 / 0.581 | 0.586 / 0.574 | — |
+| Ground | 0.950 / **0.946** | 0.951 / **0.946** | 0.950 / **0.946** | 0.950 / 0.945 | 0.949 / 0.945 | 0.945 / 0.940 |
+| Vegetation | 0.866 / 0.865 | 0.867 / **0.866** | 0.866 / **0.866** | 0.863 / 0.863 | 0.862 / 0.862 | 0.856 / 0.852 |
+| Buildings | 0.954 / **0.955** | 0.954 / **0.955** | 0.953 / **0.955** | 0.948 / 0.950 | 0.947 / 0.950 | 0.949 / 0.950 |
+| Vehicle | 0.686 / 0.667 | 0.691 / **0.669** | 0.684 / 0.665 | 0.675 / 0.653 | 0.670 / 0.648 | 0.653 / 0.609 |
+| Utility | 0.605 / 0.588 | 0.607 / **0.589** | 0.602 / **0.589** | 0.590 / 0.581 | 0.586 / 0.574 | 0.577 / 0.561 |
 | **Best validation metrics<br>(during training)** |||||||
-| Best mIoU | 0.806 | **0.810** | 0.807 | 0.800 | 0.801 | — |
-| Best Loss | 0.126 | **0.125** | 0.126 | 0.129 | 0.131 | — |
-| Best Accuracy | 0.957 | **0.958** | 0.957 | 0.956 | 0.956 | — |
+| Best mIoU | 0.806 | **0.810** | 0.807 | 0.800 | 0.801 | 0.791 |
+| Best Loss | 0.126 | **0.125** | 0.126 | 0.129 | 0.131 | 0.137 |
+| Best Accuracy | 0.957 | **0.958** | 0.957 | 0.956 | 0.956 | 0.953 |
 
-"knn" vs "ball_closest"/"ball_random" is not a fair comparison because:
-With kNN:
-- you always get exactly K points
-- the spatial radius is variable (no limit)
-- neighborhood effective size expands or shrinks depending on density
 
-With ball query:
-- you fix the maximum spatial radius 
-- the number of points is variable (up to max K)
-- the neighborhood effective size 
-    - closest: biased toward center when many points exist (may shrink)
-    - random: tends to sample the full ball more uniformly
+TODO!!!
+
+
+Table X summarizes the performance of the evaluated PointNet++ configurations. The baseline model achieves strong overall performance, with a validation mIoU of 0.804 and balanced results across most classes. Introducing dropout slightly improves the best validation mIoU (0.810) while maintaining similar class-wise performance, suggesting a modest regularization benefit. The K-neighbors configuration yields results comparable to the baseline, indicating that the neighborhood selection strategy has limited impact in this setting. In contrast, the ball-based grouping variants slightly degrade performance, particularly for smaller classes such as Vehicle and Utility. Finally, removing additional input features and using only XYZ coordinates leads to the lowest performance across all metrics, highlighting the importance of feature information beyond spatial coordinates.
+
+
+The ball-based grouping strategies slightly degrade performance, particularly for smaller classes such as Vehicle and Utility. This behaviour is likely related to the variable number of neighbours produced by radius-based grouping in sparse regions, which can lead to unstable feature aggregation compared to the fixed-size neighbourhoods provided by k-nearest neighbours.
+
+The idea was to make neighbourhoods geometrically consistent, rather than point-count consistent like KNN.
+
+
+
+
+PointNet++ extracts local geometric features by grouping neighbouring points around sampled centroids. Two common strategies for this grouping are k-nearest neighbours (KNN) and radius-based (ball) query, which differ in how the local neighbourhood is defined.
+
+In KNN grouping, the algorithm always selects a fixed number K of neighbouring points. This guarantees that each neighbourhood contains the same number of points, providing stable input to the neural network. However, the spatial size of the neighbourhood can vary depending on point density. For example, if K=32, the 32 nearest points in a dense vegetation region may lie very close to the centroid, while the same 32 points in a sparse area may cover a much larger spatial region.
+
+In contrast, ball query grouping selects all points within a fixed spatial radius r. This ensures that the neighbourhood always corresponds to the same physical scale. For instance, if 
+r=0.2 m, the network always analyzes the geometry within that spatial extent. In other words, the network learns features such as “what does the geometry look like inside a 20 cm region?” rather than “what do the nearest 32 points look like?”. For this reason, ball query is often considered more invariant to changes in point density.
+
+In practice, however, the number of points within a fixed radius can vary significantly across the scene. Dense regions may contain many points inside the radius, while sparse regions may contain only a few. This can lead to unstable feature aggregation, especially for small or sparsely sampled objects. In our experiments, the ball-based grouping strategies consistently produced slightly worse results, particularly for the Vehicle and Utility classes. These objects contain relatively few points, meaning that the fixed-radius neighbourhood often provides limited local information. By contrast, KNN grouping guarantees that each centroid always receives the same number of neighbouring points, which results in more stable feature extraction.
+
+Overall, while ball query enforces a consistent spatial scale for neighbourhoods, the results suggest that KNN grouping provides more robust performance for this dataset, especially when dealing with small or sparsely sampled objects.
+
+
+Ball query is worse here because:
+
+neighbourhood size varies
+
+sparse classes get very few neighbours
+
+KNN gives stable feature extraction
+
+"knn" vs "ball_closest"/"ball_random" is not a fair comparison 
+
 
 knn is robust in sparse areas (always enough points), but spatial neighborhood varies a lot
 ball has a consistent geometric scale (bounding), but may contain very few points.
