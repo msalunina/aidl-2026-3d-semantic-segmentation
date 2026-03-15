@@ -257,8 +257,8 @@ class DALESDataset(Dataset):
             [0.0,        0.0,       1.0],
         ], dtype=np.float32)
 
-        scale = np.random.uniform(self.scale_min, self.scale_max)
-        xyz = np.matmul(xyz, rotation.T) * scale
+        # scale = np.random.uniform(self.scale_min, self.scale_max)
+        xyz = np.matmul(xyz, rotation.T) #* scale
 
         points[:, :3] = xyz
         return points
