@@ -37,6 +37,7 @@ This formula can also be interpreted as the ratio between the **intersection** a
 
 In semantic segmentation tasks, IoU is computed independently for each class. To obtain an overall measure of segmentation performance across all classes, the mean Intersection over Union (mIoU) is used.
 The mIoU is defined as the average IoU over all classes:
+
 $$
 mIoU = \frac{1}{C} \sum_{c=1}^{C} IoU_c
 $$
@@ -89,10 +90,10 @@ layer to capture geometric structures at a different spatial scale. Early layers
 
 For instance, for our DALES dataset:
 
-- **SA1** may capture fine geometric patterns such as edges, corners, or small object parts (e.g., parts of a car wheel or tree branches).
-- **SA2** may capture slightly larger structures, such as parts of objects (e.g., a full car roof or part of a tree canopy).
-- **SA3** may capture complete objects or object groups (e.g., an entire car or a section of vegetation).
-- **SA4** may represent larger scene elements, such as a **car within a street segment**, a **group of trees**, or a **portion of terrain**.
+- **SA1** may capture fine geometric patterns such as edges, corners, or small object parts
+- **SA2** may capture slightly larger structures, such as parts of objects 
+- **SA3** may capture complete objects or object groups 
+- **SA4** may represent larger scene elements
 
 ### 1. Farthest Point Sampling (FPS)
 
