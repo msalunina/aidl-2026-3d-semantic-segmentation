@@ -84,16 +84,14 @@ The encoder builds a hierarchical representation of the point cloud through succ
 2. **Neighborhood grouping** around each center  
 3. A **shared MLP + max pooling** to extract local geometric features  (mini PointNet)
 
-As the network progresses through the hierarchy (towards deeper layers), the number of centers decreases and the distance between them increases.  
-Therefore, even if the number of neighbors remains constant, the spatial extent of each neighborhood (effective receptive field) naturally grows with depth, allowing each 
-layer to capture geometric structures at a different spatial scale. Early layers focus on **small local structures (fine geometric structures)**, while deeper layers represent **larger semantic structures** describing the scene.
+As the network progresses through the hierarchy (towards deeper layers), the number of centers decreases and the distance between them increases. Therefore, even if the number of neighbors remains constant, the spatial extent of each neighborhood (effective receptive field) naturally grows with depth, allowing each layer to capture geometric structures at a different spatial scale. Early layers focus on **small local structures (fine geometric structures)**, while deeper layers represent **larger semantic structures** describing the scene.
 
 For instance, for our DALES dataset:
 
-- **SA1** may capture fine geometric patterns such as edges, corners, or small object parts
-- **SA2** may capture slightly larger structures, such as parts of objects 
-- **SA3** may capture complete objects or object groups 
-- **SA4** may represent larger scene elements
+- SA1 may capture fine geometric patterns such as edges, corners, or small object parts
+- SA2 may capture slightly larger structures, such as parts of objects 
+- SA3 may capture complete objects or object groups 
+- SA4 may represent larger scene elements, such as a car within a street segment
 
 ### 1. Farthest Point Sampling (FPS)
 
@@ -116,11 +114,6 @@ In knn grouping, for each center point the K nearest points in Euclidean space a
 
 In dense regions, the K nearest neighbors lie close to the center and defie a small spatial patch. Instead, in sparse regions, the same number of neighbors may lie further defining a much larger spatial area. As a result, the **effective receptive field** varies with point density.
 
-In deeper SA layers, FPS progressively reduces the number of centers, increasing the spacing between them. 
-Consequently, the spatial extent of the neighborhoods naturally grows with depth, even when the value of K remains constant. 
-This allows deeper layers to capture larger geometric structures, such as buildings or terrain.
-
-
 #### Radius-Based Grouping
 
 The idea behind Radius-Based grouping is to reduce the density dependency. To do so, neighbors are selected within a **fixed spatial radius** around each center. Consequently:
@@ -129,16 +122,12 @@ The idea behind Radius-Based grouping is to reduce the density dependency. To do
 
 However, PointNet++ expects a fixed number of neighbours. If the ball contains less than K points, some points are repeated (note that this repetition does not bias information towards repeated points since in FP layers we deliberately apply max-pooling to extract features instead of average-pooling). On the contrary, if the ball contains more than K points, only up to K are retained. As a consequence, the **effective receptive field** may still depend on how those neighbors are selected, especially in dense regions where more than K points may lie inside the ball. Two strategies were implemented to select these K neighbors.
 
-- `ball_closest`: 
-
-    When more than K points lie inside the radius, only the **K closest points to the center** are selected.
+- `ball_closest`: When more than K points lie inside the radius, only the **K closest points to the center** are selected.
 
     Although the neighborhood is bounded by the radius, this selection strategy introduces a bias toward points located near the center. 
     As a consequence, the **effective receptive field** may shrink in dense regions introducing a **mild density dependence**
 
-- `ball_random`: 
-
-    When more than K points lie inside the radius, **K of them are randomly sampled**.
+- `ball_random`: When more than K points lie inside the radius, **K of them are randomly sampled**.
 
     In this case, the radius effctively defines the spatial extent of the neighborhood, since any point within the ball has an equal probability of being selected. As a consequence, the **effective receptive field** closely matches the radius making the strategy largely **density independent**
 
