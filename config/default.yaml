@@ -67,7 +67,7 @@ training:
   batch_size: 32
   num_epochs: 50
   learning_rate: 0.01
-  dropout_rate: 0.5
+  dropout_rate: 0.3
   optimizer: adam
   loss_function: nll_loss # focal_loss / nll_loss
   use_sampler: true
