@@ -63,7 +63,7 @@ if __name__ == '__main__':
         mode=wandb_mode,
     )
 
-    # set seed (here? config.dataset_seed?)
+    # set seed
     set_seed(config.dataset_seed)
 
     # Set device
@@ -83,8 +83,6 @@ if __name__ == '__main__':
         normalize=config.dataset_normalize,
         augmentation=config.dataset_augmentation,
         rotation_deg_max=config.dataset_rotation_deg_max,
-        scale_min=config.dataset_scale_min,
-        scale_max=config.dataset_scale_max,
         train_ratio=config.dataset_train_ratio,
         val_ratio=config.dataset_val_ratio,
         seed=config.dataset_seed
@@ -158,8 +156,6 @@ if __name__ == '__main__':
         raise ValueError(f"Model name {config.model_name} does not exist")
         
     # Define loss function and optimizer
-    # We use Focal Loss to better handle class imbalance
-    # Focal Loss down-weights easy examples and focuses on hard examples
     loss_weights = torch.tensor(config.loss_weights, dtype=torch.float32).to(device)
     if config.loss_function == "focal_loss":
         criterion = FocalLoss(alpha=loss_weights, gamma=1.0, ignore_index=config.ignore_label)
@@ -181,7 +177,6 @@ if __name__ == '__main__':
         )
         print(f"Using CosineAnnealingLR scheduler: T_max={config.num_epochs}, eta_min={config.scheduler_min_lr}")
 
-    # Training loop, we could put it into a separate class (trainer.py)
     print("\n" + "="*60)
     print("TRAINING")
     print("="*60)

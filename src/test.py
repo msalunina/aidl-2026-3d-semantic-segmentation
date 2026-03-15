@@ -75,7 +75,8 @@ if __name__ == '__main__':
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
         use_all_files=config.dataset_test_use_all_files,
-        seed=config.dataset_seed
+        seed=config.dataset_seed,
+        use_images=config.model_name == "ipointnet",
     )
 
     # Create test DataLoader
