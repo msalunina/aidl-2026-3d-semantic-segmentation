@@ -183,7 +183,10 @@ class DALESDataset(Dataset):
         
         # Select only the configured channels
         points = points[:, self.channel_indices]        # Shape: (N, num_selected_channels)
-        image_name = data['bev_filename'].item()
+        if(self.use_images):
+            image_name = data['bev_filename'].item()
+        else:
+            image_name = ""
         
         return points, labels, image_name
     

@@ -303,6 +303,11 @@ class IPointNetSegmentation(nn.Module):
         #image feature extractor
         self.img_encoder = ImageEncoder(channels=(4,64,128))
 
+        # Normalization layers for fusion
+        self.pc_global_norm = nn.BatchNorm1d(1024)
+        self.pc_local_norm = nn.BatchNorm1d(64)
+        self.img_norm = nn.BatchNorm1d(128)
+
         # Segmentation head: 
         # MLP(512, 256, 128)
         conv_size = 1088 + 128
@@ -333,23 +338,31 @@ class IPointNetSegmentation(nn.Module):
 
         feature_vector, _ = self.img_encoder(img)
         
+        # Normalize before expanding and concatenating
+        # Squeeze to [B, C] for BN, then unsqueeze back
         num_points = x.shape[1]
-        global_feature_expanded = global_feature.repeat(1, 1, num_points)   # [B, 1024, N]
-        image_feature_expanded = feature_vector.repeat(1, 1, num_points)
+       
+        global_norm = self.pc_global_norm(global_feature.squeeze(-1)).unsqueeze(-1)  # [B, 1024, 1]
+        global_feature_expanded = global_norm.repeat(1, 1, num_points)
+
+        img_norm = self.img_norm(feature_vector.squeeze(-1)).unsqueeze(-1)           # [B, 128, 1]
+        image_feature_expanded = img_norm.repeat(1, 1, num_points)
+
+        local_norm = self.pc_local_norm(point_features)  
         
         # Concatenate point features and global feature
         if self.skip_conn:
-            x = torch.cat([f1, f2, point_features, f3, f4, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024+64+64+64+128+128, N]
+            x = torch.cat([f1, f2, local_norm, f3, f4, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024+64+64+64+128+128, N]
         else:
             # Concatenate point features and global feature
-            x = torch.cat([point_features, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024+128, N]
+            x = torch.cat([local_norm, global_feature_expanded, image_feature_expanded], dim=1)     # [B, 64+1024+128, N]
 
         x = F.relu(self.bn_1(self.conv_1(x)))               # [batch, 512, nPoints]
         x = F.relu(self.bn_2(self.conv_2(x)))               # [batch, 256, nPoints]
         x = F.relu(self.bn_3(self.conv_3(x)))               # [batch, 128, nPoints]
         # This line can be commented if we simplify the extra 128 layer.
-        x = F.relu(self.bn_4(self.conv_4(x)))               # [batch, 128, nPoints] 
-        x = self.dropout(x)
+        x = F.relu(self.bn_4(self.conv_4(x)))               # [batch, 128, nPoints]
+        x = self.dropout(x) 
         log_probs = F.log_softmax(self.conv_5(x), dim=1)    # [batch, num_classes, nPoints]
 
         return feature_transform, log_probs
