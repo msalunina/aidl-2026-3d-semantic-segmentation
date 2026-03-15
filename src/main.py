@@ -83,8 +83,6 @@ if __name__ == '__main__':
         normalize=config.dataset_normalize,
         augmentation=config.dataset_augmentation,
         rotation_deg_max=config.dataset_rotation_deg_max,
-        scale_min=config.dataset_scale_min,
-        scale_max=config.dataset_scale_max,
         train_ratio=config.dataset_train_ratio,
         val_ratio=config.dataset_val_ratio,
         seed=config.dataset_seed

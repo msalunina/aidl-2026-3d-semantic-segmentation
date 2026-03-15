@@ -49,8 +49,6 @@ class DALESDataset(Dataset):
         normalize: bool = True,
         augmentation: bool = False,
         rotation_deg_max: float = 180.0,
-        scale_min: float = 0.9,
-        scale_max: float = 1.1,
         use_all_files: bool = False,
         train_ratio: float = 0.7,
         val_ratio: float = 0.15,
@@ -64,14 +62,7 @@ class DALESDataset(Dataset):
         self.use_all_files = use_all_files
         self.augmentation = augmentation and split == 'train'
         self.rotation_deg_max = rotation_deg_max
-        self.scale_min = scale_min
-        self.scale_max = scale_max
         self.use_images = use_images
-
-        if self.scale_min <= 0:
-            raise ValueError(f"scale_min must be > 0, got {self.scale_min}")
-        if self.scale_max < self.scale_min:
-            raise ValueError(f"scale_max ({self.scale_max}) must be >= scale_min ({self.scale_min})")
 
         #add the path for the images
         
@@ -148,7 +139,7 @@ class DALESDataset(Dataset):
             print(f"Total channels for training: {self.num_channels}")
             print(
                 f"Augmentation: {self.augmentation} "
-                f"(rotation_deg_max={self.rotation_deg_max}, scale=[{self.scale_min}, {self.scale_max}])"
+                f"(rotation_deg_max={self.rotation_deg_max})"
             )
     
     def _load_image(self, file_path):
@@ -257,8 +248,7 @@ class DALESDataset(Dataset):
             [0.0,        0.0,       1.0],
         ], dtype=np.float32)
 
-        # scale = np.random.uniform(self.scale_min, self.scale_max)
-        xyz = np.matmul(xyz, rotation.T) #* scale
+        xyz = np.matmul(xyz, rotation.T)
 
         points[:, :3] = xyz
         return points
