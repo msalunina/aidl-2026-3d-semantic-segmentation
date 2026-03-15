@@ -9,14 +9,15 @@ import torch
 class Block(nn.Module):
     def __init__(self, inChannels, outChannels):
         super(Block, self).__init__()
-        self.conv1 = Conv2d(inChannels, outChannels, kernel_size=3, stride=1)
+        self.conv1 = Conv2d(inChannels, outChannels, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(outChannels)
+        self.conv2 = Conv2d(outChannels, outChannels, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(outChannels)
         self.relu = ReLU()
-        self.conv2 = Conv2d(outChannels, outChannels, kernel_size=3, stride=1)
 
     def forward(self, x):
-        x = self.relu(self.conv1(x))
-        x = self.conv2(x)
-
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.relu(self.bn2(self.conv2(x)))
         return x
 
 class ImageEncoder(nn.Module):
