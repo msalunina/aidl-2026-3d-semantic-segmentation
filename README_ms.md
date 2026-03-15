@@ -84,6 +84,7 @@ aidl-2026-3d-semantic-segmentation/
 │   ├── main.py                      # DALES training entry point
 │   ├── test.py                      # DALES evaluation entry point
 │   ├── train_shapenet.py            # ShapeNet training entry point
+│   ├── generate_full_density_bev_rasters_from_las.py     # Preprocessing: LAS → BEV rasters
 │   ├── convert_las_to_blocks.py     # Preprocessing: LAS → NPZ blocks
 │   ├── compute_class_frequencies.py # Compute class frequencies & corresponding weights
 │   ├── tune_ray.py                  # Ray Tune hyperparameter search
@@ -102,6 +103,7 @@ aidl-2026-3d-semantic-segmentation/
 │       ├── shapenet_dataset.py      # ShapeNet Dataset loader + augmentation
 │       ├── evaluator.py
 │       ├── focal_loss.py            # Focal Loss implementation
+│       ├── sampler.py               # Class Balancing sampler for train dataloader
 │       ├── trainer.py               # Training loop + W&B logging
 │       └── trainer_for_ray.py       # Trainer adapted for Ray Tune
 ├── requirements.txt
