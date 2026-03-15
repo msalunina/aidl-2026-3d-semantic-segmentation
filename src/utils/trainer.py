@@ -476,6 +476,8 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
 
     # Log the full accumulated visualization tables once at the end
     wandb.log({"Segmentation_Visualization": wandb_pointcloud_table})
-    wandb.log({"Point Cloud & Images": wandb_pc_image_table})
+    
+    if use_image:
+       wandb.log({"Point Cloud & Images": wandb_pc_image_table})
 
     return metrics
