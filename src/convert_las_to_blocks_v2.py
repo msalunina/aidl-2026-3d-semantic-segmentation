@@ -1,305 +1,364 @@
-"""
-Dataset class for loading and preprocessing point cloud files with multiple features
-"""
+# ----------------------------------------------------------------
+# convert_las_to_blocks_with_XY_BEV_Key_metadata.py
+#
+# Same as the original convert_las_to_blocks.py, BUT saves metadata
+# so we can align a PointNet block to the exact LAS spatial window
+# and match the corresponding full-density BEV tile deterministically.
+#
+# IMPORTANT: Keeps the SAME behavior:
+# - LAS labels are 0..8, mapped via dales_label_map.py to 5 classes {0..4}
+# - same tiling (50m, 25m stride)
+# - same sampling (4096) with np.random.seed(0)
+# - same normalization (center + unit sphere)
+#
+# NEW:
+# - saves XY metadata
+# - saves tile_ix / tile_iy
+# - saves bev_key
+# - saves bev_filename
+# - saves xy_grid for per-point BEV feature sampling
+# ----------------------------------------------------------------
+
+import os
+import glob
+from pathlib import Path
 
 import numpy as np
-import torch
-from pathlib import Path
-from torch.utils.data import Dataset
-from typing import Literal
-import os
+import laspy
+import yaml
+from tqdm import tqdm
+
+from utils.dales_label_map import DALES_TO_SIMPLIFIED, IGNORE_LABEL
 
 
-class DALESDataset(Dataset):
+def load_yaml_config(path: Path) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+# ---- Config (cross-platform, project-relative) ----
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = PROJECT_ROOT / "config" / "default.yaml"
+cfg = load_yaml_config(CONFIG_PATH)
+
+IN_ROOT = (PROJECT_ROOT / cfg["paths"]["raw_data"]).resolve()
+OUT_ROOT = (PROJECT_ROOT / cfg["paths"]["model_data"]).resolve()
+
+# Keep original behavior
+BLOCK_SIZE = 50.0
+STRIDE = 25.0
+N_POINTS = 4096
+MIN_POINTS_IN_BLOCK = 1024
+
+# Optional cap for quick experiments
+MAX_BLOCKS_PER_TILE = None
+
+# Match current full-density BEV naming convention
+BEV_H = 256
+BEV_W = 256
+BEV_SUFFIX = f"__bev_full_{BEV_H}x{BEV_W}.npz"
+
+# Extract features beyond XYZ if configured (e.g. intensity, return info)
+ALL_FEATURES = cfg["data_preprocessing"]["extract_features"]
+
+np.random.seed(0)
+
+
+def extract_all_features_from_las(las_file):
     """
-    Dataset for loading DALES point cloud blocks with configurable feature selection.
-    
-    The dataset loads .npz files containing all available features (7 channels:
-    x, y, z, intensity, return_number, number_of_returns, scan_angle_rank) and selects only the
-    requested features for training based on configuration.
-    
-    Channel mapping in .npz files:
-    - 0-2: x, y, z coordinates
-    - 3: intensity
-    - 4: return_number
-    - 5: number_of_returns
-    - 6: scan_angle_rank
-    
-    Args:
-        data_dir: Path to directory containing .npz block files
-        split: One of 'train', 'val', or 'test'
-        use_features: List of feature names to use ['xyz', 'intensity', 'return_number', 'number_of_returns', 'scan_angle_rank']
-        num_points: Number of points to sample per block (if None, use all points)
-        normalize: Whether to normalize XYZ coordinates to unit sphere (other channels unchanged)
-        use_all_files: If True, use all files in directory without splitting (for separate test folder)
-        train_ratio: Proportion of data for training (ignored if use_all_files=True)
-        val_ratio: Proportion of data for validation (ignored if use_all_files=True)
-        test_ratio: Proportion of data for testing (ignored if use_all_files=True)
-        seed: Random seed for reproducible splits (ignored if use_all_files=True)
-    """
-    
-    def __init__(
-        self, 
-        data_dir: str,
-        images_dir: str = "",
-        use_images: bool = False,
-        split: Literal['train', 'val', 'test'] = 'train',
-        use_features: list = None,
-        num_points: int = None,
-        normalize: bool = True,
-        augmentation: bool = False,
-        rotation_deg_max: float = 180.0,
-        scale_min: float = 0.9,
-        scale_max: float = 1.1,
-        use_all_files: bool = False,
-        train_ratio: float = 0.7,
-        val_ratio: float = 0.15,
-        seed: int = 42
-    ):
-        self.data_dir = Path(data_dir)
-        self.images_dir = Path(images_dir)
-        self.split = split
-        self.num_points = num_points
-        self.normalize = normalize
-        self.use_all_files = use_all_files
-        self.augmentation = augmentation and split == 'train'
-        self.rotation_deg_max = rotation_deg_max
-        self.scale_min = scale_min
-        self.scale_max = scale_max
-        self.use_images = use_images
+    Extract all available features from a LAS file based on configuration.
 
-        if self.scale_min <= 0:
-            raise ValueError(f"scale_min must be > 0, got {self.scale_min}")
-        if self.scale_max < self.scale_min:
-            raise ValueError(f"scale_max ({self.scale_max}) must be >= scale_min ({self.scale_min})")
-        
-        # Feature selection configuration
-        if use_features is None:
-            use_features = ['xyz']  # Default to XYZ only
-        self.use_features = use_features
-        
-        # Build channel indices mapping
-        self._build_channel_mapping()
-        
-        # Load all block file paths
-        self.block_files = sorted(self.data_dir.glob('**/*.npz'))
-        
-        if len(self.block_files) == 0:
-            raise ValueError(f"No .npz files found in {self.data_dir}")
-        
-        # If use_all_files is True, skip splitting (useful for separate test folder)
-        if use_all_files:
-            print(f"Loaded {len(self.block_files)} blocks from {self.data_dir}")
+    Returns:
+        features: numpy array of shape (n_points, num_selected_features)
+        feature_names: list of feature names in order
+    """
+    features_list = []
+    feature_names = []
+
+    # 1. XYZ coordinates (always present)
+    xyz = np.vstack((las_file.x, las_file.y, las_file.z)).T.astype(np.float64)
+    features_list.append(xyz)
+    feature_names.extend(["x", "y", "z"])
+
+    # 2. Intensity
+    if "intensity" in ALL_FEATURES:
+        if hasattr(las_file, "intensity"):
+            intensity = np.array(las_file.intensity, dtype=np.float64).reshape(-1, 1)
+            features_list.append(intensity)
+            feature_names.append("intensity")
         else:
-            if not np.isclose(train_ratio + val_ratio + (1 - train_ratio - val_ratio), 1.0):
-                raise ValueError("train_ratio + val_ratio + test_ratio must sum to 1.0")
-            
-            # Split data into train/val/test
-            np.random.seed(seed)
-            indices = np.random.permutation(len(self.block_files))
-            
-            train_end = int(len(indices) * train_ratio)
-            val_end = train_end + int(len(indices) * val_ratio)
-            
-            if split == 'train':
-                split_indices = indices[:train_end]
-            elif split == 'val':
-                split_indices = indices[train_end:val_end]
-            elif split == 'test':
-                split_indices = indices[val_end:]
-            else:
-                raise ValueError(f"Invalid split: {split}. Must be 'train', 'val', or 'test'")
-            
-            self.block_files = [self.block_files[i] for i in split_indices]
-            
-            print(f"Loaded {len(self.block_files)} blocks for {split} split")
-    
-    def _build_channel_mapping(self):
-        """
-        Build mapping from feature names to channel indices in the .npz file.
-        
-        .npz files contain 7 channels: [x, y, z, intensity, return_number, number_of_returns, scan_angle_rank]
-        This method creates a list of indices to extract based on use_features.
-        """
-        all_channels = {
-            'xyz': [0, 1, 2],
-            'intensity': [3],
-            'return_number': [4],
-            'number_of_returns': [5],
-            'scan_angle_rank': [6]
-        }
-        
-        self.channel_indices = []
-        for feature in self.use_features:
-            if feature not in all_channels:
-                raise ValueError(f"Unknown feature: {feature}. Available: {list(all_channels.keys())}")
-            self.channel_indices.extend(all_channels[feature])
-        
-        self.num_channels = len(self.channel_indices)
-        
-        if self.split == 'train':
-            print(f"Selected features: {self.use_features}")
-            print(f"Channel indices: {self.channel_indices}")
-            print(f"Total channels for training: {self.num_channels}")
-            print(
-                f"Augmentation: {self.augmentation} "
-                f"(rotation_deg_max={self.rotation_deg_max}, scale=[{self.scale_min}, {self.scale_max}])"
+            print("Warning: intensity not found in LAS file")
+
+    # 3. Return number
+    if "return_number" in ALL_FEATURES:
+        if hasattr(las_file, "return_number"):
+            return_num = np.array(las_file.return_number, dtype=np.float64).reshape(-1, 1)
+            features_list.append(return_num)
+            feature_names.append("return_number")
+        else:
+            print("Warning: return_number not found in LAS file")
+
+    # 4. Number of returns
+    if "number_of_returns" in ALL_FEATURES:
+        if hasattr(las_file, "number_of_returns"):
+            num_returns = np.array(las_file.number_of_returns, dtype=np.float64).reshape(-1, 1)
+            features_list.append(num_returns)
+            feature_names.append("number_of_returns")
+        else:
+            print("Warning: number_of_returns not found in LAS file")
+
+    # 5. Scan angle rank
+    if "scan_angle_rank" in ALL_FEATURES:
+        if hasattr(las_file, "scan_angle_rank"):
+            scan_angle_rank = np.array(las_file.scan_angle_rank, dtype=np.float64).reshape(-1, 1)
+            features_list.append(scan_angle_rank)
+            feature_names.append("scan_angle_rank")
+        else:
+            print("Warning: scan_angle_rank not found in LAS file")
+
+    # Final channel order:
+    # [x, y, z, intensity, return_number, number_of_returns, scan_angle_rank]
+    features = np.hstack(features_list)
+    return features, feature_names
+
+
+def remap_labels(las_labels: np.ndarray) -> np.ndarray:
+    out = np.full(las_labels.shape, IGNORE_LABEL, dtype=np.int64)
+    for k, v in DALES_TO_SIMPLIFIED.items():
+        out[las_labels == k] = v
+    return out
+
+
+def tile_xy(points: np.ndarray, labels: np.ndarray, block_size: float, stride: float):
+    """
+    Return:
+      blocks: list of (block_points, block_labels, (x0, y0))
+      x_min_las, y_min_las: LAS min bounds used to define the tiling origin
+    """
+    blocks = []
+    x_min, y_min = points[:, 0].min(), points[:, 1].min()
+    x_max, y_max = points[:, 0].max(), points[:, 1].max()
+
+    # Keep same behavior / same tiling family as before
+    x_starts = np.arange(x_min, x_max - block_size, stride)
+    y_starts = np.arange(y_min, y_max - block_size, stride)
+
+    for x0 in x_starts:
+        for y0 in y_starts:
+            mask = (
+                (points[:, 0] >= x0) & (points[:, 0] < x0 + block_size) &
+                (points[:, 1] >= y0) & (points[:, 1] < y0 + block_size)
             )
-    
-    def _load_image(self, file_path):
-        """
-        Load a single image from a .npz file 
-        
-        Returns:
-            image: numpy array [256, 256, 4]
-        """
-        data = np.load(file_path)
-        c1 = data['density'].astype(np.float32)
-        c1 = (c1 - c1.min()) / (c1.max() - c1.min() + 1e-8)
+            if mask.sum() < MIN_POINTS_IN_BLOCK:
+                continue
+            blocks.append((points[mask], labels[mask], (float(x0), float(y0))))
 
-        c2 = data['z_max'].astype(np.float32)
-        c2 = (c2 - c2.min()) / (c2.max() - c2.min() + 1e-8)
+    return blocks, float(x_min), float(y_min)
 
-        c3 = data['z_mean'].astype(np.float32)
-        c3 = (c3 - c3.min()) / (c3.max() - c3.min() + 1e-8)
 
-        c4 = data['z_range'].astype(np.float32)
-        c4 = (c4 - c4.min()) / (c4.max() - c4.min() + 1e-8)
+def sample_fixed(points: np.ndarray, labels: np.ndarray, n_points: int):
+    """
+    SAME sampling logic as original, but also returns metadata.
+    Returns:
+      sampled_points, sampled_labels, sample_idx, sampled_with_replacement(0/1)
+    """
+    n = points.shape[0]
+    if n >= n_points:
+        idx = np.random.choice(n, n_points, replace=False)
+        rep = 0
+    else:
+        idx = np.random.choice(n, n_points, replace=True)
+        rep = 1
 
-        return np.stack([c1, c2, c3, c4], axis=-1)
+    return points[idx], labels[idx], idx.astype(np.int32), np.int32(rep)
 
-    def _load_block(self, file_path: Path):
-        """
-        Load a single block from .npz file and extract only the configured channels.
-        
-        Returns:
-            points: Array of shape (N, num_selected_channels)
-            labels: Array of shape (N,)
-            image_name: BEV filename
-            xy_grid: Array of shape (N, 2) with coordinates in [-1, 1] for grid_sample,
-                     or None if not present
-        """
-        data = np.load(file_path)
 
-        points = data['points'].astype(np.float32)      # Shape: (N, 7)
-        labels = data['labels'].astype(np.int64)        # Shape: (N,)
-        points = points[:, self.channel_indices]        # Shape: (N, num_selected_channels)
+def normalize_block(points: np.ndarray):
+    """
+    SAME normalization as original, but also returns centroid/scale.
+    """
+    points = points.copy()
 
-        image_name = data['bev_filename'].item()
+    # Normalize only XYZ coordinates (first 3 channels)
+    xyz = points[:, :3]
+    centroid = xyz.mean(axis=0)
+    pts = xyz - centroid
 
-        xy_grid = None
-        if 'xy_grid' in data.files:
-            xy_grid = data['xy_grid'].astype(np.float32)
+    scale = np.max(np.linalg.norm(pts, axis=1))
+    if scale > 0:
+        pts = pts / scale
 
-        return points, labels, image_name, xy_grid
-    
-    def _downsample_points(self, points: np.ndarray, labels: np.ndarray, xy_grid: np.ndarray = None):
-        """
-        Randomly sample num_points from the point cloud.
-        If there are fewer points than num_points, repeat sampling with replacement.
-        """
-        n_points = points.shape[0]
-        
-        if n_points >= self.num_points:
-            indices = np.random.choice(n_points, self.num_points, replace=False)
-        else:
-            indices = np.random.choice(n_points, self.num_points, replace=True)
-        
-        points = points[indices]
-        labels = labels[indices]
+    points[:, :3] = pts.astype(np.float32)
+    return points, centroid.astype(np.float64), float(scale)
 
-        if xy_grid is not None:
-            xy_grid = xy_grid[indices]
-            return points, labels, xy_grid
 
-        return points, labels
-    
-    def _normalize_points(self, points: np.ndarray):
-        """
-        Normalize XYZ coordinates (first 3 channels) to fit in a unit sphere centered at origin.
-        Additional channels (if present) are left unchanged.
-        """
-        points = points.copy()
-        
-        xyz = points[:, :3]
-        centroid = np.mean(xyz, axis=0)
-        xyz = xyz - centroid
-        
-        max_dist = np.max(np.sqrt(np.sum(xyz ** 2, axis=1)))
-        if max_dist > 0:
-            xyz = xyz / max_dist
-        
-        points[:, :3] = xyz
-        return points
+def compute_tile_indices(x0: float, y0: float, x_min_las: float, y_min_las: float, stride: float):
+    """
+    Convert window origin to integer indices (for matching BEV filenames).
+    Round to avoid float drift.
+    """
+    ix = int(np.round((x0 - x_min_las) / stride))
+    iy = int(np.round((y0 - y_min_las) / stride))
+    return ix, iy
 
-    def _augment_points(self, points: np.ndarray):
-        """
-        Apply random geometric augmentation to XYZ coordinates.
 
-        Augmentations:
-        - Random rotation around Z-axis
-        - Random isotropic scaling
-        """
-        points = points.copy()
+def build_bev_key(base: str, tile_ix: int, tile_iy: int) -> str:
+    """
+    Example:
+      5080_54435 + x0000 + y0002
+      -> 5080_54435__x0000_y0002
+    """
+    return f"{base}__x{tile_ix:04d}_y{tile_iy:04d}"
 
-        if points.shape[1] < 3:
-            return points
 
-        xyz = points[:, :3]
+def build_bev_filename(bev_key: str) -> str:
+    """
+    Example:
+      5080_54435__x0000_y0002
+      -> 5080_54435__x0000_y0002__bev_full_256x256.npz
+    """
+    return f"{bev_key}{BEV_SUFFIX}"
 
-        angle_rad = np.deg2rad(np.random.uniform(-self.rotation_deg_max, self.rotation_deg_max))
-        cos_theta, sin_theta = np.cos(angle_rad), np.sin(angle_rad)
-        rotation = np.array([
-            [cos_theta, -sin_theta, 0.0],
-            [sin_theta,  cos_theta, 0.0],
-            [0.0,        0.0,       1.0],
-        ], dtype=np.float32)
 
-        xyz = np.matmul(xyz, rotation.T)
-        points[:, :3] = xyz
-        return points
+def compute_xy_grid(sampled_points_xyzxy: np.ndarray, x0: float, y0: float, block_size_m: float):
+    """
+    Compute per-point XY coordinates in [-1, 1] for torch grid_sample.
 
-    def __len__(self):
-        """Return the number of blocks in this split"""
-        return len(self.block_files)
-    
-    def __getitem__(self, idx):
-        """
-        Get a single item from the dataset.
-        
-        Returns:
-            If use_images=False:
-                points, labels
-            If use_images=True:
-                points, labels, image, xy_grid
-        """
-        points, labels, image_name, xy_grid = self._load_block(self.block_files[idx])
+    IMPORTANT:
+    - sampled_points_xyzxy must be the FINAL sampled points before normalization
+    - uses raw XY coordinates in meters
+    - aligned with BEV tiles generated from the same spatial window
 
-        if self.use_images:
-            image = self._load_image(Path(os.path.join(self.images_dir, image_name)))
-            if xy_grid is None:
-                raise ValueError(
-                    f"Block file {self.block_files[idx]} does not contain 'xy_grid'. "
-                    f"Please regenerate block files with the updated preprocessing script."
+    Returns:
+        xy_grid: (N, 2) float32
+                 [:,0] = x_grid in [-1,1]
+                 [:,1] = y_grid in [-1,1]
+    """
+    x = sampled_points_xyzxy[:, 0]
+    y = sampled_points_xyzxy[:, 1]
+
+    # Relative coordinates inside current 50m block
+    x_rel = (x - x0) / block_size_m
+    y_rel = (y - y0) / block_size_m
+
+    # Clamp just in case of floating-point boundary effects
+    x_rel = np.clip(x_rel, 0.0, 1.0)
+    y_rel = np.clip(y_rel, 0.0, 1.0)
+
+    # Convert to [-1, 1] to match grid_sample convention
+    x_grid = x_rel * 2.0 - 1.0
+    y_grid = y_rel * 2.0 - 1.0
+
+    xy_grid = np.stack([x_grid, y_grid], axis=1).astype(np.float32)
+    return xy_grid
+
+
+def main():
+    os.makedirs(OUT_ROOT, exist_ok=True)
+
+    for split in ["train", "test"]:
+        in_dir = os.path.join(IN_ROOT, split)
+        out_dir = os.path.join(OUT_ROOT, split)
+        os.makedirs(out_dir, exist_ok=True)
+
+        las_files = sorted(glob.glob(os.path.join(in_dir, "*.las")))
+        if len(las_files) == 0:
+            raise RuntimeError(f"No .las files found in {in_dir}")
+
+        print(f"\n=== {split.upper()} ===")
+        print("Config:", str(CONFIG_PATH))
+        print("Input :", in_dir)
+        print("Files :", len(las_files))
+        print("Output:", out_dir)
+
+        for las_path in tqdm(las_files, desc=f"Processing {split}"):
+            base = os.path.splitext(os.path.basename(las_path))[0]
+
+            las = laspy.read(las_path)
+
+            # Extract ALL features
+            features, feature_names = extract_all_features_from_las(las)
+
+            labels_raw = np.array(las.classification, dtype=np.int64)
+            labels = remap_labels(labels_raw)
+
+            blocks, x_min_las, y_min_las = tile_xy(features, labels, BLOCK_SIZE, STRIDE)
+
+            if MAX_BLOCKS_PER_TILE is not None and len(blocks) > MAX_BLOCKS_PER_TILE:
+                sel = np.random.choice(len(blocks), MAX_BLOCKS_PER_TILE, replace=False)
+                blocks = [blocks[i] for i in sel]
+
+            for i, (window_pts, window_lbl, (x0, y0)) in enumerate(blocks):
+                n_points_in_window = int(window_pts.shape[0])
+
+                # SAME sampling behavior
+                bpts_raw, blbl, sample_idx, sampled_with_replacement = sample_fixed(
+                    window_pts, window_lbl, N_POINTS
                 )
 
-        if self.num_points is not None:
-            if self.use_images:
-                points, labels, xy_grid = self._downsample_points(points, labels, xy_grid)
-            else:
-                points, labels = self._downsample_points(points, labels)
-        
-        if self.normalize:
-            points = self._normalize_points(points)
+                # NEW: compute xy_grid from sampled RAW XY before normalization
+                xy_grid = compute_xy_grid(
+                    sampled_points_xyzxy=bpts_raw,
+                    x0=x0,
+                    y0=y0,
+                    block_size_m=BLOCK_SIZE,
+                )
 
-        if self.augmentation:
-            points = self._augment_points(points)
-        
-        points = torch.from_numpy(points).float()
-        labels = torch.from_numpy(labels).long()
+                # SAME normalization behavior
+                bpts_norm, norm_centroid, norm_scale = normalize_block(bpts_raw)
 
-        if self.use_images:
-            xy_grid = torch.from_numpy(xy_grid).float()
-            return points, labels, image, xy_grid
-        else:
-            return points, labels
+                # Window indices relative to LAS tiling origin
+                tile_ix, tile_iy = compute_tile_indices(x0, y0, x_min_las, y_min_las, STRIDE)
+
+                # Deterministic BEV identifier
+                bev_key = build_bev_key(base, tile_ix, tile_iy)
+                bev_filename = build_bev_filename(bev_key)
+
+                out_path = os.path.join(out_dir, f"{base}_b{i:05d}.npz")
+
+                np.savez_compressed(
+                    out_path,
+
+                    # Original fields
+                    points=bpts_norm.astype(np.float32),
+                    labels=blbl.astype(np.int64),
+
+                    # Metadata for alignment
+                    las_name=np.array([os.path.basename(las_path)]),
+                    split=np.array([split]),
+                    block_id=np.int32(i),
+
+                    x0=np.float64(x0),
+                    y0=np.float64(y0),
+                    block_size_m=np.float32(BLOCK_SIZE),
+                    stride_m=np.float32(STRIDE),
+
+                    x_min_las=np.float64(x_min_las),
+                    y_min_las=np.float64(y_min_las),
+                    tile_ix=np.int32(tile_ix),
+                    tile_iy=np.int32(tile_iy),
+
+                    # Direct BEV linkage
+                    bev_key=np.array([bev_key]),
+                    bev_filename=np.array([bev_filename]),
+
+                    # NEW: per-point coordinates for BEV local feature sampling
+                    xy_grid=xy_grid,
+
+                    n_points_in_window=np.int32(n_points_in_window),
+                    sample_idx=sample_idx,
+                    sampled_with_replacement=sampled_with_replacement,
+
+                    # Normalization metadata
+                    norm_centroid_xyz=norm_centroid,
+                    norm_scale=np.float64(norm_scale),
+
+                    # Optional metadata
+                    feature_names=np.array(feature_names, dtype=object),
+                )
+
+        print(f"Done {split} -> {out_dir}")
+
+
+if __name__ == "__main__":
+    main()
