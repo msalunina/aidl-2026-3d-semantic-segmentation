@@ -1,10 +1,10 @@
 
-# POINTNET ARCHITECTURE VALIDATION
+# PointNet Architecture Validation
 
 The goal of the following experiments is to validate the implementation of the PointNet network [1](https://arxiv.org/pdf/1612.00593)
 For this task, we decided to run experiments using ShapeNet dataset as stated in the original work
 
-The first implementation show in [PointNet architecture](###implementation) is used to run a train/test with the ShapeNet dataset
+The first implementation show in [PointNet architecture](###implementation) is used to run a train/test/validation with the ShapeNet dataset
 
 
 ## SETUP
@@ -12,7 +12,7 @@ The first implementation show in [PointNet architecture](###implementation) is u
 The experiments have been run in a desktop PC:
 min 2GB GPU RAM
 
-# SHAPENET PART SEGMENTATION
+# ShapeNet Part Segmentation Task
 
 The dataset has been downloaded from [Kaggle]( https://www.kaggle.com/datasets/mitkir/shapenet/download?datasetVersionNumber=1) web site as stated in the [torch_geometric](https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/datasets/shapenet.html) documentation.
 
@@ -24,30 +24,54 @@ The dataset is splitted in train,test,validation as shown in the following table
 |  EVAL  |  341.0  (12.7%) |  14.0  (18.4%) |  11.0  (20.0%) |  158.0  (17.6%) |  704.0  (18.7%) |  14.0  (20.3%) |  159.0  (20.2%) |  80.0  (20.4%) |  286.0  (18.5%) |  83.0  (18.4%) |  51.0  (25.2%) |  38.0  (20.6%) |  44.0  (15.5%) |  12.0  (18.2%) |  31.0  (20.4%) |  848.0  (16.1%) |
 |  TEST  |  391.0  (14.5%) |  8.0  (10.5%) |  5.0  (9.1%) |  81.0  (9.0%) |  396.0 (10.5%) |  6.0 (8.7%) |  78.0  (9.9%) |  35.0 (8.9%) |  143.0 (9.2%) |  44.0 (9.8%) | 26.0  (12.9%) |  16.0  (8.7%)   |  30.0 (10.6%)  |  8.0  (12.1%)  |  15.0  (9.9%) |  588.0 (11.1%) |
 
-## DATALOADER CONTRBUTIONS
-
-+ compensated IoU for part segmentation
-+ class object 
-
 The goal results for the model are shown in the following table:
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
 | PointNet  |  83.7  |  83.4  | 78.7  | 82.5  |  74.9  |  89.6  |  73.0  |  91.5  |  85.9  |  80.8  |  95.3  |  65.2  |  93.0  |  81.2  |  57.9  |  72.8  |  80.6  |
 
+The measure for the experiments is IoU(%), imlementing a compensated IoU for objects that may have a missing label part. For example plane class has part labels [0,1,2,3] but an object in the batch may have part labels [0,1,2] then a value of 1/4 is added in the IoU metrics, this avoids a punishment in IoU for non present parts in an object. This compensation is mentioned in the original work. 
+
+
+### Dataloader implementation
+
+To be able to use the compensated IoU measure, we had to create a new dataloader. This will allow us to return with the element, the compensated IoU value, and the index of the object class that is also needed in the next steps.
+
+The dataloader is based on the [torch_geometrics](https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/datasets/shapenet.html) implementation, and can be found in [shapenet_dataset.py](https://github.com/msalunina/aidl-2026-3d-semantic-segmentation/blob/main/src/utils/shapenet_dataset.py)
+
+
+## Experiments
+
+The experiments will be run using the following configuration:
+
+```yaml
+  learning_rate: 0.01          # Initial LR passed to Adam
+  scheduler_type: cosine       # Only supported option currently
+  scheduler_min_lr: 0.00001    # Floor LR (eta_min in CosineAnnealingLR)
+  num_epochs: 50               # Also used as T_max for the scheduler
+  num_points: 1024
+  batch_size: 32
+  random_noise: mean 0 std dev 0.02
+  rotation_arround_up_axis: 0.7
+```
+
+
+### PointNet base model
+
+First we do a train/evaluation run 
 
 The base model gives the following results
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-|TRAIN  |  0.725  |  0.753  |  0.676  |  0.774  |  0.617  |  0.856  |  0.616  |  0.856  |  0.781  |  0.832  |  0.938  |  0.452  |  0.736  |  0.762  |  0.482  |  0.634  |  0.841  |
-| EVAL  |  0.703  |  0.764  |  0.690  |  0.471  |  0.634  |  0.869  |  0.585  |  0.859  |  0.803  |  0.802  |  0.936  |  0.470  |  0.809  |  0.711  |  0.376  |  0.642  |  0.819  |
+|TRAIN  |  72.5  |  75.3  |  67.6  |  77.4  |  61.7  |  85.6  |  61.6  |  85.6  |  78.1  |  83.2  |  93.8  |  45.2  |  73.6  |  76.2  |  48.2  |  63.4  |  84.1  |
+| EVAL  |  70.3  |  76.4  |  69.0  |  47.1  |  63.4  |  86.9  |  58.5  |  85.9  |  80.3  |  80.2  |  93.6  |  47.0  |  80.9  |  71.1  |  37.6  |  64.2  |  81.9  |
 
 We can see that the results are quite different from the original work. 
-Going deep in the original work, they state the following changes in the architecture for improving part segmentation:
-+ Adding a one-hot vector for the object class
-+ compensation in the IoU for the parts that are missing in a specific object,
-+ concatenating results from the first convolutional layers
+Going deep in the original work, they state the following changes in the architecture for improving part segmentation task:
+
++ Adding a one-hot vector for the object class and concatenate it in the final embedding
++ Adding skip connections and concatenate them in the final embedding
 + increase layer sizes in all the network
 
 The network with the improvements stated in the original work is shown in the following image
@@ -59,52 +83,50 @@ With the specified changes, the following experiments are planned:
 + Pointnet + skip connections
 + Pointnet + one-hot vector + skip connections
 + Increase layer sizes on architecture with best results
+ 
+
 
 The results for the experiments are shown in the following tables
 
-## POINET + ONE HOT VECTOR 
+### PointNet + One-Hot vector 
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-|TRAIN  |  0.78  |  0.779  |  0.779  |  0.851  |  0.664  |  0.870  |  0.749  |  0.882  |  0.829  |  0.858  |  0.943  |  0.517  |  0.870  |  0.812  |  0.564  |  0.684  |  0.849  |
-| EVAL  |  0.76  |  0.785  |  0.694  |  0.747  |  0.686  |  0.885  |  0.710  |  0.875  |  0.832  |  0.831  |  0.941  |  0.549  |  0.897  |  0.776  |  0.439  |  0.705  |  0.831  |
+|TRAIN  |  78.1  |  77.9  |  77.9  |  85.1  |  66.4  |  87.0  |  74.9  |  88.2  |  82.9  |  85.8  |  94.3  |  51.7  |  87.0  |  81.2  | 56.4  |  68.4  |  84.9  |
+| EVAL  |  76.1  |  78.5  |  69.4  |  74.7  |  68.6  |  88.5  |  71.0  |  87.5  |  83.2  |  83.1  |  94.1  |  54.9  |  89.7  |  77.6  | 43.9  |  70.5  |  83.1  |
 
-## POINTNET + SKIP CONN 
-
-|       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
-|:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-|TRAIN  |  0.75  |  0.763  |  0.757  |  0.779  |  0.665  |  0.862  |  0.686  |  0.866  |  0.805  |  0.845  |  0.939  |  0.442  |  0.810  |  0.738  |  0.525  |  0.650  |  0.846  |
-| EVAL  |  0.72  |  0.775  |  0.712  |  0.517  |  0.688  |  0.876  |  0.659  |  0.864  |  0.811  |  0.819  |  0.935  |  0.436  |  0.842  |  0.717  |  0.413  |  0.636  |  0.826  |
-
-
-## POINTNET + OHV + SKIP CONN 
+### PointNet + Skip Connections
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-|TRAIN  |  0.80  |  0.791  |  0.768  |  0.890  |  0.720  |  0.878  |  0.765  |  0.885  |  0.831  |  0.867  |  0.946  |  0.572  |  0.876  |  0.827  |  0.619  |  0.782  |  0.852  |
-| EVAL  |  0.77  |  0.787  |  0.727  |  0.682  |  0.717  |  0.884  |  0.694  |  0.877  |  0.828  |  0.836  |  0.943  |  0.601  |  0.893  |  0.784  |  0.503  |  0.770  |  0.835  |
-| TEST  |  0.78  |  0.809  |  0.793  |  0.611  |  0.734  |  0.891  |  0.696  |  0.887  |  0.834  |  0.830  |  0.958  |  0.575  |  0.879  |  0.815  |  0.551  |  0.695  |  0.856  |
+|TRAIN  |  74.9  |  76.3  |  75.7  |  77.9  |  66.5  |  86.2  |  68.6  |  86.6  |  80.5  |  84.5  |  93.9  |  44.2  |  81.0  |  73.8  |  52.5  |  65.0  |  84.6  |
+| EVAL  |  72.0  |  77.5  |  71.2  |  51.7  |  68.8  |  87.6  |  65.9  |  86.4  |  81.1  |  81.9  |  93.5  |  43.6  |  84.2  |  71.7  |  41.3  |  63.6  |  82.6  |
 
 
-## POINTNET - PAPER - big layer sizes - ohv - skip links
+### PointNet + One-Hot vector + Skip Connections
+
+|       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
+|:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
+|TRAIN  |  80.4  |  79.1  |  76.8  |  89.0  |  72.0  |  87.8  |  76.5  |  88.5  |  83.1  |  86.7  |  94.6  |  57.2  |  87.6  |  82.7  |  61.9  |  78.2  |  85.2  |
+| EVAL  |  77.3  |  78.7  |  72.7  |  68.2  |  71.7  |  88.4  |  69.4  |  87.7  |  82.8  |  83.6  |  94.3  |  60.1  |  89.3  |  78.4  |  50.3  |  77.0  |  83.5  |
+
+
+### PointNet + One-Hot vector + Skip Connections + Layer Sizes
+
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:| 
-|TRAIN  |  0.79  |  0.797  |  0.766  |  0.889  |  0.717  |  0.879  |  0.722  |  0.879  |  0.814  |  0.857  |  0.948  |  0.547  |  0.835  |  0.818  |  0.571  |  0.767  |  0.849  |
-| EVAL  |  0.76  |  0.791  |  0.690  |  0.685  |  0.720  |  0.887  |  0.712  |  0.874  |  0.818  |  0.843  |  0.945  |  0.580  |  0.869  |  0.759  |  0.470  |  0.752  |  0.834  |
+|TRAIN  |  79.1  |  79.7  |  76.6  |  88.9  |  71.7  |  87.9  |  72.2  |  87.9  |  81.4  |  85.7  |  94.8  |  54.7  |  83.5  |  81.8  |  57.1  |  76.7  |  84.9  |
+| EVAL  |  76.4  |  79.1  |  69.0  |  68.5  |  72.0  |  88.7  |  71.2  |  87.4  |  81.8  |  84.3  |  94.5  |  58.0  |  86.9  |  75.9  |  47.0  |  75.2  |  83.4  |
 
 
-## POINTNET + ONE HOT VECTOR + SKIP CONNECTIONS + weights
+## Conclusions
+
+The best results for part segmentation task in ShapeNet dataset is the 3rd configuration, PointNet + One-Hot vector + skip connections, the following table shows the comparison of or best results against the original work, for this comparison we are using the result obtained with the test split
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-|TRAIN  |  0.73  |  0.760  |  0.656  |  0.809  |  0.581  |  0.833  |  0.712  |  0.850  |  0.809  |  0.831  |  0.943  |  0.449  |  0.695  |  0.742  |  0.500  |  0.652  |  0.822  |
-| EVAL  |  0.71  |  0.752  |  0.662  |  0.734  |  0.593  |  0.853  |  0.650  |  0.842  |  0.813  |  0.813  |  0.935  |  0.448  |  0.732  |  0.732  |  0.369  |  0.651  |  0.785  |
-| TEST  |  0.71  |  0.780  |  0.709  |  0.702  |  0.589  |  0.856  |  0.637  |  0.857  |  0.809  |  0.811  |  0.948  |  0.445  |  0.671  |  0.717  |  0.483  |  0.576  |  0.827  |
+| PointNet  |  83.7  |  83.4  | 78.7  | 82.5  |  74.9  |  89.6  |  73.0  |  91.5  |  85.9  |  80.8  |  95.3  |  65.2  |  93.0  |  81.2  |  57.9  |  72.8  |  80.6  |
+| OURS      |  78.2  |  80.9  | 79.3  |  61.1 |  73.4  |  89.1  |  69.6  |  88.7  |  83.4  |  83.0  |  95.8  |  57.5  |  87.9  |  81.5  |  55.1  |  69.5  |  85.6  |
 
-## CONCLUSIONS
 
-ShapeNet dataset for part segmentation does not need weights eventought some classes have high imbalance
-
-|       |  Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
-|:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-| IMBALANCE | 4.940 |  14.219 | 2.824 |  13.313 |  11.485| 4.780 | 8.589|    1.0305|  49.615|     1.153 |  100.970 |    15.392 | 11.791|  6.098 |  11.615|   24.364| 
+The average IoU(%) achieved is really close to the original work, so we can assume that our implementation of the PointNet architecture is validated.

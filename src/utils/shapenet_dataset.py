@@ -102,7 +102,7 @@ class shapenetDataset(Dataset):
         Apply random geometric augmentation to XYZ coordinates.
 
         Augmentations:
-        - Random rotation around Z-axis
+        - Random rotation around Y-axis
         - Random isotropic scaling
         """
         points = points.copy()

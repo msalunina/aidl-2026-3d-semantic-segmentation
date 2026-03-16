@@ -96,10 +96,20 @@ class DALESDataset(Dataset):
     def _load_image(self, file_path):
         
         data = np.load(file_path)
+        
+        #c1 = data['density'].astype(np.float32)
+        #c2 = data['z_max'].astype(np.float32)
+        #c3 = data['z_mean'].astype(np.float32)
+        #c4 = data['z_range'].astype(np.float32)
+        
         c1 = data['density'].astype(np.float32)
+        c1 = (c1 - c1.min()) / (c1.max() - c1.min())
         c2 = data['z_max'].astype(np.float32)
+        c2 = (c2 - c2.min()) / (c2.max() - c2.min())
         c3 = data['z_mean'].astype(np.float32)
+        c3 = (c3 - c3.min()) / (c3.max() - c3.min())
         c4 = data['z_range'].astype(np.float32)
+        c4 = (c4 - c4.min()) / (c4.max() - c4.min())
 
         return np.stack([c1, c2, c3, c4], axis=-1) 
 
