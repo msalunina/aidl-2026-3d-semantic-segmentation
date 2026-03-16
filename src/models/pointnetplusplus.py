@@ -649,7 +649,7 @@ class PointNetPlusPlusSegmentation(nn.Module):
         # 256 -> 1024 : interpolated features gives 256 + skip has 64 = 320
         self.fp2 = PointNetFeaturePropagation(in_channels=256 + 64, mlp_channels=[256, 128])
         # 1024 -> N : interpolated features gives 128 + skip has D (if any) = 128 + extra_channels
-        self.fp1 = PointNetFeaturePropagation(in_channels=128 + extra_channels, mlp_channels=[128, 128, 128])
+        self.fp1 = PointNetFeaturePropagation(in_channels=128 + extra_channels, mlp_channels=[128, 128])
 
         # -----------------------
         # Per-point classifier head
