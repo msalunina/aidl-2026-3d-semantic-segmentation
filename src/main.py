@@ -5,9 +5,9 @@ import numpy as np
 import os
 import random
 from utils.config_parser import ConfigParser
-from utils.dataset_v2 import DALESDataset
+from utils.dataset import DALESDataset
 from torch.utils.data import DataLoader
-from utils.trainer_v2 import train_model_segmentation
+from utils.trainer import train_model_segmentation
 from utils.focal_loss import FocalLoss
 from utils.sampler import ClassBalancedSampler
 from pathlib import Path
@@ -147,7 +147,7 @@ if __name__ == '__main__':
 
     # Initialize model dependent on the provided input
     if config.model_name == "pointnet":
-        from models.pointnet_v2 import PointNetSegmentation
+        from models.pointnet import PointNetSegmentation
         model = PointNetSegmentation(
             num_classes=config.num_classes,
             input_channels=config.num_channels,
@@ -155,7 +155,7 @@ if __name__ == '__main__':
         ).to(device)
 
     elif config.model_name == "ipointnet":
-        from models.pointnet_v2 import IPointNetSegmentation
+        from models.pointnet import IPointNetSegmentation
         model = IPointNetSegmentation(
             num_classes=config.num_classes,
             input_channels=config.num_channels,

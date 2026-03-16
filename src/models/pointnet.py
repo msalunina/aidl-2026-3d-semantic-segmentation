@@ -7,7 +7,7 @@ Based on the paper: PointNet: Deep Learning on Point Sets for 3D Classification 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.img_encoder_v2 import ImageEncoder
+from models.img_encoder import ImageEncoder
 
 
 class TransformationNet(nn.Module):
