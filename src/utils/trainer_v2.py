@@ -306,12 +306,13 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
 # ----------------------------------------------------
 #    TESTING EPOCH FUNCTION (SEGMENTATION)
 # ----------------------------------------------------
+
 def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_image=False, epoch=None):
 
-    device = next(network.parameters()).device  # guarantee that we are using the same device than the model
+    device = next(network.parameters()).device
 
     with torch.no_grad():
-        network.eval()                      # Dectivate the train=True flag inside the model
+        network.eval()
 
         loss_history = []
         nCorrect = 0
@@ -319,9 +320,13 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         inter = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
         union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
 
+        # NEW: track richest sample across whole validation epoch
+        should_log_vis = epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}
+        best_num_classes = -1
+        best_vis_data = None
+
         for batch_idx, batch in enumerate(tqdm(data_loader, desc="val epoch", position=1, leave=False)):
 
-            # Pointnet needs: [B, N, C]
             if use_image:
                 points_BNC, labels, image, xy_grid = batch
             else:
@@ -333,53 +338,61 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             if use_image:
                 xy_grid = xy_grid.to(device)
 
-            # Forward pass + loss under mixed precision
             with torch.amp.autocast(device.type):
-                # Forward points through the network
+
                 if use_image:
-                    image = image.permute(0, 3, 1, 2)  # change [B, H, W, C] -> [B, C, H, W]
+                    image = image.permute(0, 3, 1, 2)
                     image = image.to(device)
                     output = network(points_BNC, image, xy_grid)
                 else:
                     output = network(points_BNC)
 
-                # Handle output depending on what model returns
                 if isinstance(output, tuple):
                     feature_tnet, log_probs_BCN = output
                 else:
                     log_probs_BCN = output
 
-                # Compute loss: NLLLoss(ignore_index=-1)
                 loss = criterion(log_probs_BCN, labels)
 
             loss_history.append(loss.item())
 
-            # ----------- COMPUTE METRICS -------------
             predictions = log_probs_BCN.argmax(dim=1)
             id_valid = labels != config.ignore_label
             valid_predictions = predictions[id_valid]
             valid_labels = labels[id_valid]
 
             batch_correct = (valid_predictions == valid_labels).sum().item()
-            nCorrect = nCorrect + batch_correct
-            nTotal = nTotal + id_valid.sum().item()
+            nCorrect += batch_correct
+            nTotal += id_valid.sum().item()
 
-            inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, network.num_classes)
+            inter_batch, union_batch = compute_batch_intersection_and_union(
+                valid_labels, valid_predictions, network.num_classes
+            )
             inter += inter_batch
             union += union_batch
 
-            # Log visualization only for first, middle, and last epoch, using first validation batch only
-            if batch_idx == 0 and epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}:
+            # NEW: search richest sample across all batches
+            if should_log_vis:
                 sample_idx = _select_richest_sample_idx(labels, ignore_label=config.ignore_label)
 
-                _append_pointcloud_predictions_to_table(
-                    points_BNC, labels, predictions, log_probs_BCN, epoch, sample_idx=sample_idx
-                )
-                if use_image:
-                    _append_pointcloud_image_pair_to_table(
-                        points_BNC, labels, image, epoch, sample_idx=sample_idx
-                    )
-            # ------------------------------------------
+                labels_np = labels[sample_idx].detach().cpu().numpy()
+                valid_lbl = labels_np[labels_np != config.ignore_label]
+                num_classes_present = len(np.unique(valid_lbl))
+
+                if num_classes_present > best_num_classes:
+                    best_num_classes = num_classes_present
+
+                    best_vis_data = {
+                        "points_BNC": points_BNC.detach().cpu(),
+                        "labels": labels.detach().cpu(),
+                        "predictions": predictions.detach().cpu(),
+                        "log_probs_BCN": log_probs_BCN.detach().cpu(),
+                        "epoch": epoch,
+                        "sample_idx": sample_idx,
+                    }
+
+                    if use_image:
+                        best_vis_data["image"] = image.detach().cpu()
 
         assert nTotal > 0, "No valid points in epoch (all labels are -1)."
         assert (union > 0).any(), "Not a single class present for IoU in epoch."
@@ -392,7 +405,29 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         iou_class_epoch[id_present] = inter[id_present] / union[id_present]
         eval_miou_epoch = iou_class_epoch[id_present].mean().item()
 
+        # Log visualization once after scanning entire epoch
+        if should_log_vis and best_vis_data is not None:
+
+            _append_pointcloud_predictions_to_table(
+                best_vis_data["points_BNC"],
+                best_vis_data["labels"],
+                best_vis_data["predictions"],
+                best_vis_data["log_probs_BCN"],
+                best_vis_data["epoch"],
+                sample_idx=best_vis_data["sample_idx"],
+            )
+
+            if use_image:
+                _append_pointcloud_image_pair_to_table(
+                    best_vis_data["points_BNC"],
+                    best_vis_data["labels"],
+                    best_vis_data["image"],
+                    best_vis_data["epoch"],
+                    sample_idx=best_vis_data["sample_idx"],
+                )
+
     return eval_loss_epoch, eval_acc_epoch, eval_miou_epoch, iou_class_epoch
+
 # ----------------------------------------------------
 
 

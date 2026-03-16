@@ -318,6 +318,11 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         inter = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
         union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
 
+        # NEW: keep richest sample across the whole validation epoch
+        should_log_vis = epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}
+        best_vis_data = None
+        best_num_classes = -1
+
         for batch_idx, batch in enumerate(tqdm(data_loader, desc="val epoch", position=1, leave=False)):
 
             # Pointnet needs: [B, N, C]
@@ -325,7 +330,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
                 points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
             else:
                 points_BNC, labels = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
-            
+
             points_BNC = points_BNC.to(device)
             labels = labels.to(device)
 
@@ -367,17 +372,28 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
             inter += inter_batch
             union += union_batch
 
-            # Log visualization only for first, middle, and last epoch, using first validation batch only
-            if batch_idx == 0 and epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}:
+            # NEW: select richest sample across ALL validation batches
+            if should_log_vis:
                 sample_idx = _select_richest_sample_idx(labels, ignore_label=config.ignore_label)
 
-                _append_pointcloud_predictions_to_table(
-                    points_BNC, labels, predictions, log_probs_BCN, epoch, sample_idx=sample_idx
-                )
-                if(use_image):
-                    _append_pointcloud_image_pair_to_table(
-                        points_BNC, labels, image, epoch, sample_idx=sample_idx
-                    )
+                labels_np = labels[sample_idx].detach().cpu().numpy()
+                valid_lbl = labels_np[labels_np != config.ignore_label]
+                num_classes_present = len(np.unique(valid_lbl))
+
+                if num_classes_present > best_num_classes:
+                    best_num_classes = num_classes_present
+
+                    best_vis_data = {
+                        "points_BNC": points_BNC.detach().cpu(),
+                        "labels": labels.detach().cpu(),
+                        "predictions": predictions.detach().cpu(),
+                        "log_probs_BCN": log_probs_BCN.detach().cpu(),
+                        "epoch": epoch,
+                        "sample_idx": sample_idx,
+                    }
+
+                    if(use_image):
+                        best_vis_data["image"] = image.detach().cpu()
             # ------------------------------------------
 
         assert nTotal > 0, "No valid points in epoch (all labels are -1)."
@@ -390,6 +406,26 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         iou_class_epoch = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
         iou_class_epoch[id_present] = inter[id_present] / union[id_present]       # iou of each class, per epoch (could be returned)
         eval_miou_epoch = iou_class_epoch[id_present].mean().item()               # mean iou over classes, per epoch
+
+        # NEW: append visualization once, after scanning whole epoch
+        if should_log_vis and best_vis_data is not None:
+            _append_pointcloud_predictions_to_table(
+                best_vis_data["points_BNC"],
+                best_vis_data["labels"],
+                best_vis_data["predictions"],
+                best_vis_data["log_probs_BCN"],
+                best_vis_data["epoch"],
+                sample_idx=best_vis_data["sample_idx"],
+            )
+
+            if(use_image):
+                _append_pointcloud_image_pair_to_table(
+                    best_vis_data["points_BNC"],
+                    best_vis_data["labels"],
+                    best_vis_data["image"],
+                    best_vis_data["epoch"],
+                    sample_idx=best_vis_data["sample_idx"],
+                )
 
     return eval_loss_epoch, eval_acc_epoch, eval_miou_epoch, iou_class_epoch
 # ----------------------------------------------------
