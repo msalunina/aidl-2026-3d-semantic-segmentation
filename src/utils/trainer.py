@@ -230,13 +230,16 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
     for batch in tqdm(train_loader, desc="train epoch", position=1, leave=False):
 
         # Pointnet needs: [B, N, C]
-        if(use_image):
-            points_BNC, labels, image = batch                           # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+        if use_image:
+            points_BNC, labels, image, xy_grid = batch
         else:
-            points_BNC, labels = batch                           # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+            points_BNC, labels = batch
 
         points_BNC = points_BNC.to(device)
         labels = labels.to(device)
+
+        if use_image:
+            xy_grid = xy_grid.to(device)
 
         # Set network gradients to 0
         optimizer.zero_grad(set_to_none=True)
@@ -245,9 +248,9 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         with torch.amp.autocast(device.type):
             # Forward points and image through the network
             if use_image:
-                image = image.permute(0,3,1,2)  #change [B, H, W, C] -> [B. C. H. W]
+                image = image.permute(0, 3, 1, 2)  # change [B, H, W, C] -> [B, C, H, W]
                 image = image.to(device)
-                output = network(points_BNC, image)
+                output = network(points_BNC, image, xy_grid)
             else:
                 output = network(points_BNC)
 
@@ -271,17 +274,15 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
         scaler.update()
 
         # ----------- COMPUTE METRICS -------------
-        # Compute predictions
         predictions = log_probs_BCN.argmax(dim=1)
-        # Identify valid labels (-1 is not valid)
         id_valid = labels != config.ignore_label
         valid_predictions = predictions[id_valid]
         valid_labels = labels[id_valid]
-        # Accuracy
-        batch_correct = (valid_predictions == valid_labels).sum().item()    # num correct (valid) per batch
-        nCorrect = nCorrect + batch_correct                                 # num correct (valid) per epoch
-        nTotal = nTotal + id_valid.sum().item()                             # num total (valid) per epoch
-        # Update intersection and union
+
+        batch_correct = (valid_predictions == valid_labels).sum().item()
+        nCorrect = nCorrect + batch_correct
+        nTotal = nTotal + id_valid.sum().item()
+
         inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, network.num_classes)
         inter += inter_batch
         union += union_batch
@@ -289,14 +290,14 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
 
     assert nTotal > 0, "No valid points in epoch (all labels are -1)."
     assert (union > 0).any(), "Not a single class present for IoU in epoch."
-    # Average across all batches
+
     train_loss_epoch = np.mean(loss_history)
     train_acc_epoch = nCorrect / nTotal
-    # Compute IoU per class and mean
-    id_present = union > 0                                                    # id of classes that are present
+
+    id_present = union > 0
     iou_class_epoch = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
-    iou_class_epoch[id_present] = inter[id_present] / union[id_present]       # iou of each class, per epoch (could be returned)
-    train_miou_epoch = iou_class_epoch[id_present].mean().item()              # mean iou over classes, per epoch
+    iou_class_epoch[id_present] = inter[id_present] / union[id_present]
+    train_miou_epoch = iou_class_epoch[id_present].mean().item()
 
     return train_loss_epoch, train_acc_epoch, train_miou_epoch, iou_class_epoch
 # ----------------------------------------------------
@@ -305,12 +306,13 @@ def train_single_epoch_segmentation(config, train_loader, network, optimizer, cr
 # ----------------------------------------------------
 #    TESTING EPOCH FUNCTION (SEGMENTATION)
 # ----------------------------------------------------
+
 def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_image=False, epoch=None):
 
-    device = next(network.parameters()).device  # guarantee that we are using the same device than the model
+    device = next(network.parameters()).device
 
     with torch.no_grad():
-        network.eval()                      # Dectivate the train=True flag inside the model
+        network.eval()
 
         loss_history = []
         nCorrect = 0
@@ -318,61 +320,58 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
         inter = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
         union = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
 
-        # NEW: keep richest sample across the whole validation epoch
+        # NEW: track richest sample across whole validation epoch
         should_log_vis = epoch is not None and epoch in {0, config.num_epochs // 2, config.num_epochs - 1}
-        best_vis_data = None
         best_num_classes = -1
+        best_vis_data = None
 
         for batch_idx, batch in enumerate(tqdm(data_loader, desc="val epoch", position=1, leave=False)):
 
-            # Pointnet needs: [B, N, C]
-            if(use_image):
-                points_BNC, labels, image = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+            if use_image:
+                points_BNC, labels, image, xy_grid = batch
             else:
-                points_BNC, labels = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]
+                points_BNC, labels = batch
 
             points_BNC = points_BNC.to(device)
             labels = labels.to(device)
 
-            # Forward pass + loss under mixed precision
+            if use_image:
+                xy_grid = xy_grid.to(device)
+
             with torch.amp.autocast(device.type):
-                # Forward points through the network
+
                 if use_image:
-                    image = image.permute(0,3,1,2) #change [B, H, W, C] -> [B. C. H. W]
+                    image = image.permute(0, 3, 1, 2)
                     image = image.to(device)
-                    output = network(points_BNC, image)
+                    output = network(points_BNC, image, xy_grid)
                 else:
                     output = network(points_BNC)
 
-                # Handle output depending on what model returns
                 if isinstance(output, tuple):
                     feature_tnet, log_probs_BCN = output
                 else:
                     log_probs_BCN = output
 
-                # Compute loss: NLLLoss(ignore_index=-1)
-                # NLLLoss expects class dimension at dim=1, network returns [B, num_classes, N] --> HAPPY!
                 loss = criterion(log_probs_BCN, labels)
 
             loss_history.append(loss.item())
 
-            # ----------- COMPUTE METRICS -------------
-            # Compute predictions
             predictions = log_probs_BCN.argmax(dim=1)
-            # Identify valid labels (-1 is not valid)
             id_valid = labels != config.ignore_label
             valid_predictions = predictions[id_valid]
             valid_labels = labels[id_valid]
-            # Accuracy
-            batch_correct = (valid_predictions == valid_labels).sum().item()    # num correct (valid) per batch
-            nCorrect = nCorrect + batch_correct                                 # num correct (valid) per epoch
-            nTotal = nTotal + id_valid.sum().item()                             # num total (valid) per epoch
-            # Update intersection and union
-            inter_batch, union_batch = compute_batch_intersection_and_union(valid_labels, valid_predictions, network.num_classes)
+
+            batch_correct = (valid_predictions == valid_labels).sum().item()
+            nCorrect += batch_correct
+            nTotal += id_valid.sum().item()
+
+            inter_batch, union_batch = compute_batch_intersection_and_union(
+                valid_labels, valid_predictions, network.num_classes
+            )
             inter += inter_batch
             union += union_batch
 
-            # NEW: select richest sample across ALL validation batches
+            # NEW: search richest sample across all batches
             if should_log_vis:
                 sample_idx = _select_richest_sample_idx(labels, ignore_label=config.ignore_label)
 
@@ -392,23 +391,23 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
                         "sample_idx": sample_idx,
                     }
 
-                    if(use_image):
+                    if use_image:
                         best_vis_data["image"] = image.detach().cpu()
-            # ------------------------------------------
 
         assert nTotal > 0, "No valid points in epoch (all labels are -1)."
         assert (union > 0).any(), "Not a single class present for IoU in epoch."
-        # Average across all batches
+
         eval_loss_epoch = np.mean(loss_history)
         eval_acc_epoch = nCorrect / nTotal
-        # Compute IoU per class and mean
-        id_present = union > 0                                                    # id of classes that are present
-        iou_class_epoch = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
-        iou_class_epoch[id_present] = inter[id_present] / union[id_present]       # iou of each class, per epoch (could be returned)
-        eval_miou_epoch = iou_class_epoch[id_present].mean().item()               # mean iou over classes, per epoch
 
-        # NEW: append visualization once, after scanning whole epoch
+        id_present = union > 0
+        iou_class_epoch = torch.zeros(network.num_classes, device=device, dtype=torch.float32)
+        iou_class_epoch[id_present] = inter[id_present] / union[id_present]
+        eval_miou_epoch = iou_class_epoch[id_present].mean().item()
+
+        # Log visualization once after scanning entire epoch
         if should_log_vis and best_vis_data is not None:
+
             _append_pointcloud_predictions_to_table(
                 best_vis_data["points_BNC"],
                 best_vis_data["labels"],
@@ -418,7 +417,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
                 sample_idx=best_vis_data["sample_idx"],
             )
 
-            if(use_image):
+            if use_image:
                 _append_pointcloud_image_pair_to_table(
                     best_vis_data["points_BNC"],
                     best_vis_data["labels"],
@@ -428,6 +427,7 @@ def eval_single_epoch_segmentation(config, data_loader, network, criterion, use_
                 )
 
     return eval_loss_epoch, eval_acc_epoch, eval_miou_epoch, iou_class_epoch
+
 # ----------------------------------------------------
 
 
@@ -473,7 +473,9 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
     scaler = torch.amp.GradScaler(device.type)
 
     for epoch in tqdm(range(config.num_epochs), desc="Looping on epochs", position=0):
-        train_loss_epoch, train_acc_epoch, train_miou_epoch, train_iou_class_epoch = train_single_epoch_segmentation(config, train_loader, network, optimizer, criterion, scaler, use_image)
+        train_loss_epoch, train_acc_epoch, train_miou_epoch, train_iou_class_epoch = train_single_epoch_segmentation(
+            config, train_loader, network, optimizer, criterion, scaler, use_image
+        )
 
         val_loss_epoch, val_acc_epoch, val_miou_epoch, val_iou_class_epoch = eval_single_epoch_segmentation(
             config, val_loader, network, criterion, use_image, epoch=epoch
@@ -498,7 +500,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
         # Step the learning rate scheduler
         scheduler.step()
 
-        if(epoch % config.snap_interval == 0):
+        if epoch % config.snap_interval == 0:
             checkpoint = {
                 "model_state_dict": network.state_dict(),
                 "config": config,   # save full configuration
@@ -540,7 +542,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
 
     # Log the full accumulated visualization tables once at the end
     wandb.log({"Segmentation_Visualization": wandb_pointcloud_table})
-    
+
     if use_image:
        wandb.log({"Point Cloud & Images": wandb_pc_image_table})
 

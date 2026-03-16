@@ -16,6 +16,7 @@
 # - saves tile_ix / tile_iy
 # - saves bev_key
 # - saves bev_filename
+# - saves xy_grid for per-point BEV feature sampling
 # ----------------------------------------------------------------
 
 import os
@@ -53,7 +54,9 @@ MIN_POINTS_IN_BLOCK = 1024
 MAX_BLOCKS_PER_TILE = None
 
 # Match current full-density BEV naming convention
-BEV_SUFFIX = "__bev_full_256x256.npz"
+BEV_H = 256
+BEV_W = 256
+BEV_SUFFIX = f"__bev_full_{BEV_H}x{BEV_W}.npz"
 
 # Extract features beyond XYZ if configured (e.g. intensity, return info)
 ALL_FEATURES = cfg["data_preprocessing"]["extract_features"]
@@ -64,59 +67,57 @@ np.random.seed(0)
 def extract_all_features_from_las(las_file):
     """
     Extract all available features from a LAS file based on configuration.
-    
-    Args:
-        las_file: laspy LAS file object
-    
+
     Returns:
         features: numpy array of shape (n_points, num_selected_features)
         feature_names: list of feature names in order
     """
     features_list = []
     feature_names = []
-    
+
     # 1. XYZ coordinates (always present)
     xyz = np.vstack((las_file.x, las_file.y, las_file.z)).T.astype(np.float64)
     features_list.append(xyz)
-    feature_names.extend(['x', 'y', 'z'])
-    
+    feature_names.extend(["x", "y", "z"])
+
     # 2. Intensity
-    if 'intensity' in ALL_FEATURES:
-        if hasattr(las_file, 'intensity'):
+    if "intensity" in ALL_FEATURES:
+        if hasattr(las_file, "intensity"):
             intensity = np.array(las_file.intensity, dtype=np.float64).reshape(-1, 1)
             features_list.append(intensity)
-            feature_names.append('intensity')
+            feature_names.append("intensity")
         else:
-            print(f"Warning: intensity not found in LAS file")
-    
+            print("Warning: intensity not found in LAS file")
+
     # 3. Return number
-    if 'return_number' in ALL_FEATURES:
-        if hasattr(las_file, 'return_number'):
+    if "return_number" in ALL_FEATURES:
+        if hasattr(las_file, "return_number"):
             return_num = np.array(las_file.return_number, dtype=np.float64).reshape(-1, 1)
             features_list.append(return_num)
-            feature_names.append('return_number')
+            feature_names.append("return_number")
         else:
-            print(f"Warning: return_number not found in LAS file")
-    
+            print("Warning: return_number not found in LAS file")
+
     # 4. Number of returns
-    if 'number_of_returns' in ALL_FEATURES:
-        if hasattr(las_file, 'number_of_returns'):
+    if "number_of_returns" in ALL_FEATURES:
+        if hasattr(las_file, "number_of_returns"):
             num_returns = np.array(las_file.number_of_returns, dtype=np.float64).reshape(-1, 1)
             features_list.append(num_returns)
-            feature_names.append('number_of_returns')
+            feature_names.append("number_of_returns")
         else:
-            print(f"Warning: number_of_returns not found in LAS file")
+            print("Warning: number_of_returns not found in LAS file")
 
     # 5. Scan angle rank
-    if 'scan_angle_rank' in ALL_FEATURES:
-        if hasattr(las_file, 'scan_angle_rank'):
+    if "scan_angle_rank" in ALL_FEATURES:
+        if hasattr(las_file, "scan_angle_rank"):
             scan_angle_rank = np.array(las_file.scan_angle_rank, dtype=np.float64).reshape(-1, 1)
             features_list.append(scan_angle_rank)
-            feature_names.append('scan_angle_rank')
+            feature_names.append("scan_angle_rank")
         else:
-            print(f"Warning: scan_angle_rank not found in LAS file")
-    
-    # Concatenate all features: [x, y, z, intensity, return_num, num_returns, scan_angle_rank] = 7 channels
+            print("Warning: scan_angle_rank not found in LAS file")
+
+    # Final channel order:
+    # [x, y, z, intensity, return_number, number_of_returns, scan_angle_rank]
     features = np.hstack(features_list)
     return features, feature_names
 
@@ -138,6 +139,7 @@ def tile_xy(points: np.ndarray, labels: np.ndarray, block_size: float, stride: f
     x_min, y_min = points[:, 0].min(), points[:, 1].min()
     x_max, y_max = points[:, 0].max(), points[:, 1].max()
 
+    # Keep same behavior / same tiling family as before
     x_starts = np.arange(x_min, x_max - block_size, stride)
     y_starts = np.arange(y_min, y_max - block_size, stride)
 
@@ -175,9 +177,10 @@ def normalize_block(points: np.ndarray):
     """
     SAME normalization as original, but also returns centroid/scale.
     """
+    points = points.copy()
+
     # Normalize only XYZ coordinates (first 3 channels)
     xyz = points[:, :3]
-    
     centroid = xyz.mean(axis=0)
     pts = xyz - centroid
 
@@ -217,6 +220,39 @@ def build_bev_filename(bev_key: str) -> str:
     return f"{bev_key}{BEV_SUFFIX}"
 
 
+def compute_xy_grid(sampled_points_xyzxy: np.ndarray, x0: float, y0: float, block_size_m: float):
+    """
+    Compute per-point XY coordinates in [-1, 1] for torch grid_sample.
+
+    IMPORTANT:
+    - sampled_points_xyzxy must be the FINAL sampled points before normalization
+    - uses raw XY coordinates in meters
+    - aligned with BEV tiles generated from the same spatial window
+
+    Returns:
+        xy_grid: (N, 2) float32
+                 [:,0] = x_grid in [-1,1]
+                 [:,1] = y_grid in [-1,1]
+    """
+    x = sampled_points_xyzxy[:, 0]
+    y = sampled_points_xyzxy[:, 1]
+
+    # Relative coordinates inside current 50m block
+    x_rel = (x - x0) / block_size_m
+    y_rel = (y - y0) / block_size_m
+
+    # Clamp just in case of floating-point boundary effects
+    x_rel = np.clip(x_rel, 0.0, 1.0)
+    y_rel = np.clip(y_rel, 0.0, 1.0)
+
+    # Convert to [-1, 1] to match grid_sample convention
+    x_grid = x_rel * 2.0 - 1.0
+    y_grid = y_rel * 2.0 - 1.0
+
+    xy_grid = np.stack([x_grid, y_grid], axis=1).astype(np.float32)
+    return xy_grid
+
+
 def main():
     os.makedirs(OUT_ROOT, exist_ok=True)
 
@@ -240,7 +276,7 @@ def main():
 
             las = laspy.read(las_path)
 
-            # Extract ALL features (xyz, intensity, return_number, number_of_returns)
+            # Extract ALL features
             features, feature_names = extract_all_features_from_las(las)
 
             labels_raw = np.array(las.classification, dtype=np.int64)
@@ -256,17 +292,25 @@ def main():
                 n_points_in_window = int(window_pts.shape[0])
 
                 # SAME sampling behavior
-                bpts, blbl, sample_idx, sampled_with_replacement = sample_fixed(
+                bpts_raw, blbl, sample_idx, sampled_with_replacement = sample_fixed(
                     window_pts, window_lbl, N_POINTS
                 )
 
+                # NEW: compute xy_grid from sampled RAW XY before normalization
+                xy_grid = compute_xy_grid(
+                    sampled_points_xyzxy=bpts_raw,
+                    x0=x0,
+                    y0=y0,
+                    block_size_m=BLOCK_SIZE,
+                )
+
                 # SAME normalization behavior
-                bpts_norm, norm_centroid, norm_scale = normalize_block(bpts)
+                bpts_norm, norm_centroid, norm_scale = normalize_block(bpts_raw)
 
                 # Window indices relative to LAS tiling origin
                 tile_ix, tile_iy = compute_tile_indices(x0, y0, x_min_las, y_min_las, STRIDE)
 
-                # NEW: deterministic BEV identifier
+                # Deterministic BEV identifier
                 bev_key = build_bev_key(base, tile_ix, tile_iy)
                 bev_filename = build_bev_filename(bev_key)
 
@@ -276,8 +320,8 @@ def main():
                     out_path,
 
                     # Original fields
-                    points=bpts_norm,
-                    labels=blbl,
+                    points=bpts_norm.astype(np.float32),
+                    labels=blbl.astype(np.int64),
 
                     # Metadata for alignment
                     las_name=np.array([os.path.basename(las_path)]),
@@ -294,9 +338,12 @@ def main():
                     tile_ix=np.int32(tile_ix),
                     tile_iy=np.int32(tile_iy),
 
-                    # NEW: direct BEV linkage
+                    # Direct BEV linkage
                     bev_key=np.array([bev_key]),
                     bev_filename=np.array([bev_filename]),
+
+                    # NEW: per-point coordinates for BEV local feature sampling
+                    xy_grid=xy_grid,
 
                     n_points_in_window=np.int32(n_points_in_window),
                     sample_idx=sample_idx,
@@ -305,6 +352,9 @@ def main():
                     # Normalization metadata
                     norm_centroid_xyz=norm_centroid,
                     norm_scale=np.float64(norm_scale),
+
+                    # Optional metadata
+                    feature_names=np.array(feature_names, dtype=object),
                 )
 
         print(f"Done {split} -> {out_dir}")
