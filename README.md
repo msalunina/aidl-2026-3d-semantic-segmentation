@@ -152,7 +152,7 @@ python src/main.py
 Override training hyperparameters without editing the YAML:
 
 ```bash
-python src/main.py --num_epochs 100 --batch_size 16 --learning_rate 0.001 --dropout_rate 0.3
+python src/main.py --num_epochs 100 --batch_size 16 --dropout_rate 0.3
 ```
 
 Available CLI arguments: `--model_name`, `--num_points`, `--batch_size`, `--num_epochs`, `--dropout_rate`.
