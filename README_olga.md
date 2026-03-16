@@ -354,6 +354,24 @@ Classes are ordered by decreasing frequency in the dataset.
 | Metric | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |------|------|------|------|------|------|------|
 | **Overall metrics** |||||||
+| mIoU | 0.810 / 0.800 | 0.816 / **0.806** | 0.811 / 0.806 | 0.805 / 0.801 | 0.802 / 0.798 |  |
+| Loss | 0.127 / 0.129 | 0.122 / 0.127 | 0.126 / 0.127 | 0.131 / 0.129 | 0.133 / 0.132 |  |
+| Accuracy | 0.959 / 0.957 | 0.960 / 0.957 | 0.959 / 0.957 | 0.957 / 0.956 | 0.957 / 0.956 |  |
+| **Class IoU** |||||||
+| Ground | 0.951 / 0.946 | 0.952 / 0.946 | 0.951 / 0.946 | 0.950 / 0.945 | 0.949 / 0.945 |  |
+| Vegetation | 0.868 / 0.864 | 0.871 / **0.866** | 0.868 / 0.865 | 0.865 / 0.864 | 0.864 / 0.863 |  |
+| Buildings | 0.954 / 0.954 | 0.955 / **0.955** | 0.954 / **0.955** | 0.948 / 0.950 | 0.948 / 0.950 |  |
+| Vehicle | 0.686 / 0.653 | 0.699 / 0.659 | 0.688 / **0.666** | 0.675 / 0.657 | 0.668 / 0.648 |  |
+| Utility | 0.594 / 0.585 | 0.603 / **0.602** | 0.593 / 0.596 | 0.584 / 0.586 | 0.581 / 0.584 |  |
+| **Best validation** |||||||
+| Best mIoU | ----- / 0.806 | ----- / **0.810** | ----- / 0.809 | ----- / 0.801 | ----- / 0.800 |  |
+| Best Loss | ----- / 0.126 | ----- / **0.125** | ----- / **0.125** | ----- / 0.129 | ----- / 0.131 |  |
+| Best Accuracy | ----- / 0.957 | ----- / **0.958** | ----- / **0.958** | ----- / 0.956 | ----- / 0.956 |  |
+
+
+<!-- | Metric | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
+|------|------|------|------|------|------|------|
+| **Overall metrics** |||||||
 | mIoU | 0.812 / 0.804 | 0.814 / **0.805** | 0.811 / 0.804 | 0.805 / 0.799 | 0.803 / 0.796 | 0.796 / 0.782 |
 | Loss | 0.128 / 0.126 | 0.125 / **0.125** | 0.128 / 0.126 | 0.133 / 0.129 | 0.135 / 0.131 | 0.140 / 0.139 |
 | Accuracy | 0.958 / **0.957** | 0.959 / **0.957** | 0.958 / **0.957** | 0.957 / 0.956 | 0.956 / 0.956 | 0.955 / 0.952 |
@@ -366,7 +384,9 @@ Classes are ordered by decreasing frequency in the dataset.
 | **Best validation** |||||||
 | Best mIoU | ----- / 0.806 | ----- **0.810** | ----- 0.807 | ----- 0.800 | ----- 0.801 | ----- 0.791 |
 | Best Loss | ----- / 0.126 | ----- **0.125** | ----- 0.126 | ----- 0.129 | ----- 0.131 | ----- 0.137 |
-| Best Accuracy | ----- 0.957 | ----- **0.958** | ----- 0.957 | ----- 0.956 | ----- 0.956 | ----- 0.953 |
+| Best Accuracy | ----- 0.957 | ----- **0.958** | ----- 0.957 | ----- 0.956 | ----- 0.956 | ----- 0.953 | -->
+
+
 
 
 TODO!!!
@@ -379,7 +399,10 @@ The ball-based grouping strategies slightly degrade performance, particularly fo
 
 The idea was to make neighbourhoods geometrically consistent, rather than point-count consistent like KNN.
 
+Increasing the neighborhood size slightly improves the IoU for the Vehicle class. Vehicles are relatively small and sparse objects in the scene, and a larger neighborhood provides additional contextual information that may help distinguish them from surrounding structures.
+However, Even though Vehicle IoU improves, the overall mIoU does not. 
 
+Whereas larger context helps with vehicles, it hurts for utilities. Since utility structures are much smaller, they contain very few points, tehrefore, increasing the number of neighbours quickly inccreases the number of points from other classes, making the context less pure. So there is a tradeoff between the size of teh structure to identify and the size of the neighbourhood,  what seems to provide useful semantinc context very easily can hurt more than help. 
 
 
 PointNet++ extracts local geometric features by grouping neighbouring points around sampled centroids. Two common strategies for this grouping are k-nearest neighbours (KNN) and radius-based (ball) query, which differ in how the local neighbourhood is defined.
