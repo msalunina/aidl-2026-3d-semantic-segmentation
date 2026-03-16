@@ -24,8 +24,6 @@ class DALESDataset(Dataset):
         normalize: bool = True,
         augmentation: bool = False,
         rotation_deg_max: float = 180.0,
-        scale_min: float = 0.9,
-        scale_max: float = 1.1,
         use_all_files: bool = False,
         train_ratio: float = 0.7,
         val_ratio: float = 0.15,
@@ -39,8 +37,6 @@ class DALESDataset(Dataset):
         self.use_all_files = use_all_files
         self.augmentation = augmentation and split == 'train'
         self.rotation_deg_max = rotation_deg_max
-        self.scale_min = scale_min
-        self.scale_max = scale_max
         self.use_images = use_images
 
         if use_features is None:
