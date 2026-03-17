@@ -14,7 +14,7 @@ After tiling, each block is randomly sampled to a fixed size of 4096 points. Thi
 
 To reduce class imbalance and improve learning stability, the original 7 DALES labels (Ground, Vegetation, Cars, Trucks. Poles, Power lines. Fences and Buildings) are mapped into 5 semantic classes:  0 – Ground, 1 – Vegetation, 2 – Building, 3 – Vehicle, 4 – Utility and  -1 – Ignore. 
 
-This preprocessing pipeline transforms the original large-scale DALES scenes into standardized point-cloud blocks that can be efficiently used for semantic segmentation experiments with PointNet-based architectures. (./src/convert_las_to_blocks.py). 
+This preprocessing pipeline transforms the original large-scale DALES scenes into standardized point-cloud blocks that can be efficiently used for semantic segmentation experiments with PointNet-based architectures. ([`convert_las_to_blocks.py`](./src/convert_las_to_blocks.py)). 
 
 After preprocessing, each point-cloud block is stored in NumPy compressed format (.npz). This choice is motivated by efficiency, simplicity, and compatibility with the training pipeline.
 
@@ -33,9 +33,9 @@ DALES sample tracked down in Google Earth
 
 To validate preprocessing, we implemented visualization tools to visualize the processed point cloud blocks:
 
-Matplotlib 3D visualization (./src/viz_blocks_matplotlib.py)
+Matplotlib 3D visualization: [`viz_blocks_matplotlib.py`](./src/viz_blocks_matplotlib.py)  
 
-Open3D interactive visualization (./src/viz_blocks_open3d.py)
+Open3D interactive visualization: [`viz_blocks_open3d.py`](./src/viz_blocks_open3d.py)
 
     These tools allow inspection of spatial structure, verification of class distributions and debugging preprocessing steps
 
