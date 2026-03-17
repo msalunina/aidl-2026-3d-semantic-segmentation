@@ -1,11 +1,11 @@
 
-# Metrics
+## Metrics
 
 Evaluating the performance of a semantic segmentation model requires metrics that measure how well the predicted labels match the ground truth labels. In the case of point cloud segmentation, the task consists of assigning a semantic class to every point in the cloud. While classification accuracy measures the proportion of correctly labeled points, it is often not a reliable metric for segmentation tasks because datasets are usually highly imbalanced. For example, in LiDAR datasets large portions of the scene may correspond to dominant classes such as ground or vegetation, while other classes such as vehicles or utilities appear much less frequently.
 
 In such situations, a model could achieve high accuracy simply by predicting the dominant classes, even if it fails to correctly predict rare classes. For this reason, Intersection over Union (IoU) is widely used as a more robust metric for segmentation evaluation.
 
-## Intersection over Union (IoU)
+### Intersection over Union (IoU)
 Intersection over Union (IoU) measures the overlap between the predicted region for a class and the corresponding ground truth region. The IoU for a class is defined as
 
 $$
@@ -33,7 +33,7 @@ This formula can also be interpreted as the ratio between the **intersection** a
 - the **union** corresponds to all points that belong to the class either in the prediction or in the ground truth (TP + FP + FN)
 
 
-## Mean Intersection over Union (mIoU)
+### Mean Intersection over Union (mIoU)
 
 In semantic segmentation tasks, IoU is computed independently for each class. To obtain an overall measure of segmentation performance across all classes, the mean Intersection over Union (mIoU) is used.
 The mIoU is defined as the average IoU over all classes:
@@ -50,7 +50,7 @@ By averaging over classes, mIoU ensures that all classes contribute equally to t
 
 
 
-## IoU Implementation
+### IoU Implementation
 
 
 For each class, the intersection and the union are computed for every batch and accumulated over the entire epoch. Then, their ratio gives a single IoU value per class and epoch:
@@ -63,7 +63,7 @@ where the sum is perfomed over all batches b in the epoch.
 
 
 
-# PointNet++
+## PointNet++
 
 PointNet++ is a deep neural network designed to process unordered point sets sampled from a metric space. The architecture extends the original PointNet by introducing a hierarchical feature learning framework that captures both local geometric structures and global contextual information.
 
@@ -82,7 +82,7 @@ Next Figure shows the PointNet++ architecture
 
 
 
-## Encoder
+### Encoder
 The encoder builds a hierarchical representation of the point cloud through successive **Set Abstraction (SA)** layers. Each SA layer applies sequentially:
 
 1. **Farthest Point Sampling (FPS)** to select a subset of centers  
@@ -91,12 +91,12 @@ The encoder builds a hierarchical representation of the point cloud through succ
 
 As the network progresses towards deeper layers, the number of centers decreases and the distance between them increases. Therefore, even if the number of neighbors remains constant, the spatial extent of each neighborhood (effective receptive field) naturally grows with depth, allowing each layer to capture geometric structures at a different spatial scale. Early layers focus on **small local structures (fine geometric structures)**, while deeper layers represent **larger semantic structures** describing the scene.
 
-### 1. Farthest Point Sampling (FPS)
+#### 1. Farthest Point Sampling (FPS)
 
 In order to select the center points, PointNet++ uses Farthest Point Sampling (FPS). It iteratively selects points that maximize the distance from previously selected centers. This ensures that the sampled points are evenly distributed across the point cloud.
 
 
-### 2. Neighborhood Grouping
+#### 2. Neighborhood Grouping
 
 The grouping stage constructs local neighbourhoods around each center. The strategy used to select neighbors determines the **spatial support of the local patch**, which directly influences the type of geometric structures the network can capture. Two grouping strategies are compared:
 
@@ -104,7 +104,7 @@ The grouping stage constructs local neighbourhoods around each center. The strat
 - **Radius-Based grouping**: selects all points within a predefined radius
 
 
-#### k-Nearest Neighbors (`knn`)
+##### k-Nearest Neighbors (`knn`)
 
 In knn grouping, for each center point the K nearest points in Euclidean space are selected. Consequently:
 - **Number of neighbors** is fixed
@@ -112,7 +112,7 @@ In knn grouping, for each center point the K nearest points in Euclidean space a
 
 In dense regions, the K nearest neighbors lie close to the center and define a small spatial patch, whereas in sparse regions, the same number of neighbors may lie further defining a much larger spatial area. As a result, the **effective receptive field** varies with point density.
 
-#### Radius-Based Grouping
+##### Radius-Based Grouping
 
 The idea behind Radius-Based grouping is to reduce the density dependency. To do so, neighbors are selected within a **fixed spatial radius** around each center. Consequently:
 - **Maximum spatial support of the neigborhood** is fixed for each layer
@@ -141,12 +141,12 @@ The following comparison highlights how the choice of grouping strategy controls
 
 
 
-### 3. A **Shared MLP + Max Pooling**
+#### 3. A **Shared MLP + Max Pooling**
 
 After selecting the K neighbors for each center, each local region is processed by a mini-PointNet network, which learns a feature representation for the neighborhood. This consists of a shared multilayer perceptron (MLP) applied independently to each point followed by a symmetric aggregation function (max pooling) to obtain a single feature vector representing the region.
 
 
-## Decoder
+### Decoder
 
 While the encoder progressively reduces the number of points and extracts higher-level features, semantic segmentation requires a prediction for **every original input point**. Therefore, PointNet++ includes a decoder composed of successive **Feature Propagation (FP)** layers, which progressively upsample features from sparse point sets back to denser ones. Each Feature Propagation layer applies sequentially:
 
@@ -157,19 +157,19 @@ While the encoder progressively reduces the number of points and extracts higher
 In this way, the decoder combines high-level semantic information from deeper layers with fine geometric details preserved by the early encoder layers.
 
 
-### 1. 3-NN Interpolation
+#### 1. 3-NN Interpolation
 
 At each decoder stage, features from a sparse set of points are interpolated onto a denser set of target points. For each target point, the three nearest source points are identified and their features are interpolated using weights inversely proportional to their distance. Therefore, closer source points contribute more strongly to the interpolated feature, while farther ones contribute less.
 
 This interpolation step allows features learned at coarse spatial resolutions to be transferred back to denser point sets.
 
-### 2. Concatenation with Skip Features
+#### 2. Concatenation with Skip Features
 
 After interpolation, the propagated features are concatenated with the corresponding **skip features** coming from the encoder.
 
 These skip features provide local geometric information extracted at earlier abstraction levels, where the point resolution is still relatively high. Consequently, the decoder does not rely only on coarse semantic information from deep layers, but also reuses fine-grained spatial details that may have been lost during downsampling.
 
-### 3. Shared MLP Refinement
+#### 3. Shared MLP Refinement
 
 Once the interpolated features and skip features have been concatenated, the resulting feature vectors are refined using a **shared multilayer perceptron (MLP)** applied independently to each point. In doing so, semantic information coming from the decoder and geometric details preserved from the skip connections are fused together, producing a more informative point-wise representation
 
@@ -177,10 +177,10 @@ By stacking several Feature Propagation layers, the decoder progressively recons
 
 
 
-## Network Architecture 
+### Network Architecture 
 
 
-### Encoder Architecture (SA Layers)
+#### Encoder Architecture (SA Layers)
 
 | Layer | # Centers (FPS) | Neighborhood | K | Radius | MLP |
 |:------:|:-----------------:|:-------------:|:---:|:-------:|:------|
@@ -189,7 +189,7 @@ By stacking several Feature Propagation layers, the decoder progressively recons
 | **SA3** | 64 | knn / ball query | 32 | 0.20 | `[128,128,256]` |
 | **SA4** | 16 | knn / ball query | 32 | 0.40 | `[256,256,512]` |
 
-#### Tensor Shapes
+**Tensor Shapes**
 
 Each Set Abstraction (SA) layer samples centers using FPS, groups K neighbors around each center, applies a shared MLP to the grouped features, and aggregates the neighborhood using max pooling.
 
@@ -209,7 +209,7 @@ where:
 - C: features/channels
 
 
-### Decoder Architecture (FP layers)
+#### Decoder Architecture (FP layers)
 
 | Layer | Interpolation | Skip connection | MLP |
 |:------:|:---------------:|:----------------:|:------|
@@ -223,7 +223,7 @@ _NOTE: In the original PointNet++ semantic segmentation architecture, the final 
 In our implementation, instead, this last FP is split between the **FP1** block and a separate **classifier head** to allow dropout to be applied explicitly to the two final layers before the per-point class score prediction.
 
 
-#### Tensor Shapes
+**Tensor Shapes**
 
 Each Feature Propagation (FP) layer interpolates features from a sparse point set to a denser one using 3-NN interpolation with inverse-distance weighting, concatenates the interpolated features with skip features from the encoder, and refines them using a shared MLP.
 
@@ -252,7 +252,7 @@ where:
 
 
 
-## Experiments
+### Experiments
 
 The idea behind this part of the report is to analyse the effect that some hyperparameters have on the PointNet++ newtwork.
 As a starting point, we take advantage of the experiments performed on PoinNet and keep the same already optimized choices: 
@@ -261,7 +261,7 @@ As a starting point, we take advantage of the experiments performed on PoinNet a
 - NLL loss
 - input channels `[xyz,return_number,number_of_returns]`
 
-### Hypothesis
+#### Hypothesis
 
 Then, we want to test four modifications of the baseline configuration: dropout rate, neighborhood size, grouping strategy, and input feature channels. Each experiment isolates one component while keeping the rest of the architecture unchanged.
 
@@ -292,12 +292,12 @@ Morover, unlike Pointnet which processes the entire point cloud using a single g
 - B. NLL unweighted (uniform weights: [1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
 
 
-### Results
+#### Results
 
 Tables A and B summarize the performance of the evaluated PointNet++ configurations with a weighted and unweighted NLL loss. Overall, the different configurations produce relatively similar results, indicating that the baseline is already well tuned. However, several trends can be observed when modifying specific components of the architecture and remain largely consistent in both settings.
 
 
-#### A. NLL Weighted Loss (Best for PointNet)  
+##### A. NLL Weighted Loss (Best for PointNet)  
 
 | Metric<br>NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
@@ -321,7 +321,7 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 
 
 
-#### B. NLL Unweighted Loss
+##### B. NLL Unweighted Loss
 
 | Metric<br>NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |   BEST (2+3) |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|:------:|
@@ -342,7 +342,7 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 
 **Table B**. Comparison of PointNet++ configurations: NLL loss + uniform weights (i.e no weights). Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Best validation values refer to the best value achieved during the entire training.
 
-### Discussion
+#### Discussion
 
 The following figures show the learning curves for the baseline case for both the unweighted and weighted NLL loss. Both configurations follow a very similar training behaviour: the training loss decreases in both cases and the validation curves stabilize after approximately 30 epochs. However, the unweighted case consistently achieves better validation performance, not only regarding the smaller oscilations it exhibits, but also in the smaller loss values.
 
@@ -360,11 +360,11 @@ These results suggest that PointNet++ already handles class imbalance reasonably
 
 Regarding the changes with respect to the baseline, frequent classes like Ground, Vegetation and Building behave similar for all experiments showing almost identical IoU values. Rares classes like Vehicle and Utility are the ones that show more variability. Although such variability is not uniform among experiments, their overall mIoU values indicate two clear benefitial modifications: dropout (experiment 2) and number of neighbours (experiment 3). 
 
-#### Effect of Dropout
+##### Effect of Dropout
 
 Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU (0.816) and slightly better performance for several classes. This impacts in one of the best mIoU values.
 
-#### Effect of Neighborhood Size (K-neighbors)
+##### Effect of Neighborhood Size (K-neighbors)
 
 Experiment 3 increases the number of neighbors in the deeper abstraction layers from [32,32,32,32] to [32,32,64,64]. The resulting performance is slightly higher than the baseline across most metrics. 
 
@@ -372,19 +372,19 @@ One noticeable effect is a slight improvement of the IoU for the Vehicle class. 
 
 This variability indicates a strong tradeoff between the size of the structure to identify and the size of the neighbourhood providing context, what seems to provide useful semantinc context for one class, may hurt another. 
 
-#### Effect of Grouping Strategy
+##### Effect of Grouping Strategy
 
 The knn strategy is robust in sparse areas because it guarantees enough number of points (fixed), which translates into a stable input to the network. However, the spatial size of the neighborhood varies depending on point density. In contrast, ball-based strategies select points within a fixed spatial radius r, which ensures that the neighbourhood always corresponds to the same physical scale. However, may contain very few points depending on the point density. This variability in the number of points can lead to unstable feature aggregation, particularly for small or sparsely sampled classes.
 
 This behaviour is shown in our experiments, the ball-based grouping strategies slightly degrade performance compared to the knn baseline, particularly for the Vehicle and Utility classes which contain relatively few points. 
 
 
-#### Effect of Input Feature Channels
+##### Effect of Input Feature Channels
 
 Experiment 6 evaluates the impact of removing additional input features and using only the XYZ coordinates. As expected, this configuration consistently produces the lowest performance across all metrics, indicating the importance of includding non-geometric features if available. This effect is particularly visible for the Vehicle and Utility classes, which already contain relatively few points. Without the additional feature channels, the model has less information to separate these objects from surrounding structures.
 
 
-### Final Model
+#### Final Model
 
 Overall, the experiments suggest that the baseline PointNet++ configuration is already close to optimal for this dataset. Among the tested configurations, reducing the dropout rate (Experiment 2) and increasing the neighborhood size (Experiment 3) produced the most consistent improvements over the baseline. To evaluate whether both improvements could be combined, a final experiment was performed using both modifications simultaneously. This configuration achieved the highest overall performance, reaching a best validation mIoU of 0.818, slightly outperforming the individual experiments.
 
