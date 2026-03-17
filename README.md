@@ -450,14 +450,29 @@ The goal results for the model are shown in the following table:
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
 | PointNet  |  83.7  |  83.4  | 78.7  | 82.5  |  74.9  |  89.6  |  73.0  |  91.5  |  85.9  |  80.8  |  95.3  |  65.2  |  93.0  |  81.2  |  57.9  |  72.8  |  80.6  |
 
-The measure for the experiments is IoU(%), imlementing a compensated IoU for objects that may have a missing label part. For example plane class has part labels [0,1,2,3] but an object in the batch may have part labels [0,1,2] then a value of 1/4 is added in the IoU metrics, this avoids a punishment in IoU for non present parts in an object. This compensation is mentioned in the original work. 
+### Metrics
+
+The measure for the experiments is mean Intersection over Union mIoU(%), with an extra compensation in objects that may have a missing label part.
+
+$$
+mIoU = (\frac{1}{C} \sum_{c=1}^{C} IoU_c) + (\frac{ml}{C})
+$$
+
+where:
+- $C$ is the number of classes
+- $IoU_c$ is the IoU for class $c$
+- $ml$ is the number of missing part labels
+
+For example Plane class object has part labels [0,1,2,3] but an object in the batch may have only part labels [0,1,2] then a value of 1/4 is added in the mIoU metrics. This avoids a punishment in the metrics for non present parts in an object. 
+
+This compensation of the metrics is used in the metrics of the original work. 
 
 
 ### Dataloader implementation
 
 To be able to use the compensated IoU measure, and one hote vector class index, we had to create a custom dataloader. This will allow us to return with the element, the compensated IoU value, and the index of the object class that is also needed in the next steps.
 
-The dataloader is based on the [torch_geometrics](https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/datasets/shapenet.html) implementation, and can be found in [shapenet_dataset.py](https://github.com/msalunina/aidl-2026-3d-semantic-segmentation/blob/main/src/utils/shapenet_dataset.py)
+The dataloader is based on the [torch_geometrics](https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/datasets/shapenet.html) implementation, and can be found in [shapenet_dataset.py](src/utils/shapenet_dataset.py)
 
 
 ### Experiments
@@ -474,6 +489,14 @@ All the experiments will be run using the following configuration:
   random_noise: mean 0 std dev 0.02
   rotation_arround_up_axis: 0.7
 ```
+
+To run the experiments the file [train_shapenet.py](src/train_shapenet.py) is used.
+
+The main function has 3 sub-functions:
++ train_shapenet: This function is used to train the model, it generates metrics for the train and validation split
++ test_sahapenet: This function is used to test the model, it generates metrics for the test split.
++ showPointCloudResults: This function executes visualization with matplotlib, for a batch in the test split.
+
 
 **1. PointNet base model**
 
@@ -493,7 +516,7 @@ Going deep in the original work, they state the following changes in the archite
 + Adding skip connections and concatenate them in the final embedding
 + increase layer sizes in all the network
 
-The network with the improvements stated in the original work is shown in the following image
+The network with the improvements for the part segmentaiton taks stated in the original work is shown in the following image
 ![PointNet architecture](figs/part_segmentation_pointnet.png)
 
 With the specified changes, the following experiments are planned:
@@ -561,8 +584,6 @@ In the following figures, the evolution mIoU curves during the training for each
 
 ### Conclusions
 
-
-
 The best results for part segmentation task in ShapeNet dataset has been achieved using the 3rd configuration, PointNet + One-Hot vector + skip connections, the following table shows the comparison of or best results against the original work, for this comparison we are using the result obtained with the test split
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
@@ -571,7 +592,7 @@ The best results for part segmentation task in ShapeNet dataset has been achieve
 | OURS      |  78.2  |  80.9  | $\color{green}{79.3}$  |  61.1 |  73.4  |  89.1  |  69.6  |  88.7  |  83.4  |  $\color{green}{83.0}$  |  $\color{green}{95.8}$ |  57.5  |  87.9  |  $\color{green}{81.5}$  |  55.1  |  69.5  |  $\color{green}{85.6}$  |
 
 
-The average IoU(%) achieved is really close to the original work, we even achieved improved performance on 5 classe, eventought really bad performance on others.
+The mIoU(%) achieved is really close to the original work, we even achieved improved performance on 5 classe, eventought we did really bad performance on others.
 
 With this results we conclude that our implementation of the PointNet architecture is validated.
 
