@@ -538,21 +538,44 @@ The results for the experiments are shown in the following tables
 |TRAIN  |  79.1  |  79.7  |  76.6  |  88.9  |  71.7  |  87.9  |  72.2  |  87.9  |  81.4  |  85.7  |  94.8  |  54.7  |  83.5  |  81.8  |  57.1  |  76.7  |  84.9  |
 | EVAL  |  76.4  |  79.1  |  69.0  |  68.5  |  72.0  |  88.7  |  71.2  |  87.4  |  81.8  |  84.3  |  94.5  |  58.0  |  86.9  |  75.9  |  47.0  |  75.2  |  83.4  |
 
+### Qualitative Resuls
+
+In the following figures, qualitative result for the model is shown, the first column shows the original pointcloud with color as the label, the second column shows the prediction, and the third column shows the error as black points. We use as a reference random images from the test split.
+
+
+![chair_qualitative](figs/shapenet_chair.png)
+Image of a Chair object
+
+![airplane_qualitative_top](figs/shapenet_airplane_top.png)
+Image of Plane object top view
+
+![airplane_qualitative_side](figs/shapenet_airplane_side.png)
+Image of Plane object top-side view
+
+
+### Quantitative Results
+
+In the following figures, the evolution mIoU curves during the training for each object is shown.
+
+![mIoU_shapenet1](figs/shapenet_miou1.jpg)
+![mIoU_shapenet2](figs/shapenet_miou2.jpg)
+![mIoU_shapenet3](figs/shapenet_miou3.jpg)
 
 ### Conclusions
+
+
 
 The best results for part segmentation task in ShapeNet dataset has been achieved using the 3rd configuration, PointNet + One-Hot vector + skip connections, the following table shows the comparison of or best results against the original work, for this comparison we are using the result obtained with the test split
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
-| PointNet  |  83.7  |  83.4  | 78.7  | 82.5  |  74.9  |  89.6  |  73.0  |  91.5  |  85.9  |  80.8  |  95.3  |  65.2  |  93.0  |  81.2  |  57.9  |  72.8  |  80.6  |
-| OURS      |  78.2  |  80.9  | 79.3  |  61.1 |  73.4  |  89.1  |  69.6  |  88.7  |  83.4  |  83.0  |  95.8  |  57.5  |  87.9  |  81.5  |  55.1  |  69.5  |  85.6  |
+| PointNet  |  83.7  |  83.4  | 78.7                   | 82.5  |  74.9  |  89.6  |  73.0  |  91.5  |  85.9  |  80.8  |  95.3                  |  65.2  |  93.0  |  81.2  |  57.9  |  72.8  |  80.6  |
+| OURS      |  78.2  |  80.9  | $\color{green}{79.3}$  |  61.1 |  73.4  |  89.1  |  69.6  |  88.7  |  83.4  |  $\color{green}{83.0}$  |  $\color{green}{95.8}$ |  57.5  |  87.9  |  $\color{green}{81.5}$  |  55.1  |  69.5  |  $\color{green}{85.6}$  |
 
 
-The average IoU(%) achieved is really close to the original work, so we can conclude that our implementation of the PointNet architecture is validated.
+The average IoU(%) achieved is really close to the original work, we even achieved improved performance on 5 classe, eventought really bad performance on others.
 
----
-
+With this results we conclude that our implementation of the PointNet architecture is validated.
 
 ---
 
