@@ -65,12 +65,9 @@ where the sum is perfomed over all batches b in the epoch.
 
 # POINTNET++
 
-PointNet++ is a deep neural network designed to process unordered point sets sampled from a metric space. The architecture extends the original PointNet by introducing 
-a hierarchical feature learning framework that captures both local geometric structures and global contextual information.
+PointNet++ is a deep neural network designed to process unordered point sets sampled from a metric space. The architecture extends the original PointNet by introducing a hierarchical feature learning framework that captures both local geometric structures and global contextual information.
 
-While PointNet processes the entire point cloud using a single global aggregation, PointNet++ organizes the computation into multiple levels of abstraction, progressively 
-learning features from small local neighborhoods to larger spatial regions. This hierarchical structure enables the network to capture fine-grained geometric patterns and 
-improves performance on complex scenes and segmentation tasks.
+While PointNet processes the entire point cloud using a single global aggregation, PointNet++ organizes the computation into multiple levels of abstraction, progressively learning features from small local neighborhoods to larger spatial regions. This hierarchical structure enables the network to capture fine-grained geometric patterns and improves performance on complex scenes and segmentation tasks.
 
 The architecture consists of two main components:
 
@@ -92,18 +89,11 @@ The encoder builds a hierarchical representation of the point cloud through succ
 2. **Neighborhood grouping** around each center  
 3. A **shared MLP + max pooling** to extract local geometric features  (mini PointNet)
 
-As the network progresses through the hierarchy (towards deeper layers), the number of centers decreases and the distance between them increases. Therefore, even if the number of neighbors remains constant, the spatial extent of each neighborhood (effective receptive field) naturally grows with depth, allowing each layer to capture geometric structures at a different spatial scale. Early layers focus on **small local structures (fine geometric structures)**, while deeper layers represent **larger semantic structures** describing the scene.
-
-For instance, for our DALES dataset:
-
-- SA1 may capture fine geometric patterns such as edges, corners, or small object parts
-- SA2 may capture slightly larger structures, such as parts of objects 
-- SA3 may capture complete objects or object groups 
-- SA4 may represent larger scene elements, such as a car within a street segment
+As the network progresses towards deeper layers, the number of centers decreases and the distance between them increases. Therefore, even if the number of neighbors remains constant, the spatial extent of each neighborhood (effective receptive field) naturally grows with depth, allowing each layer to capture geometric structures at a different spatial scale. Early layers focus on **small local structures (fine geometric structures)**, while deeper layers represent **larger semantic structures** describing the scene.
 
 ### 1. Farthest Point Sampling (FPS)
 
-In order to select the center points, PointNet++ uses Farthest Point Sampling (FPS). Iteratively it selects points that maximize the distance from previously selected centers. This ensures that the sampled points are evenly distributed across the point cloud.
+In order to select the center points, PointNet++ uses Farthest Point Sampling (FPS). It iteratively selects points that maximize the distance from previously selected centers. This ensures that the sampled points are evenly distributed across the point cloud.
 
 
 ### 2. Neighborhood grouping
@@ -120,7 +110,7 @@ In knn grouping, for each center point the K nearest points in Euclidean space a
 - **Number of neighbors** is fixed
 - **Spatial size of the neighborhood** depends on the local point density. 
 
-In dense regions, the K nearest neighbors lie close to the center and defie a small spatial patch. Instead, in sparse regions, the same number of neighbors may lie further defining a much larger spatial area. As a result, the **effective receptive field** varies with point density.
+In dense regions, the K nearest neighbors lie close to the center and define a small spatial patch, whereas in sparse regions, the same number of neighbors may lie further defining a much larger spatial area. As a result, the **effective receptive field** varies with point density.
 
 #### Radius-Based Grouping
 
@@ -153,17 +143,12 @@ The following comparison highlights how the choice of grouping strategy controls
 
 ### 3. A **shared MLP + max pooling**
 
-Each local region is processed by a mini-PointNet network, which learns a feature representation for the neighborhood. This consists of a shared multilayer perceptron (MLP) applied independently to each point followed by a symmetric aggregation function (max pooling) to obtain a single feature vector representing the region.
-
-
-
+After selecting the K neighbors for each center, each local region is processed by a mini-PointNet network, which learns a feature representation for the neighborhood. This consists of a shared multilayer perceptron (MLP) applied independently to each point followed by a symmetric aggregation function (max pooling) to obtain a single feature vector representing the region.
 
 
 ## DECODER
 
-While the encoder progressively reduces the number of points and extracts higher-level features, semantic segmentation requires a prediction for **every original input point**. Therefore, PointNet++ includes a decoder composed of successive **Feature Propagation (FP)** layers, which progressively upsample features from sparse point sets back to denser ones.
-
-Each Feature Propagation layer applies sequentially:
+While the encoder progressively reduces the number of points and extracts higher-level features, semantic segmentation requires a prediction for **every original input point**. Therefore, PointNet++ includes a decoder composed of successive **Feature Propagation (FP)** layers, which progressively upsample features from sparse point sets back to denser ones. Each Feature Propagation layer applies sequentially:
 
 1. **3-NN interpolation** to transfer features from a sparse set of points to a denser one  
 2. **Concatenation with skip features** coming from the encoder  
@@ -231,12 +216,11 @@ where:
 | **FP4** | 3-NN (16 → 64) | SA3 features | `[256,256]` |
 | **FP3** | 3-NN (64 → 256) | SA2 features | `[256,256]` |
 | **FP2** | 3-NN (256 → 1024) | SA1 features | `[256,128]` |
-| **FP1** | 3-NN (1024 → N) | input features (if any) | `[128,128,128]` |
+| **FP1** | 3-NN (1024 → N) | input features (if any) | `[128,128]` |
 | **Classifier head** | – | – | `[128,128,num_classes]` |
 
 _NOTE: In the original PointNet++ semantic segmentation architecture, the final decoder FP layer is [128,128,128,128,num_classes].
-In our implementation, instead, this last FP is split between the **FP1** block and a separate **classifier head** to allow dropout to be applied explicitly to the two final layers before the per-point class score prediction
-As a consequence, the implemented architecture contains one additional 128-dimensional transformation, resulting in [128,128,128,128,128,num_classes]._
+In our implementation, instead, this last FP is split between the **FP1** block and a separate **classifier head** to allow dropout to be applied explicitly to the two final layers before the per-point class score prediction.
 
 
 #### Tensor Shapes
@@ -270,169 +254,150 @@ where:
 
 ## EXPERIMENTS
 
+The idea behind this part of the report is to analyse the effect that some hyperparameters have on the PointNet++ newtwork.
+As a starting point, we take advantage of the experiments performed on PoinNet and keep the same already optimized choices: 
+- Data augmentation (only rotation)
+- Class-aware sampler
+- NLL loss
+- input channels `[xyz,return_number,number_of_returns]`
 
-Table 1. Summary of the PointNet++ experiment configurations. Each experiment modifies a specific component of the baseline model: the dropout rate, the number of neighbors, the grouping strategy or the input feature channels
+### HYPOTHESIS
 
-| PointNet++|      test     |    grouping    |    dropout   |      K-neighbors      |              feature channels               | 
+Then, we want to test four modifications of the baseline configuration: dropout rate, neighborhood size, grouping strategy, and input feature channels. Each experiment isolates one component while keeping the rest of the architecture unchanged.
+
+- **dropout**: The original PointNet++ paper applies a dropout rate of `0.5` in the last two fully connected layers before per-point classification. Dropout acts as a regularization technique to reduce overfitting, but too high dropout rates may lead to underfitting by limiting the network’s capacity to learn meaningful feature representations. In experiment 2, the dropout rate is reduced to `0.3`, following the same modification applied in PointNet. We expect this change to improve performance.
+
+- **K-neighbors**: PointNet++ builds local geometric features by aggregating information from neighboring points around sampled centers. The number of neighbors determines the amount of local context available to the network. In Experiment 3, the neighborhood size is increased in the deeper layers from `[32,32,32,32]` to `[32,32,64,64]`. Larger neighborhoods may provide additional context, which could help the network to better recognize small or sparse objects such as vehicles. However, excessively large neighborhoods may also introduce points from different classes, potentially reducing the purity of the local geometric representation. This can be very damaging for structures with very few points, like Utilities.
+
+- **grouping strategy**: although knn guarantees a fixed number of points per neighborhood, it allows the spatial extent of the neighborhood to vary depending on point density. In contrast, ball query uses a fixed spatial radius, ensuring a consistent geometric scale for feature extraction. Experiments 4 and 5 we compare to two ball-based strategies (`ball_closest` and `ball_random`) with the density-dependent neighborhood (`knn`). We expect ball-based grouping to be more invariant to point density due to the fixed radius. However, in sparse regions the radius may contain very few points, which can reduce the quality of the extracted features.
+
+- **input feature channels**: PointNet++ typically uses both spatial coordinates and additional input features. In experiment 6, only the spatial coordinates (`xyz`) are used as input. We expect to observe a decrease in performance due to the reduced input information.
+
+
+| Experiment|  what to test |    grouping    |    dropout   |      K-neighbors      |              feature channels          | 
 |:---------:|:-------------:|:--------------:|:------------:|:-----------------------:|:------------------------------------:|
-|     1     |  baseline     |      "knn"     |      0.5     | [32,32,32,32] (exact K) | [xyz,return_number,number_of_returns]|
-|     2     |    dropout    |      "knn"     |      0.3     | [32,32,32,32] (exact K) | [xyz,return_number,number_of_returns]|
-|     3     |  K-neighbors  |      "knn"     |      0.5     | [32,32,64,64] (exact K) | [xyz,return_number,number_of_returns]| 
-|     4     |  grouping     | "ball_closest" |      0.5     | [32,32,32,32] (max K)   | [xyz,return_number,number_of_returns]| 
-|     5     |  grouping     | "ball_random"  |      0.5     | [32,32,32,32] (max K)   | [xyz,return_number,number_of_returns]| 
-|     6     |  channels     |      "knn"     |      0.5     | [32,32,32,32] (exact K) | [xyz]                                | 
+|     1     |  baseline     |      `knn`     |      0.5     | [32,32,32,32] (exact K) | [xyz,return_number,number_of_returns]|
+|     2     |    dropout    |      `knn`     |      0.3     | [32,32,32,32] (exact K) | [xyz,return_number,number_of_returns]|
+|     3     |  K-neighbors  |      `knn`     |      0.5     | [32,32,64,64] (exact K) | [xyz,return_number,number_of_returns]| 
+|     4     |  grouping     | `ball_closest` |      0.5     | [32,32,32,32] (max K)   | [xyz,return_number,number_of_returns]| 
+|     5     |  grouping     | `ball_random`  |      0.5     | [32,32,32,32] (max K)   | [xyz,return_number,number_of_returns]| 
+|     6     |  channels     |      `knn`     |      0.5     | [32,32,32,32] (exact K) | [xyz]                                | 
+
+**Table 1**. Summary of the PointNet++ experiment configurations. Each experiment modifies a specific component of the baseline model: the dropout rate, the number of neighbors, the grouping strategy or the input feature channels. (_Note: for `ball_closest` and `ball_random` grouping strategies, the parameter K does not define the exact number of neighbors but the maximum number that can be selected within the ball. Therefore, the effective size of the neighborhood is in this case controlled by the radius parameter, which is fixed in all experiments to [0.08, 0.1, 0.2, 0.4]. Such values were selected based on preliminary exploratory tests._)
 
 
-Note: for the two ball-based grouping strategies, the parameter K does not define the exact number of neighbors but instead, specifies the maximum number of neighbours 
-that can be selected within the ball. The effective size of the neighborhood is controlled by the radius parameter, which is fixed in all experiments to [0.08, 0.1, 0.2, 0.4]. 
-These values were selected based on preliminary exploratory tests.
+Morover, unlike Pointnet which processes the entire point cloud using a single global aggregation, PointNet++ learns features from small local neighborhoods to larger spatial regions. Consequently, it is by nature more aware of the different sizes of the structures present on a scene and, therefore, it is likely to be less affected by class imblance produced by very small and rare objects. To test this, we will perform the 6-set of experiments twice: 
+
+- A. NLL weighted (PointNet weights: [0.5272, 0.5272, 0.5276, 1.5454, 1.8727])
+- B. NLL unweighted (uniform weights: [1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
 
 
-### Focal loss + class weighting 
+### RESULTS
 
-| Metric | 1. baseline<br>olga | 1. baseline<br>edu | 1. baseline<br>dygiro |
-|------|------|------|------|
+### A. NLL loss + weighted (best config for PointNet)   
+
+| Metric<br>NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
+|:------|:------:|:------:|:------:|:------:|:------:|:------:|
 | **Overall metrics** |||||||
-| mIoU | 0.781 / 0.766 | 0.783 / 0.768 | 0.781 / **0.771** |
-| Loss | 0.019 / **0.019** | 0.019 / **0.019** | 0.019 / 0.020 |
-| Accuracy | 0.953 / 0.951 | 0.954 / 0.951 | 0.953 / 0.951 |
+| mIoU     | 0.810 / 0.800     | 0.816 / **0.806** | 0.811 / **0.806** | 0.805 / 0.801 | 0.802 / 0.798 | 0.795 / 0.788 |
+| Loss     | 0.127 / 0.129     | 0.122 / **0.127** | 0.126 / **0.127** | 0.131 / 0.129 | 0.133 / 0.132 | 0.138 / 0.139 |
+| Accuracy | 0.959 / **0.957** | 0.960 / **0.957** | 0.959 / **0.957** | 0.957 / 0.956 | 0.957 / 0.956 | 0.955 / 0.953 |
 | **Class IoU** |||||||
-| Ground | 0.947 / **0.942** | 0.947 / **0.942** | 0.947 / **0.942** |
-| Vegetation | 0.853 / 0.849 | 0.854 / 0.849 | 0.854 / **0.851** |
-| Buildings | 0.950 / **0.947** | 0.950 / **0.947** | 0.950 / 0.944 |
-| Vehicle | 0.619 / 0.567 | 0.621 / 0.551 | 0.615 / **0.569** |
-| Utility | 0.537 / 0.526 | 0.543 / **0.551** | 0.538 / 0.547 |
-
-**Table 1**. Comparing baseline on different machines. Focal loss + class weighting [0.2553, 0.3465, 0.4482, 1.8602, 2.0897].<br>
-All experiments use class-aware sampler. Values are reported as train / validation. Bold values indicate the best validation score.
-Classes are ordered by decreasing frequency in the dataset.
-
-
-| Metric | 1 - baseline<br>olga | 2 - dropout<br>edu | 3 - K-neighbors<br>olga | 4 - ball_closest<br>edu | 5 - ball_random<br>olga | 6 - xyz only<br>edu |
-|------|------|------|------|------|------|------|
-| **Overall metrics** |||||||
-| mIoU | 0.781 / 0.766 | 0.785 / 0.768 | 0.782 / 0.769 | 0.776 / **0.771** | 0.772 / 0.766 | 0.767 / 0.754 |
-| Loss | 0.019 / 0.019 | 0.018 / 0.021 | 0.019 / 0.019 | 0.020 / **0.018** | 0.021 / 0.019 | 0.021 / 0.020 |
-| Accuracy | 0.953 / 0.951 | 0.954 / 0.950 | 0.954 / **0.952** | 0.952 / **0.952** | 0.951 / 0.951 | 0.949 / 0.948 |
-| **Class IoU** |||||||
-| Ground | 0.947 / 0.942 | 0.947 / 0.940 | 0.947 / **0.943** | 0.946 / **0.943** | 0.944 / 0.942 | 0.941 / 0.938 |
-| Vegetation | 0.853 / 0.849 | 0.856 / 0.845 | 0.854 / 0.851 | 0.851 / **0.855** | 0.849 / 0.852 | 0.844 / 0.843 |
-| Buildings | 0.950 / 0.947 | 0.950 / 0.942 | 0.950 / **0.948** | 0.943 / **0.948** | 0.943 / 0.947 | 0.945 / 0.947 |
-| Vehicle | 0.619 / 0.567 | 0.626 / 0.570 | 0.622 / 0.560 | 0.610 / **0.595** | 0.599 / 0.584 | 0.591 / 0.543 |
-| Utility | 0.537 / 0.526 | 0.544 / 0.541 | 0.538 / 0.541 | 0.531 / 0.515 | 0.525 / 0.503 | 0.511 / 0.501 |
-
-**Table 2**. Comparison of PointNet++ configurations: Focal loss + class weighting [0.2553, 0.3465, 0.4482, 1.8602, 2.0897]. 
-<br>All experiments use class-aware sampler. Values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset.
-
-### NLL loss + near-uniform class weighting 
-
-| Metric | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5b - ball_random | 6 - xyz only |
-|------|------|------|------|------|------|------|
-| **Overall metrics** |||||||
-| mIoU | 0.813 / 0.796 | 0.816 / 0.804 | 0.813 / 0.803 | 0.806 / **0.811** | 0.804 / 0.805 | 0.795 / 0.796 |
-| Loss | 0.116 / 0.122 | 0.114 / 0.120 | 0.115 / 0.122 | 0.120 / **0.116** | 0.122 / 0.117 | 0.126 / 0.124 |
-| Accuracy | 0.959 / 0.956 | 0.959 / 0.956 | 0.959 / 0.956 | 0.957 / **0.957** | 0.957 / **0.957** | 0.955 / 0.954 |
-| **Class IoU** |||||||
-| Ground | 0.950 / 0.944 | 0.950 / 0.944 | 0.950 / 0.943 | 0.949 / **0.945** | 0.948 / **0.945** | 0.945 / 0.939 |
-| Vegetation | 0.868 / 0.861 | 0.869 / 0.862 | 0.868 / 0.860 | 0.864 / **0.867** | 0.863 / 0.866 | 0.857 / 0.858 |
-| Buildings | 0.952 / 0.949 | 0.953 / 0.949 | 0.952 / 0.948 | 0.946 / 0.950 | 0.946 / **0.952** | 0.948 / 0.948 |
-| Vehicle | 0.680 / 0.640 | 0.688 / 0.654 | 0.682 / 0.654 | 0.672 / **0.675** | 0.666 / 0.665 | 0.646 / 0.646 |
-| Utility | 0.615 / 0.586 | 0.618 / 0.611 | 0.612 / 0.611 | 0.600 / **0.617** | 0.596 / 0.599 | 0.582 / 0.592 |
+| Ground     | 0.951 / **0.946** | 0.952 / **0.946** | 0.951 / **0.946** | 0.950 / 0.945 | 0.949 / 0.945 | 0.946 / 0.940 |
+| Vegetation | 0.868 / 0.864     | 0.871 / **0.866** | 0.868 / 0.865     | 0.865 / 0.864 | 0.864 / 0.863 | 0.859 / 0.855 |
+| Buildings  | 0.954 / 0.954     | 0.955 / **0.955** | 0.954 / **0.955** | 0.948 / 0.950 | 0.948 / 0.950 | 0.950 / 0.949 |
+| Vehicle    | 0.686 / 0.653     | 0.699 / 0.659     | 0.688 / **0.666** | 0.675 / 0.657 | 0.668 / 0.648 | 0.652 / 0.632 |
+| Utility    | 0.594 / 0.585     | 0.603 / **0.602** | 0.593 / 0.596     | 0.584 / 0.586 | 0.581 / 0.584 | 0.570 / 0.563 |
 | **Best validation** |||||||
-| Best mIoU | ----- / 0.816 | ----- / **0.816** | ----- / 0.815 | ----- / **0.816** | ----- / 0.806 | ----- / 0.797 |
-| Best Loss | ----- / 0.113 | ----- / **0.113** | ----- / 0.114 | ----- / 0.115 | ----- / 0.117 | ----- / 0.124 |
-| Best Accuracy | ----- / 0.959 | ----- / **0.959** | ----- / **0.959** | ----- / 0.958 | ----- / 0.957 | ----- / 0.954 |
+| Best mIoU     | ----- / 0.806 | ----- / **0.810** | ----- / 0.809     | ----- / 0.801 | ----- / 0.800 | ----- / 0.789 |
+| Best Loss     | ----- / 0.126 | ----- / **0.125** | ----- / **0.125** | ----- / 0.129 | ----- / 0.131 | ----- / 0.139 |
+| Best Accuracy | ----- / 0.957 | ----- / **0.958** | ----- / **0.958** | ----- / 0.956 | ----- / 0.956 | ----- / 0.953 |
 
-
-**Table 3**. Comparison of PointNet++ configurations: NLL loss + near-uniform class weighting [0.9894, 0.9894, 0.9894, 1.0049, 1.0270]
-<br>All experiments use class-aware sampler. Values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset.
-
-
-
-### FINAL CONFIG (optimal for PoinNet)
-
-| Metric | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
-|------|------|------|------|------|------|------|
-| **Overall metrics** |||||||
-| mIoU | 0.810 / 0.800 | 0.816 / **0.806** | 0.811 / 0.806 | 0.805 / 0.801 | 0.802 / 0.798 |  |
-| Loss | 0.127 / 0.129 | 0.122 / 0.127 | 0.126 / 0.127 | 0.131 / 0.129 | 0.133 / 0.132 |  |
-| Accuracy | 0.959 / 0.957 | 0.960 / 0.957 | 0.959 / 0.957 | 0.957 / 0.956 | 0.957 / 0.956 |  |
-| **Class IoU** |||||||
-| Ground | 0.951 / 0.946 | 0.952 / 0.946 | 0.951 / 0.946 | 0.950 / 0.945 | 0.949 / 0.945 |  |
-| Vegetation | 0.868 / 0.864 | 0.871 / **0.866** | 0.868 / 0.865 | 0.865 / 0.864 | 0.864 / 0.863 |  |
-| Buildings | 0.954 / 0.954 | 0.955 / **0.955** | 0.954 / **0.955** | 0.948 / 0.950 | 0.948 / 0.950 |  |
-| Vehicle | 0.686 / 0.653 | 0.699 / 0.659 | 0.688 / **0.666** | 0.675 / 0.657 | 0.668 / 0.648 |  |
-| Utility | 0.594 / 0.585 | 0.603 / **0.602** | 0.593 / 0.596 | 0.584 / 0.586 | 0.581 / 0.584 |  |
-| **Best validation** |||||||
-| Best mIoU | ----- / 0.806 | ----- / **0.810** | ----- / 0.809 | ----- / 0.801 | ----- / 0.800 |  |
-| Best Loss | ----- / 0.126 | ----- / **0.125** | ----- / **0.125** | ----- / 0.129 | ----- / 0.131 |  |
-| Best Accuracy | ----- / 0.957 | ----- / **0.958** | ----- / **0.958** | ----- / 0.956 | ----- / 0.956 |  |
-
-
-<!-- | Metric | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
-|------|------|------|------|------|------|------|
-| **Overall metrics** |||||||
-| mIoU | 0.812 / 0.804 | 0.814 / **0.805** | 0.811 / 0.804 | 0.805 / 0.799 | 0.803 / 0.796 | 0.796 / 0.782 |
-| Loss | 0.128 / 0.126 | 0.125 / **0.125** | 0.128 / 0.126 | 0.133 / 0.129 | 0.135 / 0.131 | 0.140 / 0.139 |
-| Accuracy | 0.958 / **0.957** | 0.959 / **0.957** | 0.958 / **0.957** | 0.957 / 0.956 | 0.956 / 0.956 | 0.955 / 0.952 |
-| **Class IoU** |||||||
-| Ground | 0.950 / **0.946** | 0.951 / **0.946** | 0.950 / **0.946** | 0.950 / 0.945 | 0.949 / 0.945 | 0.945 / 0.940 |
-| Vegetation | 0.866 / 0.865 | 0.867 / **0.866** | 0.866 / **0.866** | 0.863 / 0.863 | 0.862 / 0.862 | 0.856 / 0.852 |
-| Buildings | 0.954 / **0.955** | 0.954 / **0.955** | 0.953 / **0.955** | 0.948 / 0.950 | 0.947 / 0.950 | 0.949 / 0.950 |
-| Vehicle | 0.686 / 0.667 | 0.691 / **0.669** | 0.684 / 0.665 | 0.675 / 0.653 | 0.670 / 0.648 | 0.653 / 0.609 |
-| Utility | 0.605 / 0.588 | 0.607 / **0.589** | 0.602 / **0.589** | 0.590 / 0.581 | 0.586 / 0.574 | 0.577 / 0.561 |
-| **Best validation** |||||||
-| Best mIoU | ----- / 0.806 | ----- **0.810** | ----- 0.807 | ----- 0.800 | ----- 0.801 | ----- 0.791 |
-| Best Loss | ----- / 0.126 | ----- **0.125** | ----- 0.126 | ----- 0.129 | ----- 0.131 | ----- 0.137 |
-| Best Accuracy | ----- 0.957 | ----- **0.958** | ----- 0.957 | ----- 0.956 | ----- 0.956 | ----- 0.953 | -->
+**Table A**. Comparison of PointNet++ configurations: NLL loss + moderate class weighting [0.5272, 0.5272, 0.5276, 1.5454, 1.8727]. Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Best validation values refer to the best value achieved during the entire training.
 
 
 
 
-TODO!!!
+### B. NLL loss + unweighted
+
+| Metric<br>NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |   BEST (2+3) |
+|:------|:------:|:------:|:------:|:------:|:------:|:------:|:------:|
+| **Overall metrics** ||||||||
+| mIoU     | 0.815 / 0.812     | 0.819 / **0.813** | 0.816 / 0.812     | 0.808 / 0.810     | 0.809 / 0.809 | 0.797 / 0.797 | 0.819 / **0.813** |
+| Loss     | 0.112 / 0.115     | 0.110 / **0.114** | 0.112 / **0.114** | 0.117 / 0.116     | 0.117 / 0.116 | 0.122 / 0.123 | 0.110 / 0.115     |
+| Accuracy | 0.960 / **0.958** | 0.961 / **0.958** | 0.960 / **0.958** | 0.959 / **0.958** | 0.959 / 0.957 | 0.956 / 0.954 | 0.961 / **0.958** |
+| **Class IoU** ||||||||
+| Ground     | 0.951 / **0.946** | 0.952 / **0.946** | 0.952 / **0.946** | 0.950 / **0.946** | 0.950 / 0.945 | 0.946 / 0.940 | 0.952 / **0.946** |
+| Vegetation | 0.871 / 0.868     | 0.873 / 0.868     | 0.871 / **0.869** | 0.868 / 0.868     | 0.868 / 0.867 | 0.861 / 0.858 | 0.873 / 0.868     |
+| Buildings  | 0.954 / **0.955** | 0.954 / 0.954     | 0.953 / **0.955** | 0.948 / 0.950     | 0.949 / 0.951 | 0.950 / 0.950 | 0.955 / 0.953     |
+| Vehicle    | 0.690 / 0.672     | 0.700 / 0.677     | 0.695 / 0.677     | 0.682 / **0.679** | 0.683 / 0.673 | 0.653 / 0.647 | 0.698 / 0.677     |
+| Utility    | 0.611 / **0.620** | 0.616 / 0.618     | 0.608 / 0.616     | 0.594 / 0.609     | 0.594 / 0.609 | 0.574 / 0.590 | 0.616 / `0.621` |
+| **Best validation** ||||||||
+| Best mIoU     | ----- / 0.815     | ----- / **0.816** | ----- / **0.816** | ----- / 0.810 | ----- / 0.809 | ----- / 0.797 | ----- / `0.818` |
+| Best Loss     | ----- / 0.113     | ----- / 0.113     | ----- / **0.112** | ----- / 0.115 | ----- / 0.116 | ----- / 0.123 | ----- / 0.112     |
+| Best Accuracy | ----- / **0.959** | ----- / **0.959** | ----- / **0.959** | ----- / 0.958 | ----- / 0.957 | ----- / 0.954 | ----- / **0.959** |
+
+**Table B**. Comparison of PointNet++ configurations: NLL loss + uniform weights (i.e no weights). Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Best validation values refer to the best value achieved during the entire training.
 
 
-Table X summarizes the performance of the evaluated PointNet++ configurations. The baseline model achieves strong overall performance, with a validation mIoU of 0.804 and balanced results across most classes. Introducing dropout slightly improves the best validation mIoU (0.810) while maintaining similar class-wise performance, suggesting a modest regularization benefit. The K-neighbors configuration yields results comparable to the baseline, indicating that the neighborhood selection strategy has limited impact in this setting. In contrast, the ball-based grouping variants slightly degrade performance, particularly for smaller classes such as Vehicle and Utility. Finally, removing additional input features and using only XYZ coordinates leads to the lowest performance across all metrics, highlighting the importance of feature information beyond spatial coordinates.
+
+### A vs B comparison: NLL with moderate weights vs NLL (no weights) 
+
+The following figures show the learning curves for the baseline case for both the unweighted and weighted NLL loss.
 
 
-The ball-based grouping strategies slightly degrade performance, particularly for smaller classes such as Vehicle and Utility. This behaviour is likely related to the variable number of neighbours produced by radius-based grouping in sparse regions, which can lead to unstable feature aggregation compared to the fixed-size neighbourhoods provided by k-nearest neighbours.
+![Baseline comparison](figs/pnpp_baseline_loss.png)
+The curves show that both configurations follow a very similar training behaviour. The training loss decreases in both cases and the validation curves stabilize after approximately 30 epochs. However, the unweighted case consistently achieves better validation performance, not only regarding the smaller oscilations it exhibits, but also in the smaller values.
 
-The idea was to make neighbourhoods geometrically consistent, rather than point-count consistent like KNN.
+This behaviour can also be observed in the mIoU curves below, where the unweighted configuration converges to a slightly higher validation mIoU than the weighted version. 
 
-Increasing the neighborhood size slightly improves the IoU for the Vehicle class. Vehicles are relatively small and sparse objects in the scene, and a larger neighborhood provides additional contextual information that may help distinguish them from surrounding structures.
-However, Even though Vehicle IoU improves, the overall mIoU does not. 
+![Baseline comparison](figs/pnpp_baseline_miou.png)
+![Baseline comparison](figs/pnpp_baseline_classes.png)
 
-Whereas larger context helps with vehicles, it hurts for utilities. Since utility structures are much smaller, they contain very few points, tehrefore, increasing the number of neighbours quickly inccreases the number of points from other classes, making the context less pure. So there is a tradeoff between the size of teh structure to identify and the size of the neighbourhood,  what seems to provide useful semantinc context very easily can hurt more than help. 
+Regarding the class IoU, curves indicate that for frequent classes such as Ground, Vegetation, and Buildings, both configurations behave almost identically. However, for the rare classes Vehicle and Utility, the weighted loss does not provide the expected improvement. In fact, the unweighted configuration slightly outperforms the weighted one in the final epochs.
 
+These results suggest that PointNet++ already handles class imbalance reasonably well through its hierarchical architecture, which captures geometric structures at multiple spatial scales. In contrast to PointNet, where strong class weighting was beneficial, the same weighting scheme appears to slightly degrade performance in the PointNet++ setting, specially for rare classes such as Vehicle and Utility.
 
-PointNet++ extracts local geometric features by grouping neighbouring points around sampled centroids. Two common strategies for this grouping are k-nearest neighbours (KNN) and radius-based (ball) query, which differ in how the local neighbourhood is defined.
+### 6 experiments comparison
 
-In KNN grouping, the algorithm always selects a fixed number K of neighbouring points. This guarantees that each neighbourhood contains the same number of points, providing stable input to the neural network. However, the spatial size of the neighbourhood can vary depending on point density. For example, if K=32, the 32 nearest points in a dense vegetation region may lie very close to the centroid, while the same 32 points in a sparse area may cover a much larger spatial region.
+Tables A and B summarize the performance of the evaluated PointNet++ configurations. Overall, the different configurations produce relatively similar results, indicating that the baseline is already well tuned. However, several trends can be observed when modifying specific components of the architecture and remain largely consistent in both settings.
 
-In contrast, ball query grouping selects all points within a fixed spatial radius r. This ensures that the neighbourhood always corresponds to the same physical scale. For instance, if 
-r=0.2 m, the network always analyzes the geometry within that spatial extent. In other words, the network learns features such as “what does the geometry look like inside a 20 cm region?” rather than “what do the nearest 32 points look like?”. For this reason, ball query is often considered more invariant to changes in point density.
+Frequent classes like Ground, Vegetation and Building behave similar for all experiments showing almost identical IoU values. Rares classes like Vehicle and Utility are the ones that show more variability. Although such variability is not uniform among experiment, their overall mIoU values indicate two clear benefitial modifications/improvements: dropout (experiment 2) and number of neighbours (experiments 3). 
 
-In practice, however, the number of points within a fixed radius can vary significantly across the scene. Dense regions may contain many points inside the radius, while sparse regions may contain only a few. This can lead to unstable feature aggregation, especially for small or sparsely sampled objects. In our experiments, the ball-based grouping strategies consistently produced slightly worse results, particularly for the Vehicle and Utility classes. These objects contain relatively few points, meaning that the fixed-radius neighbourhood often provides limited local information. By contrast, KNN grouping guarantees that each centroid always receives the same number of neighbouring points, which results in more stable feature extraction.
+### Effect of dropout
 
-Overall, while ball query enforces a consistent spatial scale for neighbourhoods, the results suggest that KNN grouping provides more robust performance for this dataset, especially when dealing with small or sparsely sampled objects.
+Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU and slightly better performance for several classes. This impacts in one of the best mIoU values.
 
+### Effect of neighborhood size (K-neighbors)
 
-Ball query is worse here because:
+Experiment 3 increases the number of neighbors in the deeper abstraction layers from [32,32,32,32] to [32,32,64,64]. The resulting performance is slightly higher than the baseline across most metrics. 
 
-neighbourhood size varies
+One noticeable effect is a slight improvement of the IoU for the Vehicle class. Vehicles are relatively small and sparse objects in the scene, and a larger neighborhood allows the network to capture a larger spatial context around them. This additional context can help distinguish vehicles from surrounding structures. In contrast, results show that the Utility class does not benefit from larger neighborhoods. Utility objects such as poles and street lights are thin vertical structures that contain very few points. Increasing the neighborhood size quickly introduces points from other classes, making the context less pure.
 
-sparse classes get very few neighbours
+This variability indicates a strong tradeoff between the size of the structure to identify and the size of the neighbourhood providing context, what seems to provide useful semantinc context for one class, may hurt another. 
 
-KNN gives stable feature extraction
+### Effect of grouping strategy
 
-"knn" vs "ball_closest"/"ball_random" is not a fair comparison 
+Knn strategy is robust in sparse areas because it guarantees enough number of points (fixed), which translates into a stable input to the network. However, the spatial size of the neighborhood varies depending on point density. In contrast, ball-based strategies select points within a fixed spatial radius r, which ensures that the neighbourhood always corresponds to the same physical scale. However, may contain very few points depending on the point density. This variability in the number of points can lead to unstable feature aggregation, particularly for small or sparsely sampled classes.
 
-
-knn is robust in sparse areas (always enough points), but spatial neighborhood varies a lot
-ball has a consistent geometric scale (bounding), but may contain very few points.
-If very dense areas:
-ball_closest → biased toward center 
-ball_random  → more spatially uniform sampling
+This behaviour is shown in our experiments, the ball-based grouping strategies slightly degrade performance compared to the KNN baseline, particularly for the Vehicle and Utility classes which contain relatively few points. 
 
 
-### RESULTS:
+### Effect of input feature channels
+
+Experiment 6 evaluates the impact of removing additional input features and using only the XYZ coordinates. As expected, this configuration consistently produces the lowest performance across all metrics, indicating the importance of includding non-geometric features if available. This effect is particularly visible for the Vehicle and Utility classes, which already contain relatively few points. Without the additional feature channels, the model has less information to separate these objects from surrounding structures.
+
+
+### FINAL MODEL (2+3)
+
+Overall, the experiments suggest that the baseline PointNet++ configuration is already close to optimal for this dataset. Among the tested configurations, reducing the dropout rate (Experiment 2) and increasing the neighborhood size (Experiment 3) produced the most consistent improvements over the baseline. To evaluate whether both improvements could be combined, a final experiment was performed using both modifications simultaneously. This configuration achieved the highest overall performance, reaching a best validation mIoU of 0.818, slightly outperforming the individual experiments.
+
+However, the improvements are not uniform across all classes. While the combined model improves the IoU of some classes (e.g., Utility), other classes show only marginal changes. This suggests that the effects of these hyperparameters are not strictly additive and may interact during training. Based on the overall mIoU, the combined configuration (dropout 0.3 and increased neighborhood size) is selected as the final model and evaluated on the test set.
+
+| Experiment|     grouping    |    dropout   |      K-neighbors      |              feature channels          | 
+|:---------:|:--------------:|:------------:|:-----------------------:|:------------------------------------:|
+|   BEST    |      `knn`     |      0.3     | [32,32,64,64] (exact K) | [xyz,return_number,number_of_returns]|
+
+
+
+
