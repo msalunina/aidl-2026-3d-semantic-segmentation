@@ -1577,6 +1577,12 @@ However, the improvements are not uniform across all classes. While the combined
 | IPointNet | 0.77 / 0.76 ($\color{red}{−0.01}$) | 0.92 / 0.92 ($\color{green}{0.00}$) | 0.94 / 0.95 ($\color{green}{+0.01}$) | 0.58 / 0.52 ($\color{red}{−0.06}$) | 0.84 / 0.86 ($\color{green}{+0.02}$) | 0.56 / 0.55 ($\color{red}{−0.01}$) |
 | PointNet++ | 0.81 / 0.80 ($\color{red}{−0.01}$) | 0.95 / 0.95 ($\color{green}{0.00}$) | 0.95 / 0.96 ($\color{green}{+0.01}$) | 0.62 / 0.55 ($\color{red}{−0.07}$) | 0.87 / 0.89 ($\color{green}{+0.02}$) | 0.68 / 0.68 ($\color{green}{0.00}$) |
 
+| Architecture | mIoU | Buildings | Ground | Utility | Vegetation | Vehicle |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| PointNet | 0.66 / 0.66 | 0.85 / 0.86 $\color{green}{↑0.01}$ | 0.93 / 0.95 $\color{green}{↑0.02}$ | 0.38 / 0.33 $\color{red}{↓0.05}$ | 0.78 / 0.79 $\color{green}{↑0.01}$ | 0.36 / 0.36 |
+| IPointNet | 0.77 / 0.76 $\color{red}{↓0.01}$ | 0.92 / 0.92 | 0.94 / 0.95 $\color{green}{↑0.01}$ | 0.58 / 0.52 $\color{red}{↓0.06}$ | 0.84 / 0.86 $\color{green}{↑0.02}$ | 0.56 / 0.55 $\color{red}{↓0.01}$ |
+| PointNet++ | 0.81 / 0.80 $\color{red}{↓0.01}$ | 0.95 / 0.95 | 0.95 / 0.96 $\color{green}{↑0.01}$ | 0.62 / 0.55 $\color{red}{↓0.07}$ | 0.87 / 0.89 $\color{green}{↑0.02}$ | 0.68 / 0.68 |
+
 
 *Values shown as Val / Test (delta).*
 
