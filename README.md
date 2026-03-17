@@ -71,6 +71,16 @@
     - [Results](#results-3)
     - [Conclusions](#conclusions-4)
   - [PointNet on DALES - Incremental Improvements (Validation)](#pointnet-on-dales---incremental-improvements-validation)
+  - [IPointNet: BEV-Point Cloud Fusion](#ipointnet-bev-point-cloud-fusion)
+    - [Full-Density BEV Generation](#full-density-bev-generation)
+    - [Point Cloud and BEV Alignment](#point-cloud-and-bev-alignment)
+    - [Image Encoder and Initial Global Fusion](#image-encoder-and-initial-global-fusion)
+    - [Local BEV Feature Fusion](#local-bev-feature-fusion)
+    - [Implicit BEV Neighborhood](#implicit-bev-neighborhood)
+    - [IPointNet Architecture](#ipointnet-architecture)
+    - [Results](#results-4)
+    - [Key Insight](#key-insight)
+    - [Conclusion](#conclusion)
   - [PointNet++](#pointnet)
     - [Encoder](#encoder)
       - [1. Farthest Point Sampling (FPS)](#1-farthest-point-sampling-fps)
@@ -85,19 +95,9 @@
       - [Decoder Architecture (FP layers)](#decoder-architecture-fp-layers)
     - [Experiments](#experiments-1)
       - [Hypothesis](#hypothesis-6)
-      - [Results](#results-4)
+      - [Results](#results-5)
       - [Discussion](#discussion)
       - [Final Model](#final-model)
-  - [IPointNet: BEV-Point Cloud Fusion](#ipointnet-bev-point-cloud-fusion)
-    - [Full-Density BEV Generation](#full-density-bev-generation)
-    - [Point Cloud and BEV Alignment](#point-cloud-and-bev-alignment)
-    - [Image Encoder and Initial Global Fusion](#image-encoder-and-initial-global-fusion)
-    - [Local BEV Feature Fusion](#local-bev-feature-fusion)
-    - [Implicit BEV Neighborhood](#implicit-bev-neighborhood)
-    - [IPointNet Architecture](#ipointnet-architecture)
-    - [Results](#results-5)
-    - [Key Insight](#key-insight)
-    - [Conclusion](#conclusion)
   - [Comparing Three Architectures (Test Sample Results)](#comparing-three-architectures-test-sample-results)
   - [Future Work](#future-work)
 
@@ -165,6 +165,8 @@ conda activate aidl-2026-project
 pip install --no-cache-dir -r requirements.txt
 wandb login   # one-time setup, stores API key locally
 ```
+
+---
 
 ### DALES Segmentation 
 
@@ -324,6 +326,8 @@ Evaluating the performance of a semantic segmentation model requires metrics tha
 
 In such situations, a model could achieve high accuracy simply by predicting the dominant classes, even if it fails to correctly predict rare classes. For this reason, Intersection over Union (IoU) is widely used as a more robust metric for segmentation evaluation.
 
+---
+
 ### Intersection over Union (IoU)
 Intersection over Union (IoU) measures the overlap between the predicted region for a class and the corresponding ground truth region. The IoU for a class is defined as
 
@@ -362,7 +366,7 @@ $$
 
 where the sum is perfomed over all batches b in the epoch. 
 
-
+---
 
 ### Mean Intersection over Union (mIoU)
 
@@ -456,6 +460,7 @@ The goal results for the model are shown in the following table:
 
 The measure for the experiments is IoU(%), imlementing a compensated IoU for objects that may have a missing label part. For example plane class has part labels [0,1,2,3] but an object in the batch may have part labels [0,1,2] then a value of 1/4 is added in the IoU metrics, this avoids a punishment in IoU for non present parts in an object. This compensation is mentioned in the original work. 
 
+---
 
 ### Dataloader implementation
 
@@ -463,6 +468,7 @@ To be able to use the compensated IoU measure, and one hote vector class index, 
 
 The dataloader is based on the [torch_geometrics](https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/datasets/shapenet.html) implementation, and can be found in [shapenet_dataset.py](https://github.com/msalunina/aidl-2026-3d-semantic-segmentation/blob/main/src/utils/shapenet_dataset.py)
 
+---
 
 ### Experiments
 
@@ -540,6 +546,8 @@ The results for the experiments are shown in the following tables
 |TRAIN  |  79.1  |  79.7  |  76.6  |  88.9  |  71.7  |  87.9  |  72.2  |  87.9  |  81.4  |  85.7  |  94.8  |  54.7  |  83.5  |  81.8  |  57.1  |  76.7  |  84.9  |
 | EVAL  |  76.4  |  79.1  |  69.0  |  68.5  |  72.0  |  88.7  |  71.2  |  87.4  |  81.8  |  84.3  |  94.5  |  58.0  |  86.9  |  75.9  |  47.0  |  75.2  |  83.4  |
 
+---
+
 ### Qualitative Resuls
 
 In the following figures, qualitative result for the model is shown, the first column shows the original pointcloud with color as the label, the second column shows the prediction, and the third column shows the error as black points. We use as a reference random images from the test split.
@@ -554,6 +562,7 @@ Image of Plane object top view
 ![airplane_qualitative_side](figs/shapenet_airplane_side.png)
 Image of Plane object top-side view
 
+---
 
 ### Quantitative Results
 
@@ -562,6 +571,8 @@ In the following figures, the evolution mIoU curves during the training for each
 ![mIoU_shapenet1](figs/shapenet_miou1.jpg)
 ![mIoU_shapenet2](figs/shapenet_miou2.jpg)
 ![mIoU_shapenet3](figs/shapenet_miou3.jpg)
+
+---
 
 ### Conclusions
 
@@ -608,6 +619,8 @@ After preprocessing, each point-cloud block is stored in NumPy compressed format
 Point cloud block with simplified class labels
 
 The choice of block size (50 m × 50 m) and point count (4096) is driven by a trade-off between geometric context, computational efficiency, and model capacity, particularly for PointNet-based architectures. The block size defines what part of the world the model sees. The point count defines how detailed that view is. A 50 m × 50 m block is large enough to capture both a building and nearby objects such as vehicles, letting the model to learn contextual relationships while preserving local geometric detail. PointNet requires a fixed-size unordered point set, and 4096 is a widely adopted and effective choice.
+
+---
 
 ### Geospatial Validation
 
@@ -661,6 +674,8 @@ PointNet's input is a per-point feature vector. The minimal version uses only XY
 
 The hypothesis is that adding return metadata (XYZ + return_number + number_of_returns, 5 channels) improves segmentation performance, particularly on classes where geometry alone is ambiguous, doing so without meaningful additional compute cost, since PointNet's shared MLP scales with channel count but the increase from 3 to 5 is marginal.
 
+---
+
 ### Implementation (`config/default.yaml`)
 
 Feature selection is controlled in the config under `dataset.use_features`. The preprocessing step (`convert_las_to_blocks.py`) extracts all requested features into the NPZ blocks; the dataset loader then selects the subset specified at training time. The number of input channels (`num_channels`) is computed automatically from the selected features.
@@ -683,6 +698,8 @@ dataset:
     - number_of_returns
 ```
 
+---
+
 ### Experiment Setup
 
 | Run | Input Features | Channels | Purpose |
@@ -691,6 +708,7 @@ dataset:
 | 2 | XYZ + return_number + number_of_returns | 5 | Geometry + return metadata |
 
 All other hyperparameters are held constant: NLL loss, uniform weights, sampler off, no augmentation, 50 epochs, batch size 32, learning rate 0.01 with cosine annealing.
+
 
 ### Results
 
@@ -703,6 +721,7 @@ All other hyperparameters are held constant: NLL loss, uniform weights, sampler 
 
 ![pn_exp_channels](figs/pn_exp_channels.png)
 
+
 ### Conclusions
 
 Adding return metadata (2 extra channels) improves validation mIoU from 0.592 to 0.637 (+0.045), a substantial gain from two extra input features at negligible compute cost. The improvement is driven almost entirely by the rare classes: Utility jumps from 0.272 to 0.344 and Vehicle from 0.199 to 0.300, confirming that return_number and number_of_returns carry discriminative signal about vertical structure that geometry alone cannot capture. Majority classes (Ground, Vegetation, Buildings) remain essentially unchanged, meaning the additional features help where they are needed without hurting elsewhere. All subsequent experiments use the 5-channel input (XYZ + return data).
@@ -714,6 +733,8 @@ Adding return metadata (2 extra channels) improves validation mIoU from 0.592 to
 DALES has severe class imbalance: Ground (53% of points), Vegetation (29%), and Buildings (17%) vastly outnumber Vehicle (<1%) and Utility (<1%). This class imbalance can be attacked at three levels: the loss function (how the gradient is shaped), the loss weights (how much each class contributes), and the sampler (which blocks the model trains on). These are not simply additive - they interact, and stacking all three does not guarantee the best result.
 
 The sections below document each strategy independently, the reasoning behind it, and what the results revealed about how they interact.
+
+---
 
 ### Focal Loss vs NLL Loss
 
@@ -796,6 +817,8 @@ loss_weights:
   - 1.0270   # Utility
 ```
 
+---
+
 ### Class Balanced Sampler
 
 #### Hypothesis
@@ -820,6 +843,8 @@ training:
 ```
 
 When `use_sampler: true`, the DataLoader uses the sampler instead of random shuffling (shuffle and sampler are mutually exclusive in PyTorch). The sampler is applied only to the training set; validation always uses sequential loading.
+
+---
 
 ### Experiment Setup
 
@@ -847,6 +872,8 @@ All experiments use the same base configuration: PointNet, Adam optimizer, cosin
 | 13 | Focal (γ=1) | Uniform | On (3×) | Sampler + Focal γ=1 uniform weights |
 
 **Note on Phase 2 weight choices:** Phase 2 includes runs with Uniform weights (Runs 11 and 13) alongside the moderate ENS 0.999999 (Run 12) intentionally. As mentioned above, the hypothesis is that the class-balanced sampler and loss-level weight correction may compete rather than complement each other: the sampler already corrects the class distribution at the data level, so adding aggressive loss weights on top could over-correct and destabilize training. By testing Uniform weights with the sampler on, we can isolate the sampler's contribution and determine whether loss-level rebalancing is still necessary once the model sees rare-class blocks frequently.
+
+---
 
 ### Results
 
@@ -884,6 +911,8 @@ All experiments use the same base configuration: PointNet, Adam optimizer, cosin
 ![pn_exp_sampler_on](figs/pn_exp_sampler_on.png)
 *Validation mIoU for across loss x weight strategies with sampler on.*
 
+---
+
 ### Conclusions
 
 **NLL consistently outperforms Focal Loss.** Under matched weight strategies, NLL achieves higher validation mIoU than both Focal γ=2 and Focal γ=1. The best Phase 1 result is NLL + ENS 0.999999 (Run 4, val mIoU 0.641), compared to the best Focal result of 0.639 (Run 8, Focal γ=1 + ENS 0.99999). Focal γ=2 performs worst among the loss functions, suggesting that aggressive down-weighting of easy examples hurts more than it helps when the model still needs strong gradients from majority classes for spatial context. Focal γ=1 is a milder variant and comes closer to NLL, but does not surpass it.
@@ -902,6 +931,7 @@ All experiments use the same base configuration: PointNet, Adam optimizer, cosin
 
 Aerial LiDAR scans are captured from above, so the same object (house, tree, car) can appear at any horizontal rotation depending on the flight path. Without augmentation, the model may learn orientation-specific patterns instead of actual shape.
 
+
 ### Implementation (`src/models/dataset.py`)
 
 Augmentation is applied only at training time (disabled for validation and test splits). It is implemented in `src/utils/dataset.py` and controlled through `config/default.yaml`:
@@ -916,6 +946,7 @@ The following transform is applied per sample:
 
 - **Random Z-axis rotation**: a rotation angle $\theta \sim \mathcal{U}(-180°, +180°)$ is sampled and applied to the XYZ coordinates only. Return number, and number-of-returns channels are unaffected.
 
+
 ### Experiment Setup
 
 To isolate the effect of data augmentation, we compare the best configuration from the Class Balancing experiments (Run 12: NLL + ENS 0.999999 + sampler) with and without augmentation enabled. All other hyperparameters are held constant.
@@ -924,6 +955,7 @@ To isolate the effect of data augmentation, we compare the best configuration fr
 |---|---|---|---|---|---|
 | 12 | Off | NLL | ENS 0.999999 | On (3×) | Baseline (best balancing config) |
 | 15 | On | NLL | ENS 0.999999 | On (3×) | Add random Z-axis rotation |
+
 
 ### Results
 
@@ -947,6 +979,7 @@ Data augmentation narrows the train–val gap substantially (from 0.034 to 0.002
 ### Hypothesis
 
 The original PointNet paper does not use dropout in the segmentation head. However, our setting differs from the original in two ways: we operate on small fixed-size blocks (4096 points) rather than full scenes, and the DALES training set contains a limited number of such blocks. This means the model sees the same local geometries repeatedly across epochs, which creates a risk of overfitting to block-specific patterns rather than learning generalizable per-point features. The hypothesis is that adding moderate dropout (0.3-0.5) before the final classification layer will act as a complementary regularizer to data augmentation: while augmentation diversifies the input geometry, dropout prevents the segmentation head from relying on fixed activation patterns, encouraging more robust internal representations.
+
 
 ### Implementation
 
@@ -989,6 +1022,8 @@ Dropout provides a clear improvement over the no-dropout augmentation baseline. 
 
 Dropout 0.5 (Run 17) performs nearly identically to 0.3 (val mIoU 0.658 vs. 0.660), indicating that the model is not very sensitive to the exact rate in this range. The marginal drop at 0.5 suggests that stronger dropout starts to under-fit slightly, but the difference is within noise.
 
+---
+
 ## PointNet on DALES - Incremental Improvements (Validation)
 
 Each row adds one technique on top of the previous best. The Gap column shows train mIoU − validation mIoU (lower = better generalization).
@@ -1010,6 +1045,151 @@ Each row adds one technique on top of the previous best. The Gap column shows tr
 
 ---
 
+## IPointNet: BEV-Point Cloud Fusion
+
+We now extend the baseline PointNet architecture by incorporating BEV-based spatial context through the proposed IPointNet model.
+
+In this work, we extend the PointNet architecture by integrating Bird’s Eye View (BEV) representations with 3D point clouds to improve semantic segmentation performance on the DALES dataset. While PointNet learns directly from unordered point sets, it has limited ability to capture larger spatial context. To overcome this limitation, we introduce a multi-modal pipeline that combines local 3D geometry with 2D spatial context derived from BEV images.
+
+---
+
+### Full-Density BEV Generation
+
+We generate dense BEV raster images directly from the raw .las files, without any PointNet subsampling. The same 50 m × 50 m sliding windows used for point-cloud blocks are applied to create perfectly aligned BEV tiles.
+
+Each BEV image has a resolution of 256 × 256 pixels and contains four channels:
+
+Density (log(1 + number of points))
+Z max (maximum elevation)
+Z mean (average elevation)
+Z range (height variation)
+
+![BEV visualization](figs/image1.png)
+![BEV visualization](figs/image2.png)
+![BEV visualization](figs/image3.png)
+![BEV visualization](figs/image4.png)
+
+
+Full-density BEV representation showing density and height statistics
+
+This representation preserves global spatial structure and captures geometric properties that are not directly accessible from local point neighborhoods. The BEV images are stored as compressed NumPy files (.npz) for efficient loading and training. ([`generate_full_density_bev_rasters_from_las.py`](./src/generate_full_density_bev_rasters_from_las.py))
+
+---
+
+### Point Cloud and BEV Alignment
+
+A key contribution of this work is the precise alignment between point-cloud blocks and BEV images. During preprocessing, each point-cloud block stores metadata that allows deterministic matching with its corresponding BEV tile.
+
+In addition to the standard PointNet preprocessing, we store:
+
+Block origin (x0, y0)
+Tile indices (tile_ix, tile_iy)
+BEV filename for direct lookup
+Per-point XY coordinates in BEV space (xy_grid)
+
+The xy_grid encodes the position of each point inside the BEV tile using normalized coordinates in the range [-1, 1]. This enables exact spatial correspondence between the 3D point cloud and the 2D BEV representation.
+
+([`convert_las_to_blocks.py`](./src/convert_las_to_blocks.py))
+
+---
+
+### Image Encoder and Initial Global Fusion
+
+Initially, we used a convolutional image encoder to extract a global feature vector (fvect) from the BEV image. This encoder progressively reduces spatial resolution through convolution and pooling layers, followed by global average pooling.
+
+The resulting vector summarizes the entire BEV tile into a single descriptor. This vector was then broadcast and concatenated to all points in the block.
+
+However, this approach did not improve performance. The reason is that global pooling removes all spatial information, meaning that every point receives identical BEV context regardless of its location.
+
+---
+
+### Local BEV Feature Fusion
+
+To address this limitation, we implemented a local fusion strategy that preserves spatial alignment at the point level.
+
+Instead of using the global feature vector, we use the spatial feature map produced by the image encoder ([`img_encoder.py`](./src/img_encoder.py)). This feature map preserves spatial information and provides per-point feature extraction through interpolation.
+
+This operation assigns each point a BEV feature that represents its local neighborhood:
+
+Points in dense regions receive high-density features
+Points on buildings capture height structure
+Points near utilities capture vertical variation patterns
+
+This local sampling is implemented using PyTorch’s grid_sample operation inside the IPointNet architecture.
+
+---
+
+### Implicit BEV Neighborhood
+
+The BEV neighborhood is not explicitly defined by a radius. Instead, it emerges from:
+
+The BEV resolution (≈ 0.2 m per pixel)
+The receptive field of the convolutional encoder
+
+As a result, each point receives contextual information corresponding to approximately 2–3 meters around its location. This provides mid-scale spatial context that complements the fine-grained geometry captured by PointNet.
+
+---
+
+### IPointNet Architecture
+
+![IPN architecture](figs/ipointnet.jpg)
+
+The final IPointNet model extends the standard PointNet segmentation pipeline by incorporating BEV features.
+The implementation of both PointNet and IPointNet architectures can be found in [`pointnet.py`](./src/models/pointnet.py), specifically in the `IPointNetSegmentation` class.
+
+For each point, the model concatenates:
+
+Local PointNet features
+Global PointNet feature
+Locally sampled BEV feature
+
+These combined features are processed through shared multilayer perceptrons to predict semantic labels.
+
+---
+
+### Results
+
+The integration of BEV features leads to a significant improvement in segmentation performance.
+
+PointNet baseline: 0.66 mIoU  
+IPointNet: 0.77 mIoU  
+
+This corresponds to:
+
++0.11 absolute mIoU improvement  
+~17% relative improvement  
+
+![PN vs IPN](figs/pn_vs_ipn.png)
+![PN vs IPN for rare classes](figs/pn_vs_ipn_rare_classes.png)
+
+
+Training and validation curves showing stable convergence
+
+At the class level, the most significant gains are observed in:
+
+Vehicles: +20 IoU  
+Utility structures (poles, power lines, fences): +20 IoU  
+
+These classes benefit strongly from spatial context such as density patterns and height variation.
+
+---
+
+### Key Insight
+
+The main finding of this work is that BEV fusion is only effective when spatial alignment is preserved at the point level.
+
+Global fusion (single vector per image) does not provide useful information for segmentation. In contrast, local feature sampling allows each point to access context from its own spatial neighborhood, leading to substantial performance gains.
+
+---
+
+### Conclusion
+
+IPointNet demonstrates that combining 3D point-based learning with 2D BEV representations significantly improves semantic segmentation of aerial LiDAR data. The key enabler is the preservation of spatial correspondence between modalities and the use of local feature fusion.
+
+Future work may explore multi-scale BEV representations, attention-based fusion mechanisms, and integration with more advanced point-cloud architectures such as PointNet++.
+
+---
+
 ## PointNet++
 
 PointNet++ is a deep neural network designed to process unordered point sets sampled from a metric space. The architecture extends the original PointNet by introducing a hierarchical feature learning framework that captures both local geometric structures and global contextual information.
@@ -1027,7 +1207,7 @@ Next Figure shows the PointNet++ architecture
 (from "PointNet++: Deep Hierarchical Feature Learning on Point Sets in a Metric Space" (Qi et al., 2017).)
 
 
-
+---
 
 ### Encoder
 The encoder builds a hierarchical representation of the point cloud through successive **Set Abstraction (SA)** layers. Each SA layer applies sequentially:
@@ -1092,6 +1272,7 @@ The following comparison highlights how the choice of grouping strategy controls
 
 After selecting the K neighbors for each center, each local region is processed by a mini-PointNet network, which learns a feature representation for the neighborhood. This consists of a shared multilayer perceptron (MLP) applied independently to each point followed by a symmetric aggregation function (max pooling) to obtain a single feature vector representing the region.
 
+---
 
 ### Decoder
 
@@ -1122,7 +1303,7 @@ Once the interpolated features and skip features have been concatenated, the res
 
 By stacking several Feature Propagation layers, the decoder progressively reconstructs point features at increasing resolutions until features are available for the full original point cloud size.
 
-
+---
 
 ### Network Architecture 
 
@@ -1197,7 +1378,7 @@ where:
 
 
 
-
+---
 
 ### Experiments
 
@@ -1359,159 +1540,11 @@ However, the improvements are not uniform across all classes. While the combined
 <!-- | Best Loss     | ----- / 0.112     |         |
 | Best Accuracy | ----- / **0.959** |         | -->
 
-
-
 ---
-
-
-
----
-
-## IPointNet: BEV-Point Cloud Fusion
-
-We now extend the baseline PointNet architecture by incorporating BEV-based spatial context through the proposed IPointNet model.
-
-In this work, we extend the PointNet architecture by integrating Bird’s Eye View (BEV) representations with 3D point clouds to improve semantic segmentation performance on the DALES dataset. While PointNet learns directly from unordered point sets, it has limited ability to capture larger spatial context. To overcome this limitation, we introduce a multi-modal pipeline that combines local 3D geometry with 2D spatial context derived from BEV images.
-
----
-
-### Full-Density BEV Generation
-
-We generate dense BEV raster images directly from the raw .las files, without any PointNet subsampling. The same 50 m × 50 m sliding windows used for point-cloud blocks are applied to create perfectly aligned BEV tiles.
-
-Each BEV image has a resolution of 256 × 256 pixels and contains four channels:
-
-Density (log(1 + number of points))
-Z max (maximum elevation)
-Z mean (average elevation)
-Z range (height variation)
-
-![BEV visualization](figs/image1.png)
-![BEV visualization](figs/image2.png)
-![BEV visualization](figs/image3.png)
-![BEV visualization](figs/image4.png)
-
-
-Full-density BEV representation showing density and height statistics
-
-This representation preserves global spatial structure and captures geometric properties that are not directly accessible from local point neighborhoods. The BEV images are stored as compressed NumPy files (.npz) for efficient loading and training. ([`generate_full_density_bev_rasters_from_las.py`](./src/generate_full_density_bev_rasters_from_las.py))
-
----
-
-### Point Cloud and BEV Alignment
-
-A key contribution of this work is the precise alignment between point-cloud blocks and BEV images. During preprocessing, each point-cloud block stores metadata that allows deterministic matching with its corresponding BEV tile.
-
-In addition to the standard PointNet preprocessing, we store:
-
-Block origin (x0, y0)
-Tile indices (tile_ix, tile_iy)
-BEV filename for direct lookup
-Per-point XY coordinates in BEV space (xy_grid)
-
-The xy_grid encodes the position of each point inside the BEV tile using normalized coordinates in the range [-1, 1]. This enables exact spatial correspondence between the 3D point cloud and the 2D BEV representation.
-
-([`convert_las_to_blocks.py`](./src/convert_las_to_blocks.py))
-
----
-
-### Image Encoder and Initial Global Fusion
-
-Initially, we used a convolutional image encoder to extract a global feature vector (fvect) from the BEV image. This encoder progressively reduces spatial resolution through convolution and pooling layers, followed by global average pooling.
-
-The resulting vector summarizes the entire BEV tile into a single descriptor. This vector was then broadcast and concatenated to all points in the block.
-
-However, this approach did not improve performance. The reason is that global pooling removes all spatial information, meaning that every point receives identical BEV context regardless of its location.
-
----
-
-### Local BEV Feature Fusion
-
-To address this limitation, we implemented a local fusion strategy that preserves spatial alignment at the point level.
-
-Instead of using the global feature vector, we use the spatial feature map produced by the image encoder ([`img_encoder.py`](./src/img_encoder.py)). This feature map preserves spatial information and provides per-point feature extraction through interpolation.
-
-This operation assigns each point a BEV feature that represents its local neighborhood:
-
-Points in dense regions receive high-density features
-Points on buildings capture height structure
-Points near utilities capture vertical variation patterns
-
-This local sampling is implemented using PyTorch’s grid_sample operation inside the IPointNet architecture.
-
----
-
-### Implicit BEV Neighborhood
-
-The BEV neighborhood is not explicitly defined by a radius. Instead, it emerges from:
-
-The BEV resolution (≈ 0.2 m per pixel)
-The receptive field of the convolutional encoder
-
-As a result, each point receives contextual information corresponding to approximately 2–3 meters around its location. This provides mid-scale spatial context that complements the fine-grained geometry captured by PointNet.
-
----
-
-### IPointNet Architecture
-
-![IPN architecture](figs/ipointnet.jpg)
-
-The final IPointNet model extends the standard PointNet segmentation pipeline by incorporating BEV features.
-The implementation of both PointNet and IPointNet architectures can be found in [`pointnet.py`](./src/models/pointnet.py), specifically in the `IPointNetSegmentation` class.
-
-For each point, the model concatenates:
-
-Local PointNet features
-Global PointNet feature
-Locally sampled BEV feature
-
-These combined features are processed through shared multilayer perceptrons to predict semantic labels.
-
----
-
-### Results
-
-The integration of BEV features leads to a significant improvement in segmentation performance.
-
-PointNet baseline: 0.66 mIoU  
-IPointNet: 0.77 mIoU  
-
-This corresponds to:
-
-+0.11 absolute mIoU improvement  
-~17% relative improvement  
-
-![PN vs IPN](figs/pn_vs_ipn.png)
-![PN vs IPN for rare classes](figs/pn_vs_ipn_rare_classes.png)
-
-
-Training and validation curves showing stable convergence
-
-At the class level, the most significant gains are observed in:
-
-Vehicles: +20 IoU  
-Utility structures (poles, power lines, fences): +20 IoU  
-
-These classes benefit strongly from spatial context such as density patterns and height variation.
-
----
-
-### Key Insight
-
-The main finding of this work is that BEV fusion is only effective when spatial alignment is preserved at the point level.
-
-Global fusion (single vector per image) does not provide useful information for segmentation. In contrast, local feature sampling allows each point to access context from its own spatial neighborhood, leading to substantial performance gains.
-
----
-
-### Conclusion
-
-IPointNet demonstrates that combining 3D point-based learning with 2D BEV representations significantly improves semantic segmentation of aerial LiDAR data. The key enabler is the preservation of spatial correspondence between modalities and the use of local feature fusion.
-
-Future work may explore multi-scale BEV representations, attention-based fusion mechanisms, and integration with more advanced point-cloud architectures such as PointNet++.
 
 ## Comparing Three Architectures (Test Sample Results)
 
+---
 
 ## Future Work
 
