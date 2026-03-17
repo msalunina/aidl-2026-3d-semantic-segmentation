@@ -1,5 +1,5 @@
 
-# PointNet Architecture Validation
+## PointNet Architecture Validation
 
 The goal of the following experiments is to validate the implementation of the PointNet network [1](https://arxiv.org/pdf/1612.00593)
 For this task, we decided to run experiments using ShapeNet dataset as stated in the original work
@@ -7,12 +7,7 @@ For this task, we decided to run experiments using ShapeNet dataset as stated in
 The first implementation show in [PointNet architecture](###implementation) is used to run a train/test/validation with the ShapeNet dataset
 
 
-## SETUP
-
-The experiments have been run in a desktop PC:
-min 2GB GPU RAM
-
-# ShapeNet Part Segmentation Task
+### ShapeNet Part Segmentation Task
 
 The dataset has been downloaded from [Kaggle]( https://www.kaggle.com/datasets/mitkir/shapenet/download?datasetVersionNumber=1) web site as stated in the [torch_geometric](https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/datasets/shapenet.html) documentation.
 
@@ -35,14 +30,14 @@ The measure for the experiments is IoU(%), imlementing a compensated IoU for obj
 
 ### Dataloader implementation
 
-To be able to use the compensated IoU measure, we had to create a new dataloader. This will allow us to return with the element, the compensated IoU value, and the index of the object class that is also needed in the next steps.
+To be able to use the compensated IoU measure, and one hote vector class index, we had to create a custom dataloader. This will allow us to return with the element, the compensated IoU value, and the index of the object class that is also needed in the next steps.
 
 The dataloader is based on the [torch_geometrics](https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/datasets/shapenet.html) implementation, and can be found in [shapenet_dataset.py](https://github.com/msalunina/aidl-2026-3d-semantic-segmentation/blob/main/src/utils/shapenet_dataset.py)
 
 
-## Experiments
+### Experiments
 
-The experiments will be run using the following configuration:
+All the experiments will be run using the following configuration:
 
 ```yaml
   learning_rate: 0.01          # Initial LR passed to Adam
@@ -55,8 +50,7 @@ The experiments will be run using the following configuration:
   rotation_arround_up_axis: 0.7
 ```
 
-
-### PointNet base model
+#### PointNet base model
 
 First we do a train/evaluation run 
 
@@ -85,17 +79,16 @@ With the specified changes, the following experiments are planned:
 + Increase layer sizes on architecture with best results
  
 
-
 The results for the experiments are shown in the following tables
 
-### PointNet + One-Hot vector 
+#### PointNet + One-Hot vector 
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
 |TRAIN  |  78.1  |  77.9  |  77.9  |  85.1  |  66.4  |  87.0  |  74.9  |  88.2  |  82.9  |  85.8  |  94.3  |  51.7  |  87.0  |  81.2  | 56.4  |  68.4  |  84.9  |
 | EVAL  |  76.1  |  78.5  |  69.4  |  74.7  |  68.6  |  88.5  |  71.0  |  87.5  |  83.2  |  83.1  |  94.1  |  54.9  |  89.7  |  77.6  | 43.9  |  70.5  |  83.1  |
 
-### PointNet + Skip Connections
+#### PointNet + Skip Connections
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
@@ -103,7 +96,7 @@ The results for the experiments are shown in the following tables
 | EVAL  |  72.0  |  77.5  |  71.2  |  51.7  |  68.8  |  87.6  |  65.9  |  86.4  |  81.1  |  81.9  |  93.5  |  43.6  |  84.2  |  71.7  |  41.3  |  63.6  |  82.6  |
 
 
-### PointNet + One-Hot vector + Skip Connections
+#### PointNet + One-Hot vector + Skip Connections
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
@@ -111,7 +104,7 @@ The results for the experiments are shown in the following tables
 | EVAL  |  77.3  |  78.7  |  72.7  |  68.2  |  71.7  |  88.4  |  69.4  |  87.7  |  82.8  |  83.6  |  94.3  |  60.1  |  89.3  |  78.4  |  50.3  |  77.0  |  83.5  |
 
 
-### PointNet + One-Hot vector + Skip Connections + Layer Sizes
+#### PointNet + One-Hot vector + Skip Connections + Layer Sizes
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:| 
@@ -119,9 +112,9 @@ The results for the experiments are shown in the following tables
 | EVAL  |  76.4  |  79.1  |  69.0  |  68.5  |  72.0  |  88.7  |  71.2  |  87.4  |  81.8  |  84.3  |  94.5  |  58.0  |  86.9  |  75.9  |  47.0  |  75.2  |  83.4  |
 
 
-## Conclusions
+### Conclusions
 
-The best results for part segmentation task in ShapeNet dataset is the 3rd configuration, PointNet + One-Hot vector + skip connections, the following table shows the comparison of or best results against the original work, for this comparison we are using the result obtained with the test split
+The best results for part segmentation task in ShapeNet dataset has been achieved using the 3rd configuration, PointNet + One-Hot vector + skip connections, the following table shows the comparison of or best results against the original work, for this comparison we are using the result obtained with the test split
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
@@ -129,4 +122,4 @@ The best results for part segmentation task in ShapeNet dataset is the 3rd confi
 | OURS      |  78.2  |  80.9  | 79.3  |  61.1 |  73.4  |  89.1  |  69.6  |  88.7  |  83.4  |  83.0  |  95.8  |  57.5  |  87.9  |  81.5  |  55.1  |  69.5  |  85.6  |
 
 
-The average IoU(%) achieved is really close to the original work, so we can assume that our implementation of the PointNet architecture is validated.
+The average IoU(%) achieved is really close to the original work, so we can conclude that our implementation of the PointNet architecture is validated.
