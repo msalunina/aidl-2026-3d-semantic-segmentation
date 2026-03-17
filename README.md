@@ -22,8 +22,8 @@
     - [Offline usage](#offline-usage)
   - [Metrics](#metrics)
     - [Intersection over Union (IoU)](#intersection-over-union-iou)
+      - [IoU Implementation](#iou-implementation)
     - [Mean Intersection over Union (mIoU)](#mean-intersection-over-union-miou)
-    - [IoU Implementation](#iou-implementation)
   - [PointNet Architecture](#pointnet-architecture)
     - [Why PointNet for aerial LiDAR?](#why-pointnet-for-aerial-lidar)
     - [Implementation (`src/models/pointnet.py`)](#implementation-srcmodelspointnetpy)
@@ -356,6 +356,18 @@ This formula can also be interpreted as the ratio between the **intersection** a
 - the **union** corresponds to all points that belong to the class either in the prediction or in the ground truth (TP + FP + FN)
 
 
+#### IoU Implementation
+
+For each class, the intersection and the union are computed for every batch and accumulated over the entire epoch. Then, their ratio gives a single IoU value per class and epoch:
+
+$$
+IoU_c = \frac{\sum_{b} intersection_c}{\sum_{b} union_c}
+$$
+
+where the sum is perfomed over all batches b in the epoch. 
+
+
+
 ### Mean Intersection over Union (mIoU)
 
 In semantic segmentation tasks, IoU is computed independently for each class. To obtain an overall measure of segmentation performance across all classes, the mean Intersection over Union (mIoU) is used.
@@ -370,20 +382,6 @@ where:
 - $IoU_c$ is the IoU for class $c$
 
 By averaging over classes, mIoU ensures that all classes contribute equally to the evaluation, preventing dominant classes from disproportionately influencing the metric. This makes mIoU particularly suitable for segmentation tasks in datasets with class imbalance. Unlike accuracy, which can be dominated by frequent classes, mIoU evaluates segmentation performance independently for each class and therefore provides a more reliable measure of overall segmentation quality.
-
-
-
-### IoU Implementation
-
-
-For each class, the intersection and the union are computed for every batch and accumulated over the entire epoch. Then, their ratio gives a single IoU value per class and epoch:
-
-$$
-IoU_c = \frac{\sum_{b} intersection_c}{\sum_{b} union_c}
-$$
-
-where the sum is perfomed over all batches b in the epoch. 
-
 
 ---
 
@@ -1157,8 +1155,8 @@ In our implementation, instead, this last FP is split between the **FP1** block 
     - [Offline usage](#offline-usage)
   - [Metrics](#metrics)
     - [Intersection over Union (IoU)](#intersection-over-union-iou)
+      - [IoU Implementation](#iou-implementation)
     - [Mean Intersection over Union (mIoU)](#mean-intersection-over-union-miou)
-    - [IoU Implementation](#iou-implementation)
   - [PointNet Architecture](#pointnet-architecture)
     - [Why PointNet for aerial LiDAR?](#why-pointnet-for-aerial-lidar)
     - [Implementation (`src/models/pointnet.py`)](#implementation-srcmodelspointnetpy)
