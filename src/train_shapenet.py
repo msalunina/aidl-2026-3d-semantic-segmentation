@@ -529,7 +529,7 @@ def train_shapenet(loader_train, loader_eval, loader_test, config):
 
     imbalances = np.array(imbalances, dtype=np.float32)
     
-    print(f"Mean imbalance {imbalances.sum()/len(imbalances)}\nImbalance for class object {imbalances}")
+    #print(f"Mean imbalance {imbalances.sum()/len(imbalances)}\nImbalance for class object {imbalances}")
     
     """Direct inverse
     loss_weights = np.array([2.78288265e-01, 3.93399671e-01, 9.92885292e-01, 1.37892433e+00,
