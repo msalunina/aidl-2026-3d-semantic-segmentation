@@ -1200,7 +1200,7 @@ Morover, unlike Pointnet which processes the entire point cloud using a single g
 Tables A and B summarize the performance of the evaluated PointNet++ configurations with a weighted and unweighted NLL loss. Overall, the different configurations produce relatively similar results, indicating that the baseline is already well tuned. However, several trends can be observed when modifying specific components of the architecture and remain largely consistent in both settings.
 
 
-**A. NLL Weighted Loss (Best for PointNet) ** 
+**A. NLL Weighted Loss (Best for PointNet)** 
 
 | NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
