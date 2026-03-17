@@ -22,7 +22,7 @@
     - [Offline usage](#offline-usage)
   - [Metrics](#metrics)
     - [Intersection over Union (IoU)](#intersection-over-union-iou)
-      - [IoU Implementation](#iou-implementation)
+      - [Implementation](#implementation)
     - [Mean Intersection over Union (mIoU)](#mean-intersection-over-union-miou)
   - [PointNet Architecture](#pointnet-architecture)
     - [Why PointNet for aerial LiDAR?](#why-pointnet-for-aerial-lidar)
@@ -49,7 +49,7 @@
       - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
     - [Class Weight Strategies](#class-weight-strategies)
       - [Hypothesis](#hypothesis-2)
-      - [Implementation](#implementation)
+      - [Implementation](#implementation-1)
     - [Class Balanced Sampler](#class-balanced-sampler)
       - [Hypothesis](#hypothesis-3)
       - [Implementation (`src/utils/sampler.py`)](#implementation-srcutilssamplerpy)
@@ -64,7 +64,7 @@
     - [Conclusions](#conclusions-3)
   - [Dropout](#dropout)
     - [Hypothesis](#hypothesis-5)
-    - [Implementation](#implementation-1)
+    - [Implementation](#implementation-2)
     - [Experiment Setup](#experiment-setup-3)
     - [Results](#results-3)
     - [Conclusions](#conclusions-4)
@@ -356,7 +356,7 @@ This formula can also be interpreted as the ratio between the **intersection** a
 - the **union** corresponds to all points that belong to the class either in the prediction or in the ground truth (TP + FP + FN)
 
 
-#### IoU Implementation
+#### Implementation
 
 For each class, the intersection and the union are computed for every batch and accumulated over the entire epoch. Then, their ratio gives a single IoU value per class and epoch:
 
@@ -1155,7 +1155,7 @@ In our implementation, instead, this last FP is split between the **FP1** block 
     - [Offline usage](#offline-usage)
   - [Metrics](#metrics)
     - [Intersection over Union (IoU)](#intersection-over-union-iou)
-      - [IoU Implementation](#iou-implementation)
+      - [Implementation](#implementation)
     - [Mean Intersection over Union (mIoU)](#mean-intersection-over-union-miou)
   - [PointNet Architecture](#pointnet-architecture)
     - [Why PointNet for aerial LiDAR?](#why-pointnet-for-aerial-lidar)
@@ -1182,7 +1182,7 @@ In our implementation, instead, this last FP is split between the **FP1** block 
       - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
     - [Class Weight Strategies](#class-weight-strategies)
       - [Hypothesis](#hypothesis-2)
-      - [Implementation](#implementation)
+      - [Implementation](#implementation-1)
     - [Class Balanced Sampler](#class-balanced-sampler)
       - [Hypothesis](#hypothesis-3)
       - [Implementation (`src/utils/sampler.py`)](#implementation-srcutilssamplerpy)
@@ -1197,7 +1197,7 @@ In our implementation, instead, this last FP is split between the **FP1** block 
     - [Conclusions](#conclusions-3)
   - [Dropout](#dropout)
     - [Hypothesis](#hypothesis-5)
-    - [Implementation](#implementation-1)
+    - [Implementation](#implementation-2)
     - [Experiment Setup](#experiment-setup-3)
     - [Results](#results-3)
     - [Conclusions](#conclusions-4)
