@@ -1138,6 +1138,8 @@ Points near utilities capture vertical variation patterns
 
 This local sampling is implemented using PyTorch’s grid_sample operation inside the IPointNet architecture.
 
+![image_encoder](figs/image_encoder.jpg)
+
 ---
 
 ### Implicit BEV Neighborhood
