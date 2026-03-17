@@ -1176,6 +1176,11 @@ These combined features are processed through shared multilayer perceptrons to p
 
 The integration of BEV features leads to a significant improvement in segmentation performance.
 
+|  Architecture | mIoU | Ground | Vegetation | Buildings | Vehicle | Utility |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **PointNet** | 0.66 | 0.95  | 0.79 | 0.86 | 0.36 | 0.33 |
+| **IPointNet** | $\color{green}{0.76}$ | 0.95 | $\color{green}{0.86}$ | $\color{green}{0.92}$ | $\color{green}{0.55}$ | $\color{green}{0.52}$ |
+
 PointNet baseline: 0.66 mIoU  
 IPointNet: 0.77 mIoU  
 
