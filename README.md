@@ -83,8 +83,6 @@
     - [Experiments](#experiments-1)
       - [Hypothesis](#hypothesis-6)
       - [Results](#results-4)
-        - [A. NLL Weighted Loss (Best for PointNet)](#a-nll-weighted-loss-best-for-pointnet)
-        - [B. NLL Unweighted Loss](#b-nll-unweighted-loss)
       - [Discussion](#discussion)
       - [Final Model](#final-model)
   - [IPointNet: BEV-Point Cloud Fusion](#ipointnet-bev-point-cloud-fusion)
@@ -1032,7 +1030,7 @@ The grouping stage constructs local neighbourhoods around each center. The strat
 - **Radius-Based grouping**: selects all points within a predefined radius
 
 
-**Nearest Neighbors** (`knn`)
+**k-Nearest Neighbors** (`knn`)
 
 In knn grouping, for each center point the K nearest points in Euclidean space are selected. Consequently:
 - **Number of neighbors** is fixed
@@ -1216,8 +1214,8 @@ Then, we want to test four modifications of the baseline configuration: dropout 
 
 Morover, unlike Pointnet which processes the entire point cloud using a single global aggregation, PointNet++ learns features from small local neighborhoods to larger spatial regions. Consequently, it is by nature more aware of the different sizes of the structures present on a scene and, therefore, it is likely to be less affected by class imblance produced by very small and rare objects. To test this, we will perform the 6-set of experiments twice: 
 
-- A. NLL weighted (PointNet weights: [0.5272, 0.5272, 0.5276, 1.5454, 1.8727])
-- B. NLL unweighted (uniform weights: [1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
+- **A. NLL weighted** (PointNet weights: [0.5272, 0.5272, 0.5276, 1.5454, 1.8727])
+- **B. NLL unweighted** (uniform weights: [1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
 
 
 #### Results
@@ -1225,7 +1223,7 @@ Morover, unlike Pointnet which processes the entire point cloud using a single g
 Tables A and B summarize the performance of the evaluated PointNet++ configurations with a weighted and unweighted NLL loss. Overall, the different configurations produce relatively similar results, indicating that the baseline is already well tuned. However, several trends can be observed when modifying specific components of the architecture and remain largely consistent in both settings.
 
 
-##### A. NLL Weighted Loss (Best for PointNet)  
+**A. NLL Weighted Loss (Best for PointNet)** 
 
 | NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
@@ -1241,15 +1239,15 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 | Utility    | 0.594 / 0.585     | 0.603 / **0.602** | 0.593 / 0.596     | 0.584 / 0.586 | 0.581 / 0.584 | 0.570 / 0.563 |
 | **Best validation** |||||||
 | Best mIoU     | ----- / 0.806 | ----- / **0.810** | ----- / 0.809     | ----- / 0.801 | ----- / 0.800 | ----- / 0.789 |
-| Best Loss     | ----- / 0.126 | ----- / **0.125** | ----- / **0.125** | ----- / 0.129 | ----- / 0.131 | ----- / 0.139 |
-| Best Accuracy | ----- / 0.957 | ----- / **0.958** | ----- / **0.958** | ----- / 0.956 | ----- / 0.956 | ----- / 0.953 |
+<!-- | Best Loss     | ----- / 0.126 | ----- / **0.125** | ----- / **0.125** | ----- / 0.129 | ----- / 0.131 | ----- / 0.139 |
+| Best Accuracy | ----- / 0.957 | ----- / **0.958** | ----- / **0.958** | ----- / 0.956 | ----- / 0.956 | ----- / 0.953 |  -->
 
-**Table A**. Comparison of PointNet++ configurations: NLL loss + moderate class weighting [0.5272, 0.5272, 0.5276, 1.5454, 1.8727]. Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Best validation values refer to the best value achieved during the entire training.
-
-
+**Table A**. Comparison of PointNet++ configurations: NLL loss + moderate class weighting [0.5272, 0.5272, 0.5276, 1.5454, 1.8727]. Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Metrics correspond to the last epoch whereas Best mIoU is teh highest values achieved during training.
 
 
-##### B. NLL Unweighted Loss
+
+
+**B. NLL Unweighted Loss**
 
 | NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |  
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
@@ -1265,10 +1263,10 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 | Utility    | 0.611 / **0.620** | 0.616 / 0.618     | 0.608 / 0.616     | 0.594 / 0.609     | 0.594 / 0.609 | 0.574 / 0.590 | 
 | **Best validation** ||||||||
 | Best mIoU     | ----- / 0.815     | ----- / **0.816** | ----- / **0.816** | ----- / 0.810 | ----- / 0.809 | ----- / 0.797 | 
-| Best Loss     | ----- / 0.113     | ----- / 0.113     | ----- / **0.112** | ----- / 0.115 | ----- / 0.116 | ----- / 0.123 | 
-| Best Accuracy | ----- / **0.959** | ----- / **0.959** | ----- / **0.959** | ----- / 0.958 | ----- / 0.957 | ----- / 0.954 | 
+<!-- | Best Loss     | ----- / 0.113     | ----- / 0.113     | ----- / **0.112** | ----- / 0.115 | ----- / 0.116 | ----- / 0.123 | 
+| Best Accuracy | ----- / **0.959** | ----- / **0.959** | ----- / **0.959** | ----- / 0.958 | ----- / 0.957 | ----- / 0.954 |  -->
 
-**Table B**. Comparison of PointNet++ configurations: NLL loss + uniform weights (i.e no weights). Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Best validation values refer to the best value achieved during the entire training.
+**Table B**. Comparison of PointNet++ configurations: NLL loss + uniform weights (i.e no weights). Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Metrics correspond to the last epoch whereas Best mIoU is teh highest values achieved during training.
 
 #### Discussion
 
@@ -1290,7 +1288,7 @@ Regarding the changes with respect to the baseline, frequent classes like Ground
 
 - **Effect of Dropout** 
   
-  Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU (0.816) and slightly better performance for several classes. This impacts in one of the best mIoU values.
+  Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves a validation mIoU of 0.813 and slightly better performance for several classes. This impacts in one of the best mIoU values.
 
 - **Effect of Neighborhood Size (K-neighbors)**
   
@@ -1314,7 +1312,7 @@ Regarding the changes with respect to the baseline, frequent classes like Ground
 
 #### Final Model
 
-Overall, the experiments suggest that the baseline PointNet++ configuration is already close to optimal for this dataset. Among the tested configurations, reducing the dropout rate (Experiment 2) and increasing the neighborhood size (Experiment 3) produced the most consistent improvements over the baseline. To evaluate whether both improvements could be combined, a final experiment was performed using both modifications simultaneously. This configuration achieved the highest overall performance, reaching a best validation mIoU of 0.818, slightly outperforming the individual experiments.
+Overall, the experiments suggest that the baseline PointNet++ configuration is already close to optimal for this dataset. Among the tested configurations, reducing the dropout rate (Experiment 2) and increasing the neighborhood size (Experiment 3) produced the most consistent improvements over the baseline. To evaluate whether both improvements could be combined, a final experiment was performed using both modifications simultaneously. This configuration achieved the highest overall performance, reaching a best validation mIoU of 0.818 during the training, slightly outperforming the individual experiments.
 
 However, the improvements are not uniform across all classes. While the combined model improves the IoU of some classes (e.g., Utility), other classes show only marginal changes. This suggests that the effects of these hyperparameters are not strictly additive and may interact during training. Based on the overall mIoU, the combined configuration is selected as the final model and evaluated on the test set.
 
@@ -1337,8 +1335,8 @@ However, the improvements are not uniform across all classes. While the combined
 | Utility       | 0.616 / **0.621** | `0.550` |
 | **Best validation** |             |         |
 | Best mIoU     | ----- / **0.818** |         |
-| Best Loss     | ----- / 0.112     |         |
-| Best Accuracy | ----- / **0.959** |         |
+<!-- | Best Loss     | ----- / 0.112     |         |
+| Best Accuracy | ----- / **0.959** |         | -->
 
 
 
