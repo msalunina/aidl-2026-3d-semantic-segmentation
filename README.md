@@ -74,7 +74,7 @@
       - [2. Neighborhood Grouping](#2-neighborhood-grouping)
         - [k-Nearest Neighbors (`knn`)](#k-nearest-neighbors-knn)
         - [Radius-Based Grouping](#radius-based-grouping)
-      - [3. A **Shared MLP + Max Pooling**](#3-a-shared-mlp--max-pooling)
+      - [3. A Shared MLP + Max Pooling](#3-a-shared-mlp--max-pooling)
     - [Decoder](#decoder)
       - [1. 3-NN Interpolation](#1-3-nn-interpolation)
       - [2. Concatenation with Skip Features](#2-concatenation-with-skip-features)
@@ -1054,7 +1054,7 @@ The following comparison highlights how the choice of grouping strategy controls
 
 
 
-#### 3. A **Shared MLP + Max Pooling**
+#### 3. A Shared MLP + Max Pooling
 
 After selecting the K neighbors for each center, each local region is processed by a mini-PointNet network, which learns a feature representation for the neighborhood. This consists of a shared multilayer perceptron (MLP) applied independently to each point followed by a symmetric aggregation function (max pooling) to obtain a single feature vector representing the region.
 
@@ -1209,7 +1209,7 @@ In our implementation, instead, this last FP is split between the **FP1** block 
       - [2. Neighborhood Grouping](#2-neighborhood-grouping)
         - [k-Nearest Neighbors (`knn`)](#k-nearest-neighbors-knn)
         - [Radius-Based Grouping](#radius-based-grouping)
-      - [3. A **Shared MLP + Max Pooling**](#3-a-shared-mlp--max-pooling)
+      - [3. A Shared MLP + Max Pooling](#3-a-shared-mlp--max-pooling)
     - [Decoder](#decoder)
       - [1. 3-NN Interpolation](#1-3-nn-interpolation)
       - [2. Concatenation with Skip Features](#2-concatenation-with-skip-features)
