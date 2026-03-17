@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from utils.shapenet_dataset import shapenetDataset
 from tqdm import tqdm
 import json
+import matplotlib.pyplot as plt
 
 from utils.focal_loss import FocalLoss
 
@@ -26,6 +27,11 @@ classes_size = [4,2,2,4,
                 4,3,3,2,
                 4,2,6,2,
                 3,3,3,3]
+
+colors_by_class = ["red", "green", "blue", "magenta", "red", "green", "red", "green", "red", "green", "blue", "magenta",
+                   "red", "green", "blue", "magenta", "red", "green", "blue", "red", "green", "blue", "red", "green", 
+                   "red", "green", "blue", "magenta", "red", "green", "red", "green", "blue", "magenta", "orange", "cyan", "red", "green",
+                   "red", "green", "blue", "red", "green", "blue", "red", "green", "blue", "red", "green", "blue"]
 
 classes_folder = ['02691156','02773838','02954340','02958343',
                     '03001627','03261776','03467517','03624134',
@@ -92,6 +98,93 @@ def compute_batch_intersection_and_union(labels, predictions, num_classes, iou_o
 
     return iou_batch
 
+
+#
+#
+#
+
+def showPointCloudResults(data_loader):
+    
+    device = set_device()
+      
+    network = PointNetSegmentation(num_classes=50, # 50 shape classes 
+                                input_channels=3, 
+                                dropout=0.3,
+                                add_ohv=True,
+                                skip_conn=True).to(device) #0.3 dropout
+
+     
+    checkpoint_path= os.path.join("./snapshots", "shapenet_PointNet_shapenet_xyz_all_no_lw_50.pt")
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)    # it loads more things that weights
+    
+    network.load_state_dict(checkpoint["model_state_dict"])
+    network.eval()      # changes behaviour of some layers (e.g. dropout off, batchnorm), does not strop gradient
+ 
+    
+    device = next(network.parameters()).device  # guarantee that we are using the same device than the model
+    #objects_count = objects_count.to(device)
+
+    with torch.no_grad():
+
+        for batch in data_loader:
+
+            # Pointnet needs: [B, N, C]   
+            points_BNC, labels, iou_offset, object_class = batch  # Points: [B, N, C] / labels: [B, N] / image [B, H, W]       
+            points_BNC = points_BNC.to(device)
+            labels = labels.to(device) 
+            
+            network.setOneHotVectorBatch(object_class)
+
+            output = network(points_BNC)   
+            
+            if isinstance(output, tuple):
+                feature_tnet, log_probs_BCN = output
+            else:
+                log_probs_BCN = output
+
+            predictions = log_probs_BCN.argmax(dim=1)
+            
+            for i in range(points_BNC.shape[0]):
+                x = points_BNC[i,:,0].cpu()
+                y = points_BNC[i,:,1].cpu()
+                z = points_BNC[i,:,2].cpu()   
+
+                label = labels[i].cpu()
+                pred = predictions[i].cpu()
+                colors = [colors_by_class[val] for val in label]
+                colors_p = [colors_by_class[val] for val in pred]
+                colors_e = np.array(colors_p)
+                
+                colors_e[(label != pred).numpy()] = "black"
+            
+                fig = plt.figure()
+                ax = fig.add_subplot(131, projection="3d")
+                ax.scatter(x, y, z, c=colors)
+                ax.set_title(f"{classes_names[object_class[i]]} - Ground Truth")
+                ax.set_xlabel("X")
+                ax.set_ylabel("Y")
+                ax.set_zlabel("Z")
+                
+                ax2 = fig.add_subplot(132, projection="3d")
+                ax2.scatter(x, y, z, c=colors_p)
+                ax2.set_title(f"{classes_names[object_class[i]]} - Predictions")
+                ax2.set_xlabel("X")
+                ax2.set_ylabel("Y")
+                ax2.set_zlabel("Z")
+    
+                ax3 = fig.add_subplot(133, projection="3d")
+                ax3.scatter(x, y, z, c=colors_e.tolist())
+                ax3.set_title(f"{classes_names[object_class[i]]} - Errors")
+                ax3.set_xlabel("X")
+                ax3.set_ylabel("Y")
+                ax3.set_zlabel("Z")
+                
+                plt.tight_layout()
+                plt.show()
+           
+            break
+           
+  
 
 # ----------------------------------------------------
 #    TRAINING EPOCH FUNCTION (SEGMENTATION)
@@ -590,11 +683,13 @@ def test_shapenet(loader_train, loader_eval, loader_test, config):
     val_acc_epoch, val_iou_class_epoch = test_single_epoch_segmentation(loader_test, model_trained, test_objects_count)
 
     test_acc_epoch, test_iou_class_epoch = test_single_epoch_segmentation(loader_eval, model_trained, val_objects_count)
+    
+    showPointCloudResults(loader_eval, model_trained)
 
     results_str =    "        |  MEAN  |"
-    results_train = f" TRAIN  |  {(train_iou_class_epoch.sum()/len(train_iou_class_epoch)):.2f}  |"
-    results_eval  = f"  EVAL  |  {(val_iou_class_epoch.sum()/len(val_iou_class_epoch)):.2f}  |"
-    results_test  = f"  TEST  |  {(test_iou_class_epoch.sum()/len(test_iou_class_epoch)):.2f}  |"
+    results_train = f" TRAIN  |  {(train_iou_class_epoch.sum()/len(train_iou_class_epoch)):.3f}  |"
+    results_eval  = f"  EVAL  |  {(val_iou_class_epoch.sum()/len(val_iou_class_epoch)):.3f}  |"
+    results_test  = f"  TEST  |  {(test_iou_class_epoch.sum()/len(test_iou_class_epoch)):.3f}  |"
 
     for n in range(len(classes_names)):
         results_str += f"   {classes_names[n][:3]}   |"
@@ -635,6 +730,8 @@ if __name__ == '__main__':
     loader_test = DataLoader(dataset_test, batch_size=config.batch_size, shuffle=True)
 
 
-    train_shapenet(loader_train, loader_eval, loader_test, config)
+    #train_shapenet(loader_train, loader_eval, loader_test, config)
 
     #test_shapenet(loader_train, loader_eval, loader_test, config)
+    
+    showPointCloudResults(loader_test)

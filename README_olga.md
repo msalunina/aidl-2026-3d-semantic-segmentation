@@ -394,10 +394,22 @@ Overall, the experiments suggest that the baseline PointNet++ configuration is a
 
 However, the improvements are not uniform across all classes. While the combined model improves the IoU of some classes (e.g., Utility), other classes show only marginal changes. This suggests that the effects of these hyperparameters are not strictly additive and may interact during training. Based on the overall mIoU, the combined configuration (dropout 0.3 and increased neighborhood size) is selected as the final model and evaluated on the test set.
 
-| Experiment|     grouping    |    dropout   |      K-neighbors      |              feature channels          | 
+| model     |     grouping    |    dropout   |      K-neighbors      |              feature channels          | 
 |:---------:|:--------------:|:------------:|:-----------------------:|:------------------------------------:|
 |   BEST    |      `knn`     |      0.3     | [32,32,64,64] (exact K) | [xyz,return_number,number_of_returns]|
 
+| Metric<br>NLL unweighted | BEST (2+3)|
+|:------|:------:
+| **Overall metrics** ||||||||
+| mIoU          | |
+| Loss          | |
+| Accuracy      | |
+| **Class IoU** | |
+| Ground        | |
+| Vegetation    | |
+| Buildings     | |
+| Vehicle       | |
+| Utility       | |
 
 
 

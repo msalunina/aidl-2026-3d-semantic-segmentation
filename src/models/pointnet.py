@@ -110,16 +110,22 @@ class PointNetBackbone(nn.Module):
 
 class PointNetSegmentation(nn.Module):
 
-    def __init__(self, num_classes, input_channels=3, dropout=0.3, skip_conn=False):
+    def __init__(self, num_classes, input_channels=3, dropout=0.3, skip_conn=False, add_ohv=False):
         super(PointNetSegmentation, self).__init__()
         self.num_classes = num_classes
         self.input_channels = input_channels
         self.skip_conn = skip_conn
         self.dropout = nn.Dropout(p=dropout)
+        self.add_ohv = add_ohv
+        self.ohv_gt = None
 
         self.backbone = PointNetBackbone(input_channels=input_channels)
 
         conv_size = 1088
+        
+        if self.add_ohv:
+            conv_size += 16
+        
         if self.skip_conn:
             conv_size += (64 + 64 + 64 + 128)
 
@@ -134,6 +140,9 @@ class PointNetSegmentation(nn.Module):
         self.conv_5 = nn.Conv1d(128, num_classes, 1)
         self.bn_4 = nn.BatchNorm1d(128)
 
+    def setOneHotVectorBatch(self, ohvb):
+        self.ohv_gt = ohvb
+
     def forward(self, x):
         f1, f2, f3, f4, feature_transform, point_features, global_feature = self.backbone(x)
 
@@ -144,6 +153,13 @@ class PointNetSegmentation(nn.Module):
             x = torch.cat([f1, f2, point_features, f3, f4, global_feature_expanded], dim=1)
         else:
             x = torch.cat([point_features, global_feature_expanded], dim=1)
+            
+        if( (self.ohv_gt is not None) and (self.add_ohv)):
+            #for each element in the batch, create num_points vectors each one with the one hot vector label
+            #the goal is to create a tensor of shape [B, n_classes, 1024]
+            ohv_data = F.one_hot(self.ohv_gt, num_classes=16).float() #self.ohv_gt.reshape(x.shape[0], 1) # [B, 1]
+            ohv_data = ohv_data.unsqueeze(2).repeat(1, 1, num_points).to(x.device)
+            x = torch.cat([x, ohv_data], dim=1)
 
         x = F.relu(self.bn_1(self.conv_1(x)))
         x = F.relu(self.bn_2(self.conv_2(x)))
