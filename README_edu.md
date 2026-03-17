@@ -50,7 +50,7 @@ All the experiments will be run using the following configuration:
   rotation_arround_up_axis: 0.7
 ```
 
-#### PointNet base model
+**1. PointNet base model**
 
 First we do a train/evaluation run 
 
@@ -81,14 +81,14 @@ With the specified changes, the following experiments are planned:
 
 The results for the experiments are shown in the following tables
 
-#### PointNet + One-Hot vector 
+**2. PointNet + One-Hot vector**
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
 |TRAIN  |  78.1  |  77.9  |  77.9  |  85.1  |  66.4  |  87.0  |  74.9  |  88.2  |  82.9  |  85.8  |  94.3  |  51.7  |  87.0  |  81.2  | 56.4  |  68.4  |  84.9  |
 | EVAL  |  76.1  |  78.5  |  69.4  |  74.7  |  68.6  |  88.5  |  71.0  |  87.5  |  83.2  |  83.1  |  94.1  |  54.9  |  89.7  |  77.6  | 43.9  |  70.5  |  83.1  |
 
-#### PointNet + Skip Connections
+**3. PointNet + Skip Connections**
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
@@ -96,7 +96,7 @@ The results for the experiments are shown in the following tables
 | EVAL  |  72.0  |  77.5  |  71.2  |  51.7  |  68.8  |  87.6  |  65.9  |  86.4  |  81.1  |  81.9  |  93.5  |  43.6  |  84.2  |  71.7  |  41.3  |  63.6  |  82.6  |
 
 
-#### PointNet + One-Hot vector + Skip Connections
+**4. PointNet + One-Hot vector + Skip Connections**
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|
@@ -104,7 +104,7 @@ The results for the experiments are shown in the following tables
 | EVAL  |  77.3  |  78.7  |  72.7  |  68.2  |  71.7  |  88.4  |  69.4  |  87.7  |  82.8  |  83.6  |  94.3  |  60.1  |  89.3  |  78.4  |  50.3  |  77.0  |  83.5  |
 
 
-#### PointNet + One-Hot vector + Skip Connections + Layer Sizes
+**5. PointNet + One-Hot vector + Skip Connections + Layer Sizes**
 
 |       |  MEAN  |   Air   |   Bag   |   Cap   |   Car   |   Cha   |   Ear   |   Gui   |   Kni   |   Lam   |   Lap   |   Mot   |   Mug   |   Pis   |   Roc   |   Ska   |   Tab   |
 |:-----:|:------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:|:-------:| 
