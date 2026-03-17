@@ -8,6 +8,7 @@ In such situations, a model could achieve high accuracy simply by predicting the
 ### Intersection over Union (IoU)
 Intersection over Union (IoU) measures the overlap between the predicted region for a class and the corresponding ground truth region. The IoU for a class is defined as
 
+
 $$
 IoU = \frac{TP}{TP + FP + FN}
 $$
