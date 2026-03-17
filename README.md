@@ -88,10 +88,6 @@
         - [A. NLL Weighted Loss (Best for PointNet)](#a-nll-weighted-loss-best-for-pointnet)
         - [B. NLL Unweighted Loss](#b-nll-unweighted-loss)
       - [Discussion](#discussion)
-        - [Effect of Dropout](#effect-of-dropout)
-        - [Effect of Neighborhood Size (K-neighbors)](#effect-of-neighborhood-size-k-neighbors)
-        - [Effect of Grouping Strategy](#effect-of-grouping-strategy)
-        - [Effect of Input Feature Channels](#effect-of-input-feature-channels)
       - [Final Model](#final-model)
   - [IPointNet: BEV-Point Cloud Fusion](#ipointnet-bev-point-cloud-fusion)
     - [Full-Density BEV Generation](#full-density-bev-generation)
@@ -1135,108 +1131,6 @@ In our implementation, instead, this last FP is split between the **FP1** block 
 
 
 **Tensor Shapes**
-- [3D Semantic Segmentation](#3d-semantic-segmentation)
-  - [Table of Contents](#table-of-contents)
-  - [Folder Structure](#folder-structure)
-  - [How to Run the Code](#how-to-run-the-code)
-    - [Local Setup](#local-setup)
-    - [DALES Segmentation](#dales-segmentation)
-      - [Preprocessing](#preprocessing)
-      - [Training](#training)
-      - [Testing](#testing)
-      - [Visualization](#visualization)
-    - [Running on Google Cloud VM](#running-on-google-cloud-vm)
-      - [Environment setup](#environment-setup)
-      - [NVIDIA driver installation](#nvidia-driver-installation)
-      - [Verify GPU access](#verify-gpu-access)
-  - [Experiment Tracking (W\&B)](#experiment-tracking-wb)
-    - [What is logged](#what-is-logged)
-    - [Configuration](#configuration)
-    - [Offline usage](#offline-usage)
-  - [Metrics](#metrics)
-    - [Intersection over Union (IoU)](#intersection-over-union-iou)
-      - [Implementation](#implementation)
-    - [Mean Intersection over Union (mIoU)](#mean-intersection-over-union-miou)
-  - [PointNet Architecture](#pointnet-architecture)
-    - [Why PointNet for aerial LiDAR?](#why-pointnet-for-aerial-lidar)
-    - [Implementation (`src/models/pointnet.py`)](#implementation-srcmodelspointnetpy)
-  - [PointNet Architecture Validation](#pointnet-architecture-validation)
-    - [ShapeNet Part Segmentation Task](#shapenet-part-segmentation-task)
-    - [Dataloader implementation](#dataloader-implementation)
-    - [Experiments](#experiments)
-    - [Conclusions](#conclusions)
-  - [DALES Dataset](#dales-dataset)
-    - [DALES Dataset Preprocessing](#dales-dataset-preprocessing)
-    - [Geospatial Validation](#geospatial-validation)
-  - [Optimizer and Learning Rate](#optimizer-and-learning-rate)
-    - [Configuration](#configuration-1)
-  - [Input Feature Selection](#input-feature-selection)
-    - [Hypothesis](#hypothesis)
-    - [Implementation (`config/default.yaml`)](#implementation-configdefaultyaml)
-    - [Experiment Setup](#experiment-setup)
-    - [Results](#results)
-    - [Conclusions](#conclusions-1)
-  - [Class Balancing Strategies](#class-balancing-strategies)
-    - [Focal Loss vs NLL Loss](#focal-loss-vs-nll-loss)
-      - [Hypothesis](#hypothesis-1)
-      - [Implementation (`src/utils/focal_loss.py`)](#implementation-srcutilsfocal_losspy)
-    - [Class Weight Strategies](#class-weight-strategies)
-      - [Hypothesis](#hypothesis-2)
-      - [Implementation](#implementation-1)
-    - [Class Balanced Sampler](#class-balanced-sampler)
-      - [Hypothesis](#hypothesis-3)
-      - [Implementation (`src/utils/sampler.py`)](#implementation-srcutilssamplerpy)
-    - [Experiment Setup](#experiment-setup-1)
-    - [Results](#results-1)
-    - [Conclusions](#conclusions-2)
-  - [Data Augmentation](#data-augmentation)
-    - [Hypothesis](#hypothesis-4)
-    - [Implementation (`src/models/dataset.py`)](#implementation-srcmodelsdatasetpy)
-    - [Experiment Setup](#experiment-setup-2)
-    - [Results](#results-2)
-    - [Conclusions](#conclusions-3)
-  - [Dropout](#dropout)
-    - [Hypothesis](#hypothesis-5)
-    - [Implementation](#implementation-2)
-    - [Experiment Setup](#experiment-setup-3)
-    - [Results](#results-3)
-    - [Conclusions](#conclusions-4)
-  - [PointNet++](#pointnet)
-    - [Encoder](#encoder)
-      - [1. Farthest Point Sampling (FPS)](#1-farthest-point-sampling-fps)
-      - [2. Neighborhood Grouping](#2-neighborhood-grouping)
-        - [k-Nearest Neighbors (`knn`)](#k-nearest-neighbors-knn)
-        - [Radius-Based Grouping](#radius-based-grouping)
-      - [3. A Shared MLP + Max Pooling](#3-a-shared-mlp--max-pooling)
-    - [Decoder](#decoder)
-      - [1. 3-NN Interpolation](#1-3-nn-interpolation)
-      - [2. Concatenation with Skip Features](#2-concatenation-with-skip-features)
-      - [3. Shared MLP Refinement](#3-shared-mlp-refinement)
-    - [Network Architecture](#network-architecture)
-      - [Encoder Architecture (SA Layers)](#encoder-architecture-sa-layers)
-      - [Decoder Architecture (FP layers)](#decoder-architecture-fp-layers)
-    - [Experiments](#experiments-1)
-      - [Hypothesis](#hypothesis-6)
-      - [Results](#results-4)
-        - [A. NLL Weighted Loss (Best for PointNet)](#a-nll-weighted-loss-best-for-pointnet)
-        - [B. NLL Unweighted Loss](#b-nll-unweighted-loss)
-      - [Discussion](#discussion)
-        - [Effect of Dropout](#effect-of-dropout)
-        - [Effect of Neighborhood Size (K-neighbors)](#effect-of-neighborhood-size-k-neighbors)
-        - [Effect of Grouping Strategy](#effect-of-grouping-strategy)
-        - [Effect of Input Feature Channels](#effect-of-input-feature-channels)
-      - [Final Model](#final-model)
-  - [IPointNet: BEV-Point Cloud Fusion](#ipointnet-bev-point-cloud-fusion)
-    - [Full-Density BEV Generation](#full-density-bev-generation)
-    - [Point Cloud and BEV Alignment](#point-cloud-and-bev-alignment)
-    - [Image Encoder and Initial Global Fusion](#image-encoder-and-initial-global-fusion)
-    - [Local BEV Feature Fusion](#local-bev-feature-fusion)
-    - [Implicit BEV Neighborhood](#implicit-bev-neighborhood)
-    - [IPointNet Architecture](#ipointnet-architecture)
-    - [Results](#results-5)
-    - [Key Insight](#key-insight)
-    - [Conclusion](#conclusion)
-  - [Future Work](#future-work)
 
 Each Feature Propagation (FP) layer interpolates features from a sparse point set to a denser one using 3-NN interpolation with inverse-distance weighting, concatenates the interpolated features with skip features from the encoder, and refines them using a shared MLP.
 
@@ -1373,28 +1267,28 @@ These results suggest that PointNet++ already handles class imbalance reasonably
 
 Regarding the changes with respect to the baseline, frequent classes like Ground, Vegetation and Building behave similar for all experiments showing almost identical IoU values. Rares classes like Vehicle and Utility are the ones that show more variability. Although such variability is not uniform among experiments, their overall mIoU values indicate two clear benefitial modifications: dropout (experiment 2) and number of neighbours (experiment 3). 
 
-##### Effect of Dropout
+- **Effect of Dropout** 
+  
+  Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU (0.816) and slightly better performance for several classes. This impacts in one of the best mIoU values.
 
-Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU (0.816) and slightly better performance for several classes. This impacts in one of the best mIoU values.
+- **Effect of Neighborhood Size (K-neighbors)**
+  
+  Experiment 3 increases the number of neighbors in the deeper abstraction layers from [32,32,32,32] to [32,32,64,64]. The resulting performance is slightly higher than the baseline across most metrics. 
 
-##### Effect of Neighborhood Size (K-neighbors)
+  One noticeable effect is a slight improvement of the IoU for the Vehicle class. Vehicles are relatively small and sparse objects in the scene, and a larger neighborhood allows the network to capture a larger spatial context around them. This additional context can help distinguish vehicles from surrounding structures. In contrast, results show that the Utility class does not benefit from larger neighborhoods. Utility objects such as poles and street lights are thin vertical structures that contain very few points. Increasing the neighborhood size quickly introduces points from other classes, making the context less pure.
 
-Experiment 3 increases the number of neighbors in the deeper abstraction layers from [32,32,32,32] to [32,32,64,64]. The resulting performance is slightly higher than the baseline across most metrics. 
+  This variability indicates a strong tradeoff between the size of the structure to identify and the size of the neighbourhood providing context, what seems to provide useful semantinc context for one class, may hurt another. 
 
-One noticeable effect is a slight improvement of the IoU for the Vehicle class. Vehicles are relatively small and sparse objects in the scene, and a larger neighborhood allows the network to capture a larger spatial context around them. This additional context can help distinguish vehicles from surrounding structures. In contrast, results show that the Utility class does not benefit from larger neighborhoods. Utility objects such as poles and street lights are thin vertical structures that contain very few points. Increasing the neighborhood size quickly introduces points from other classes, making the context less pure.
+- **Effect of Grouping Strategy**
+  
+  The knn strategy is robust in sparse areas because it guarantees enough number of points (fixed), which translates into a stable input to the network. However, the spatial size of the neighborhood varies depending on point density. In contrast, ball-based strategies select points within a fixed spatial radius r, which ensures that the neighbourhood always corresponds to the same physical scale. However, may contain very few points depending on the point density. This variability in the number of points can lead to unstable feature aggregation, particularly for small or sparsely sampled classes.
 
-This variability indicates a strong tradeoff between the size of the structure to identify and the size of the neighbourhood providing context, what seems to provide useful semantinc context for one class, may hurt another. 
-
-##### Effect of Grouping Strategy
-
-The knn strategy is robust in sparse areas because it guarantees enough number of points (fixed), which translates into a stable input to the network. However, the spatial size of the neighborhood varies depending on point density. In contrast, ball-based strategies select points within a fixed spatial radius r, which ensures that the neighbourhood always corresponds to the same physical scale. However, may contain very few points depending on the point density. This variability in the number of points can lead to unstable feature aggregation, particularly for small or sparsely sampled classes.
-
-This behaviour is shown in our experiments, the ball-based grouping strategies slightly degrade performance compared to the knn baseline, particularly for the Vehicle and Utility classes which contain relatively few points. 
+  This behaviour is shown in our experiments, the ball-based grouping strategies slightly degrade performance compared to the knn baseline, particularly for the Vehicle and Utility classes which contain relatively few points. 
 
 
-##### Effect of Input Feature Channels
+- **Effect of Input Feature Channels**
 
-Experiment 6 evaluates the impact of removing additional input features and using only the XYZ coordinates. As expected, this configuration consistently produces the lowest performance across all metrics, indicating the importance of includding non-geometric features if available. This effect is particularly visible for the Vehicle and Utility classes, which already contain relatively few points. Without the additional feature channels, the model has less information to separate these objects from surrounding structures.
+  Experiment 6 evaluates the impact of removing additional input features and using only the XYZ coordinates. As expected, this configuration consistently produces the lowest performance across all metrics, indicating the importance of includding non-geometric features if available. This effect is particularly visible for the Vehicle and Utility classes, which already contain relatively few points. Without the additional feature channels, the model has less information to separate these objects from surrounding structures.
 
 
 #### Final Model
