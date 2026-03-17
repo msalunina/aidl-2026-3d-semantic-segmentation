@@ -1054,10 +1054,10 @@ Each row adds one technique on top of the previous best. The Gap column shows tr
 | Technique | mIoU | Gap | Ground | Vegetation | Buildings | Vehicle | Utility |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Baseline (XYZ only)** | 0.592 | 0.036 | 0.930 | 0.749 | 0.809 | 0.199 | 0.272 |
-| **+ Input features** | 0.637 ($\color{green}{+0.045}$) | 0.019 | 0.931 ($\color{green}{+0.001}$) | 0.771 ($\color{green}{+0.022}$) | 0.839 ($\color{green}{+0.030}$) | 0.300 ($\color{green}{+0.101}$) | 0.344 ($\color{green}{+0.072}$) |
-| **+ Class balancing** | 0.646 ($\color{green}{+0.009}$) | 0.034 | 0.930 ($\color{red}{−0.001}$) | 0.767 ($\color{red}{−0.004}$) | 0.836 ($\color{red}{−0.003}$) | 0.330 ($\color{green}{+0.030}$) | 0.365 ($\color{green}{+0.021}$) |
-| **+ Data augmentation** | 0.636 ($\color{red}{−0.010}$) | 0.002 ($\color{green}{-0.032}$) | 0.927 ($\color{red}{−0.003}$) | 0.755 ($\color{red}{−0.012}$) | 0.829 ($\color{red}{−0.007}$) | 0.313 ($\color{red}{−0.017}$) | 0.353 ($\color{red}{−0.012}$) |
-| **+ Dropout (0.3)** | 0.660 ($\color{green}{+0.024}$) | 0.004 | 0.932 ($\color{green}{+0.005}$) | 0.779 ($\color{green}{+0.024}$) | 0.852 ($\color{green}{+0.023}$) | 0.359 ($\color{green}{+0.046}$) | 0.378 ($\color{green}{+0.025}$) |
+| **+ Input features** | 0.637 $\color{green}{↑0.045}$ | 0.019 | 0.931 $\color{green}{↑0.001}$ | 0.771 $\color{green}{↑0.022}$ | 0.839 $\color{green}{↑0.030}$ | 0.300 $\color{green}{↑0.101}$ | 0.344 $\color{green}{↑0.072}$ |
+| **+ Class balancing** | 0.646 $\color{green}{↑0.009}$ | 0.034 | 0.930 $\color{red}{↓0.001}$ | 0.767 $\color{red}{↓0.004}$ | 0.836 $\color{red}{↓0.003}$ | 0.330 $\color{green}{↑0.030}$ | 0.365 $\color{green}{↑0.021}$ |
+| **+ Data augmentation** | 0.636 $\color{red}{↓0.010}$ | 0.002 $\color{green}{↓0.032}$ | 0.927 $\color{red}{↓0.003}$ | 0.755 $\color{red}{↓0.012}$ | 0.829 $\color{red}{↓0.007}$ | 0.313 $\color{red}{↓0.017}$ | 0.353 $\color{red}{↓0.012}$ |
+| **+ Dropout (0.3)** | 0.660 $\color{green}{↑0.024}$ | 0.004 | 0.932 $\color{green}{↑0.005}$ | 0.779 $\color{green}{↑0.024}$ | 0.852 $\color{green}{↑0.023}$ | 0.359 $\color{green}{↑0.046}$ | 0.378 $\color{green}{↑0.025}$ |
 
 *Cumulative improvement from baseline to best: **+0.068 mIoU** (0.592 → 0.660). Largest per-class gain: Vehicle +0.160, Utility +0.106.*
 
@@ -1570,12 +1570,6 @@ However, the improvements are not uniform across all classes. While the combined
 ---
 
 ## Comparing Three Architectures (Validation and Test Sample Results)
-
-| Architecture | mIoU | Buildings | Ground | Utility | Vegetation | Vehicle |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| PointNet | 0.66 / 0.66 ($\color{green}{0.00}$) | 0.85 / 0.86 ($\color{green}{+0.01}$) | 0.93 / 0.95 ($\color{green}{+0.02}$) | 0.38 / 0.33 ($\color{red}{−0.05}$) | 0.78 / 0.79 ($\color{green}{+0.01}$) | 0.36 / 0.36 ($\color{green}{0.00}$) |
-| IPointNet | 0.77 / 0.76 ($\color{red}{−0.01}$) | 0.92 / 0.92 ($\color{green}{0.00}$) | 0.94 / 0.95 ($\color{green}{+0.01}$) | 0.58 / 0.52 ($\color{red}{−0.06}$) | 0.84 / 0.86 ($\color{green}{+0.02}$) | 0.56 / 0.55 ($\color{red}{−0.01}$) |
-| PointNet++ | 0.81 / 0.80 ($\color{red}{−0.01}$) | 0.95 / 0.95 ($\color{green}{0.00}$) | 0.95 / 0.96 ($\color{green}{+0.01}$) | 0.62 / 0.55 ($\color{red}{−0.07}$) | 0.87 / 0.89 ($\color{green}{+0.02}$) | 0.68 / 0.68 ($\color{green}{0.00}$) |
 
 | Architecture | mIoU | Buildings | Ground | Utility | Vegetation | Vehicle |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
