@@ -300,7 +300,7 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 
 ##### A. NLL Weighted Loss (Best for PointNet)  
 
-| Metric<br>NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
+| NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
 | **Overall metrics** |||||||
 | mIoU     | 0.810 / 0.800     | 0.816 / **0.806** | 0.811 / **0.806** | 0.805 / 0.801 | 0.802 / 0.798 | 0.795 / 0.788 |
@@ -324,22 +324,22 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 
 ##### B. NLL Unweighted Loss
 
-| Metric<br>NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |   BEST (2+3) |
-|:------|:------:|:------:|:------:|:------:|:------:|:------:|:------:|
+| NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |  
+|:------|:------:|:------:|:------:|:------:|:------:|:------:|
 | **Overall metrics** ||||||||
-| mIoU     | 0.815 / 0.812     | 0.819 / **0.813** | 0.816 / 0.812     | 0.808 / 0.810     | 0.809 / 0.809 | 0.797 / 0.797 | 0.819 / **0.813** |
-| Loss     | 0.112 / 0.115     | 0.110 / **0.114** | 0.112 / **0.114** | 0.117 / 0.116     | 0.117 / 0.116 | 0.122 / 0.123 | 0.110 / 0.115     |
-| Accuracy | 0.960 / **0.958** | 0.961 / **0.958** | 0.960 / **0.958** | 0.959 / **0.958** | 0.959 / 0.957 | 0.956 / 0.954 | 0.961 / **0.958** |
+| mIoU     | 0.815 / 0.812     | 0.819 / **0.813** | 0.816 / 0.812     | 0.808 / 0.810     | 0.809 / 0.809 | 0.797 / 0.797 | 
+| Loss     | 0.112 / 0.115     | 0.110 / **0.114** | 0.112 / **0.114** | 0.117 / 0.116     | 0.117 / 0.116 | 0.122 / 0.123 |
+| Accuracy | 0.960 / **0.958** | 0.961 / **0.958** | 0.960 / **0.958** | 0.959 / **0.958** | 0.959 / 0.957 | 0.956 / 0.954 | 
 | **Class IoU** ||||||||
-| Ground     | 0.951 / **0.946** | 0.952 / **0.946** | 0.952 / **0.946** | 0.950 / **0.946** | 0.950 / 0.945 | 0.946 / 0.940 | 0.952 / **0.946** |
-| Vegetation | 0.871 / 0.868     | 0.873 / 0.868     | 0.871 / **0.869** | 0.868 / 0.868     | 0.868 / 0.867 | 0.861 / 0.858 | 0.873 / 0.868     |
-| Buildings  | 0.954 / **0.955** | 0.954 / 0.954     | 0.953 / **0.955** | 0.948 / 0.950     | 0.949 / 0.951 | 0.950 / 0.950 | 0.955 / 0.953     |
-| Vehicle    | 0.690 / 0.672     | 0.700 / 0.677     | 0.695 / 0.677     | 0.682 / **0.679** | 0.683 / 0.673 | 0.653 / 0.647 | 0.698 / 0.677     |
-| Utility    | 0.611 / **0.620** | 0.616 / 0.618     | 0.608 / 0.616     | 0.594 / 0.609     | 0.594 / 0.609 | 0.574 / 0.590 | 0.616 / `0.621` |
+| Ground     | 0.951 / **0.946** | 0.952 / **0.946** | 0.952 / **0.946** | 0.950 / **0.946** | 0.950 / 0.945 | 0.946 / 0.940 |
+| Vegetation | 0.871 / 0.868     | 0.873 / 0.868     | 0.871 / **0.869** | 0.868 / 0.868     | 0.868 / 0.867 | 0.861 / 0.858 | 
+| Buildings  | 0.954 / **0.955** | 0.954 / 0.954     | 0.953 / **0.955** | 0.948 / 0.950     | 0.949 / 0.951 | 0.950 / 0.950 | 
+| Vehicle    | 0.690 / 0.672     | 0.700 / 0.677     | 0.695 / 0.677     | 0.682 / **0.679** | 0.683 / 0.673 | 0.653 / 0.647 | 
+| Utility    | 0.611 / **0.620** | 0.616 / 0.618     | 0.608 / 0.616     | 0.594 / 0.609     | 0.594 / 0.609 | 0.574 / 0.590 | 
 | **Best validation** ||||||||
-| Best mIoU     | ----- / 0.815     | ----- / **0.816** | ----- / **0.816** | ----- / 0.810 | ----- / 0.809 | ----- / 0.797 | ----- / `0.818` |
-| Best Loss     | ----- / 0.113     | ----- / 0.113     | ----- / **0.112** | ----- / 0.115 | ----- / 0.116 | ----- / 0.123 | ----- / 0.112     |
-| Best Accuracy | ----- / **0.959** | ----- / **0.959** | ----- / **0.959** | ----- / 0.958 | ----- / 0.957 | ----- / 0.954 | ----- / **0.959** |
+| Best mIoU     | ----- / 0.815     | ----- / **0.816** | ----- / **0.816** | ----- / 0.810 | ----- / 0.809 | ----- / 0.797 | 
+| Best Loss     | ----- / 0.113     | ----- / 0.113     | ----- / **0.112** | ----- / 0.115 | ----- / 0.116 | ----- / 0.123 | 
+| Best Accuracy | ----- / **0.959** | ----- / **0.959** | ----- / **0.959** | ----- / 0.958 | ----- / 0.957 | ----- / 0.954 | 
 
 **Table B**. Comparison of PointNet++ configurations: NLL loss + uniform weights (i.e no weights). Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Best validation values refer to the best value achieved during the entire training.
 
@@ -361,52 +361,65 @@ These results suggest that PointNet++ already handles class imbalance reasonably
 
 Regarding the changes with respect to the baseline, frequent classes like Ground, Vegetation and Building behave similar for all experiments showing almost identical IoU values. Rares classes like Vehicle and Utility are the ones that show more variability. Although such variability is not uniform among experiments, their overall mIoU values indicate two clear benefitial modifications: dropout (experiment 2) and number of neighbours (experiment 3). 
 
-##### Effect of Dropout
+- **Effect of Dropout** 
+  
+  Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU (0.816) and slightly better performance for several classes. This impacts in one of the best mIoU values.
 
-Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU (0.816) and slightly better performance for several classes. This impacts in one of the best mIoU values.
+- **Effect of Neighborhood Size (K-neighbors)**
+  
+  Experiment 3 increases the number of neighbors in the deeper abstraction layers from [32,32,32,32] to [32,32,64,64]. The resulting performance is slightly higher than the baseline across most metrics. 
 
-##### Effect of Neighborhood Size (K-neighbors)
+  One noticeable effect is a slight improvement of the IoU for the Vehicle class. Vehicles are relatively small and sparse objects in the scene, and a larger neighborhood allows the network to capture a larger spatial context around them. This additional context can help distinguish vehicles from surrounding structures. In contrast, results show that the Utility class does not benefit from larger neighborhoods. Utility objects such as poles and street lights are thin vertical structures that contain very few points. Increasing the neighborhood size quickly introduces points from other classes, making the context less pure.
 
-Experiment 3 increases the number of neighbors in the deeper abstraction layers from [32,32,32,32] to [32,32,64,64]. The resulting performance is slightly higher than the baseline across most metrics. 
+  This variability indicates a strong tradeoff between the size of the structure to identify and the size of the neighbourhood providing context, what seems to provide useful semantinc context for one class, may hurt another. 
 
-One noticeable effect is a slight improvement of the IoU for the Vehicle class. Vehicles are relatively small and sparse objects in the scene, and a larger neighborhood allows the network to capture a larger spatial context around them. This additional context can help distinguish vehicles from surrounding structures. In contrast, results show that the Utility class does not benefit from larger neighborhoods. Utility objects such as poles and street lights are thin vertical structures that contain very few points. Increasing the neighborhood size quickly introduces points from other classes, making the context less pure.
+- **Effect of Grouping Strategy**
+  
+  The knn strategy is robust in sparse areas because it guarantees enough number of points (fixed), which translates into a stable input to the network. However, the spatial size of the neighborhood varies depending on point density. In contrast, ball-based strategies select points within a fixed spatial radius r, which ensures that the neighbourhood always corresponds to the same physical scale. However, may contain very few points depending on the point density. This variability in the number of points can lead to unstable feature aggregation, particularly for small or sparsely sampled classes.
 
-This variability indicates a strong tradeoff between the size of the structure to identify and the size of the neighbourhood providing context, what seems to provide useful semantinc context for one class, may hurt another. 
-
-##### Effect of Grouping Strategy
-
-The knn strategy is robust in sparse areas because it guarantees enough number of points (fixed), which translates into a stable input to the network. However, the spatial size of the neighborhood varies depending on point density. In contrast, ball-based strategies select points within a fixed spatial radius r, which ensures that the neighbourhood always corresponds to the same physical scale. However, may contain very few points depending on the point density. This variability in the number of points can lead to unstable feature aggregation, particularly for small or sparsely sampled classes.
-
-This behaviour is shown in our experiments, the ball-based grouping strategies slightly degrade performance compared to the knn baseline, particularly for the Vehicle and Utility classes which contain relatively few points. 
+  This behaviour is shown in our experiments, the ball-based grouping strategies slightly degrade performance compared to the knn baseline, particularly for the Vehicle and Utility classes which contain relatively few points. 
 
 
-##### Effect of Input Feature Channels
+- **Effect of Input Feature Channels**
 
-Experiment 6 evaluates the impact of removing additional input features and using only the XYZ coordinates. As expected, this configuration consistently produces the lowest performance across all metrics, indicating the importance of includding non-geometric features if available. This effect is particularly visible for the Vehicle and Utility classes, which already contain relatively few points. Without the additional feature channels, the model has less information to separate these objects from surrounding structures.
+  Experiment 6 evaluates the impact of removing additional input features and using only the XYZ coordinates. As expected, this configuration consistently produces the lowest performance across all metrics, indicating the importance of includding non-geometric features if available. This effect is particularly visible for the Vehicle and Utility classes, which already contain relatively few points. Without the additional feature channels, the model has less information to separate these objects from surrounding structures.
 
 
 #### Final Model
 
 Overall, the experiments suggest that the baseline PointNet++ configuration is already close to optimal for this dataset. Among the tested configurations, reducing the dropout rate (Experiment 2) and increasing the neighborhood size (Experiment 3) produced the most consistent improvements over the baseline. To evaluate whether both improvements could be combined, a final experiment was performed using both modifications simultaneously. This configuration achieved the highest overall performance, reaching a best validation mIoU of 0.818, slightly outperforming the individual experiments.
 
-However, the improvements are not uniform across all classes. While the combined model improves the IoU of some classes (e.g., Utility), other classes show only marginal changes. This suggests that the effects of these hyperparameters are not strictly additive and may interact during training. Based on the overall mIoU, the combined configuration (dropout 0.3 and increased neighborhood size) is selected as the final model and evaluated on the test set.
+However, the improvements are not uniform across all classes. While the combined model improves the IoU of some classes (e.g., Utility), other classes show only marginal changes. This suggests that the effects of these hyperparameters are not strictly additive and may interact during training. Based on the overall mIoU, the combined configuration is selected as the final model and evaluated on the test set.
 
-| model     |     grouping    |    dropout   |      K-neighbors      |              feature channels          | 
+| NLL unweighted       |    grouping    |    dropout   |      K-neighbors      |              feature channels          | 
 |:---------:|:--------------:|:------------:|:-----------------------:|:------------------------------------:|
-|   BEST    |      `knn`     |      0.3     | [32,32,64,64] (exact K) | [xyz,return_number,number_of_returns]|
+|  FINAL MODEL    |   `knn`     |      0.3     | [32,32,64,64] (exact K) | [xyz,return_number,number_of_returns]|
 
-| Metric<br>NLL unweighted | BEST (2+3)|
-|:------|:------:
-| **Overall metrics** ||||||||
-| mIoU          | |
-| Loss          | |
-| Accuracy      | |
-| **Class IoU** | |
-| Ground        | |
-| Vegetation    | |
-| Buildings     | |
-| Vehicle       | |
-| Utility       | |
+
+
+
+
+| NLL unweighted |   FINAL MODEL <br> (train / val)   | FINAL MODEL <br>(test set) |
+|:--------------|:-----------------:|:-------:|
+| **Overall metrics** |             |         |
+| mIoU          | 0.819 / **0.813** | `0.804` |
+| Loss          | 0.110 / 0.115     | `0.103` |
+| Accuracy      | 0.961 / **0.958** | `0.965` |
+| **Class IoU** |                   |         |
+| Ground        | 0.952 / **0.946** | `0.960` |
+| Vegetation    | 0.873 / 0.868     | `0.885` |
+| Buildings     | 0.955 / 0.953     | `0.947` |
+| Vehicle       | 0.698 / 0.677     | `0.676` |
+| Utility       | 0.616 / **0.621** | `0.550` |
+| **Best validation** |             |         |
+| Best mIoU     | ----- / **0.818** |         |
+| Best Loss     | ----- / 0.112     |         |
+| Best Accuracy | ----- / **0.959** |         |
+
+
+
+
+
 
 
 

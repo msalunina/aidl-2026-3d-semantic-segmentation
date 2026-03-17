@@ -72,8 +72,6 @@
     - [Encoder](#encoder)
       - [1. Farthest Point Sampling (FPS)](#1-farthest-point-sampling-fps)
       - [2. Neighborhood Grouping](#2-neighborhood-grouping)
-        - [k-Nearest Neighbors (`knn`)](#k-nearest-neighbors-knn)
-        - [Radius-Based Grouping](#radius-based-grouping)
       - [3. A Shared MLP + Max Pooling](#3-a-shared-mlp--max-pooling)
     - [Decoder](#decoder)
       - [1. 3-NN Interpolation](#1-3-nn-interpolation)
@@ -1011,7 +1009,7 @@ The grouping stage constructs local neighbourhoods around each center. The strat
 - **Radius-Based grouping**: selects all points within a predefined radius
 
 
-##### k-Nearest Neighbors (`knn`)
+**Nearest Neighbors** (`knn`)
 
 In knn grouping, for each center point the K nearest points in Euclidean space are selected. Consequently:
 - **Number of neighbors** is fixed
@@ -1019,7 +1017,7 @@ In knn grouping, for each center point the K nearest points in Euclidean space a
 
 In dense regions, the K nearest neighbors lie close to the center and define a small spatial patch, whereas in sparse regions, the same number of neighbors may lie further defining a much larger spatial area. As a result, the **effective receptive field** varies with point density.
 
-##### Radius-Based Grouping
+**Radius-Based Grouping**
 
 The idea behind Radius-Based grouping is to reduce the density dependency. To do so, neighbors are selected within a **fixed spatial radius** around each center. Consequently:
 - **Maximum spatial support of the neigborhood** is fixed for each layer
@@ -1206,7 +1204,7 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 
 ##### A. NLL Weighted Loss (Best for PointNet)  
 
-| Metric<br>NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
+| NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
 | **Overall metrics** |||||||
 | mIoU     | 0.810 / 0.800     | 0.816 / **0.806** | 0.811 / **0.806** | 0.805 / 0.801 | 0.802 / 0.798 | 0.795 / 0.788 |
@@ -1230,22 +1228,22 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 
 ##### B. NLL Unweighted Loss
 
-| Metric<br>NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |   BEST (2+3) |
-|:------|:------:|:------:|:------:|:------:|:------:|:------:|:------:|
+| NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |  
+|:------|:------:|:------:|:------:|:------:|:------:|:------:|
 | **Overall metrics** ||||||||
-| mIoU     | 0.815 / 0.812     | 0.819 / **0.813** | 0.816 / 0.812     | 0.808 / 0.810     | 0.809 / 0.809 | 0.797 / 0.797 | 0.819 / **0.813** |
-| Loss     | 0.112 / 0.115     | 0.110 / **0.114** | 0.112 / **0.114** | 0.117 / 0.116     | 0.117 / 0.116 | 0.122 / 0.123 | 0.110 / 0.115     |
-| Accuracy | 0.960 / **0.958** | 0.961 / **0.958** | 0.960 / **0.958** | 0.959 / **0.958** | 0.959 / 0.957 | 0.956 / 0.954 | 0.961 / **0.958** |
+| mIoU     | 0.815 / 0.812     | 0.819 / **0.813** | 0.816 / 0.812     | 0.808 / 0.810     | 0.809 / 0.809 | 0.797 / 0.797 | 
+| Loss     | 0.112 / 0.115     | 0.110 / **0.114** | 0.112 / **0.114** | 0.117 / 0.116     | 0.117 / 0.116 | 0.122 / 0.123 |
+| Accuracy | 0.960 / **0.958** | 0.961 / **0.958** | 0.960 / **0.958** | 0.959 / **0.958** | 0.959 / 0.957 | 0.956 / 0.954 | 
 | **Class IoU** ||||||||
-| Ground     | 0.951 / **0.946** | 0.952 / **0.946** | 0.952 / **0.946** | 0.950 / **0.946** | 0.950 / 0.945 | 0.946 / 0.940 | 0.952 / **0.946** |
-| Vegetation | 0.871 / 0.868     | 0.873 / 0.868     | 0.871 / **0.869** | 0.868 / 0.868     | 0.868 / 0.867 | 0.861 / 0.858 | 0.873 / 0.868     |
-| Buildings  | 0.954 / **0.955** | 0.954 / 0.954     | 0.953 / **0.955** | 0.948 / 0.950     | 0.949 / 0.951 | 0.950 / 0.950 | 0.955 / 0.953     |
-| Vehicle    | 0.690 / 0.672     | 0.700 / 0.677     | 0.695 / 0.677     | 0.682 / **0.679** | 0.683 / 0.673 | 0.653 / 0.647 | 0.698 / 0.677     |
-| Utility    | 0.611 / **0.620** | 0.616 / 0.618     | 0.608 / 0.616     | 0.594 / 0.609     | 0.594 / 0.609 | 0.574 / 0.590 | 0.616 / `0.621` |
+| Ground     | 0.951 / **0.946** | 0.952 / **0.946** | 0.952 / **0.946** | 0.950 / **0.946** | 0.950 / 0.945 | 0.946 / 0.940 |
+| Vegetation | 0.871 / 0.868     | 0.873 / 0.868     | 0.871 / **0.869** | 0.868 / 0.868     | 0.868 / 0.867 | 0.861 / 0.858 | 
+| Buildings  | 0.954 / **0.955** | 0.954 / 0.954     | 0.953 / **0.955** | 0.948 / 0.950     | 0.949 / 0.951 | 0.950 / 0.950 | 
+| Vehicle    | 0.690 / 0.672     | 0.700 / 0.677     | 0.695 / 0.677     | 0.682 / **0.679** | 0.683 / 0.673 | 0.653 / 0.647 | 
+| Utility    | 0.611 / **0.620** | 0.616 / 0.618     | 0.608 / 0.616     | 0.594 / 0.609     | 0.594 / 0.609 | 0.574 / 0.590 | 
 | **Best validation** ||||||||
-| Best mIoU     | ----- / 0.815     | ----- / **0.816** | ----- / **0.816** | ----- / 0.810 | ----- / 0.809 | ----- / 0.797 | ----- / `0.818` |
-| Best Loss     | ----- / 0.113     | ----- / 0.113     | ----- / **0.112** | ----- / 0.115 | ----- / 0.116 | ----- / 0.123 | ----- / 0.112     |
-| Best Accuracy | ----- / **0.959** | ----- / **0.959** | ----- / **0.959** | ----- / 0.958 | ----- / 0.957 | ----- / 0.954 | ----- / **0.959** |
+| Best mIoU     | ----- / 0.815     | ----- / **0.816** | ----- / **0.816** | ----- / 0.810 | ----- / 0.809 | ----- / 0.797 | 
+| Best Loss     | ----- / 0.113     | ----- / 0.113     | ----- / **0.112** | ----- / 0.115 | ----- / 0.116 | ----- / 0.123 | 
+| Best Accuracy | ----- / **0.959** | ----- / **0.959** | ----- / **0.959** | ----- / 0.958 | ----- / 0.957 | ----- / 0.954 | 
 
 **Table B**. Comparison of PointNet++ configurations: NLL loss + uniform weights (i.e no weights). Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Best validation values refer to the best value achieved during the entire training.
 
@@ -1295,24 +1293,29 @@ Regarding the changes with respect to the baseline, frequent classes like Ground
 
 Overall, the experiments suggest that the baseline PointNet++ configuration is already close to optimal for this dataset. Among the tested configurations, reducing the dropout rate (Experiment 2) and increasing the neighborhood size (Experiment 3) produced the most consistent improvements over the baseline. To evaluate whether both improvements could be combined, a final experiment was performed using both modifications simultaneously. This configuration achieved the highest overall performance, reaching a best validation mIoU of 0.818, slightly outperforming the individual experiments.
 
-However, the improvements are not uniform across all classes. While the combined model improves the IoU of some classes (e.g., Utility), other classes show only marginal changes. This suggests that the effects of these hyperparameters are not strictly additive and may interact during training. Based on the overall mIoU, the combined configuration (dropout 0.3 and increased neighborhood size) is selected as the final model and evaluated on the test set.
+However, the improvements are not uniform across all classes. While the combined model improves the IoU of some classes (e.g., Utility), other classes show only marginal changes. This suggests that the effects of these hyperparameters are not strictly additive and may interact during training. Based on the overall mIoU, the combined configuration is selected as the final model and evaluated on the test set.
 
-| model     |     grouping    |    dropout   |      K-neighbors      |              feature channels          | 
+| NLL unweighted       |    grouping    |    dropout   |      K-neighbors      |              feature channels          | 
 |:---------:|:--------------:|:------------:|:-----------------------:|:------------------------------------:|
-|   BEST    |      `knn`     |      0.3     | [32,32,64,64] (exact K) | [xyz,return_number,number_of_returns]|
+|  FINAL MODEL    |   `knn`     |      0.3     | [32,32,64,64] (exact K) | [xyz,return_number,number_of_returns]|
 
-| Metric<br>NLL unweighted | BEST (2+3)|
-|:------|:------:
-| **Overall metrics** ||||||||
-| mIoU          | |
-| Loss          | |
-| Accuracy      | |
-| **Class IoU** | |
-| Ground        | |
-| Vegetation    | |
-| Buildings     | |
-| Vehicle       | |
-| Utility       | |
+
+| NLL unweighted |   FINAL MODEL <br> (train / val)   | FINAL MODEL <br>(test set) |
+|:--------------|:-----------------:|:-------:|
+| **Overall metrics** |             |         |
+| mIoU          | 0.819 / **0.813** | `0.804` |
+| Loss          | 0.110 / 0.115     | `0.103` |
+| Accuracy      | 0.961 / **0.958** | `0.965` |
+| **Class IoU** |                   |         |
+| Ground        | 0.952 / **0.946** | `0.960` |
+| Vegetation    | 0.873 / 0.868     | `0.885` |
+| Buildings     | 0.955 / 0.953     | `0.947` |
+| Vehicle       | 0.698 / 0.677     | `0.676` |
+| Utility       | 0.616 / **0.621** | `0.550` |
+| **Best validation** |             |         |
+| Best mIoU     | ----- / **0.818** |         |
+| Best Loss     | ----- / 0.112     |         |
+| Best Accuracy | ----- / **0.959** |         |
 
 
 
