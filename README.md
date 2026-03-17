@@ -528,6 +528,7 @@ Going deep in the original work, they state the following changes in the archite
 + increase layer sizes in all the network
 
 The network with the improvements for the part segmentaiton taks stated in the original work is shown in the following image
+
 ![PointNet architecture](figs/part_segmentation_pointnet.png)
 
 With the specified changes, the following experiments are planned:
@@ -1568,13 +1569,15 @@ However, the improvements are not uniform across all classes. While the combined
 
 ## Comparing Three Architectures (Validation and Test Sample Results)
 
+
 | Architecture | mIoU | Buildings | Ground | Utility | Vegetation | Vehicle |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| PointNet | 0.660 / 0.656 ($\color{red}{−0.004}$) | 0.852 / 0.856 ($\color{green}{+0.004}$) | 0.932 / 0.951 ($\color{green}{+0.019}$) | 0.378 / 0.329 ($\color{red}{−0.049}$) | 0.779 / 0.792 ($\color{green}{+0.013}$) | 0.359 / 0.355 ($\color{red}{−0.004}$) |
-| IPointNet | 0.767 / 0.759 ($\color{red}{−0.008}$) | 0.922 / 0.916 ($\color{red}{−0.006}$) | 0.936 / 0.951 ($\color{green}{+0.015}$) | 0.575 / 0.522 ($\color{red}{−0.053}$) | 0.841 / 0.856 ($\color{green}{+0.015}$) | 0.562 / 0.552 ($\color{red}{−0.010}$) |
-| PointNet++ | 0.813 / 0.804 ($\color{red}{−0.009}$) | 0.953 / 0.947 ($\color{red}{−0.006}$) | 0.946 / 0.960 ($\color{green}{+0.014}$) | 0.621 / 0.550 ($\color{red}{−0.071}$) | 0.868 / 0.885 ($\color{green}{+0.017}$) | 0.677 / 0.676 ($\color{red}{−0.001}$) |
+| PointNet | 0.66 / 0.66 ($\color{green}{0.00}$) | 0.85 / 0.86 ($\color{green}{+0.01}$) | 0.93 / 0.95 ($\color{green}{+0.02}$) | 0.38 / 0.33 ($\color{red}{−0.05}$) | 0.78 / 0.79 ($\color{green}{+0.01}$) | 0.36 / 0.36 ($\color{green}{0.00}$) |
+| IPointNet | 0.77 / 0.76 ($\color{red}{−0.01}$) | 0.92 / 0.92 ($\color{green}{0.00}$) | 0.94 / 0.95 ($\color{green}{+0.01}$) | 0.58 / 0.52 ($\color{red}{−0.06}$) | 0.84 / 0.86 ($\color{green}{+0.02}$) | 0.56 / 0.55 ($\color{red}{−0.01}$) |
+| PointNet++ | 0.81 / 0.80 ($\color{red}{−0.01}$) | 0.95 / 0.95 ($\color{green}{0.00}$) | 0.95 / 0.96 ($\color{green}{+0.01}$) | 0.62 / 0.55 ($\color{red}{−0.07}$) | 0.87 / 0.89 ($\color{green}{+0.02}$) | 0.68 / 0.68 ($\color{green}{0.00}$) |
 
-*Values shown as Val / Test (delta). Classes ordered by decreasing frequency.*
+
+*Values shown as Val / Test (delta).*
 
 Each architectural step brought a clear improvement: adding BEV fusion to PointNet (IPointNet) raised mIoU by +0.11 on validation, and replacing the flat architecture with hierarchical set abstraction (PointNet++) added another +0.05. Across all experiments documented above, the most impactful design choices were input feature selection (+0.045 mIoU from return metadata), class-balanced sampling for PointNet, local BEV fusion over global fusion in IPointNet, and the combination of lower dropout with larger neighborhood sizes in PointNet++.
 
