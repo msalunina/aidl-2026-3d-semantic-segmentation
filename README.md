@@ -1007,7 +1007,7 @@ The grouping stage constructs local neighbourhoods around each center. The strat
 - **Radius-Based grouping**: selects all points within a predefined radius
 
 
-**Nearest Neighbors** (`knn`)
+**k-Nearest Neighbors** (`knn`)
 
 In knn grouping, for each center point the K nearest points in Euclidean space are selected. Consequently:
 - **Number of neighbors** is fixed
@@ -1191,8 +1191,8 @@ Then, we want to test four modifications of the baseline configuration: dropout 
 
 Morover, unlike Pointnet which processes the entire point cloud using a single global aggregation, PointNet++ learns features from small local neighborhoods to larger spatial regions. Consequently, it is by nature more aware of the different sizes of the structures present on a scene and, therefore, it is likely to be less affected by class imblance produced by very small and rare objects. To test this, we will perform the 6-set of experiments twice: 
 
-- A. NLL weighted (PointNet weights: [0.5272, 0.5272, 0.5276, 1.5454, 1.8727])
-- B. NLL unweighted (uniform weights: [1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
+- **A. NLL weighted** (PointNet weights: [0.5272, 0.5272, 0.5276, 1.5454, 1.8727])
+- **B. NLL unweighted** (uniform weights: [1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
 
 
 #### Results
@@ -1200,7 +1200,7 @@ Morover, unlike Pointnet which processes the entire point cloud using a single g
 Tables A and B summarize the performance of the evaluated PointNet++ configurations with a weighted and unweighted NLL loss. Overall, the different configurations produce relatively similar results, indicating that the baseline is already well tuned. However, several trends can be observed when modifying specific components of the architecture and remain largely consistent in both settings.
 
 
-** A. NLL Weighted Loss (Best for PointNet) ** 
+**A. NLL Weighted Loss (Best for PointNet) ** 
 
 | NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
@@ -1224,7 +1224,7 @@ Tables A and B summarize the performance of the evaluated PointNet++ configurati
 
 
 
-** B. NLL Unweighted Loss**
+**B. NLL Unweighted Loss**
 
 | NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |  
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
