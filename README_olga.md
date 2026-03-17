@@ -1,5 +1,5 @@
 
-# METRICS
+# Metrics
 
 Evaluating the performance of a semantic segmentation model requires metrics that measure how well the predicted labels match the ground truth labels. In the case of point cloud segmentation, the task consists of assigning a semantic class to every point in the cloud. While classification accuracy measures the proportion of correctly labeled points, it is often not a reliable metric for segmentation tasks because datasets are usually highly imbalanced. For example, in LiDAR datasets large portions of the scene may correspond to dominant classes such as ground or vegetation, while other classes such as vehicles or utilities appear much less frequently.
 
@@ -63,7 +63,7 @@ where the sum is perfomed over all batches b in the epoch.
 
 
 
-# POINTNET++
+# PointNet++
 
 PointNet++ is a deep neural network designed to process unordered point sets sampled from a metric space. The architecture extends the original PointNet by introducing a hierarchical feature learning framework that captures both local geometric structures and global contextual information.
 
@@ -82,7 +82,7 @@ Next Figure shows the PointNet++ architecture
 
 
 
-## ENCODER
+## Encoder
 The encoder builds a hierarchical representation of the point cloud through successive **Set Abstraction (SA)** layers. Each SA layer applies sequentially:
 
 1. **Farthest Point Sampling (FPS)** to select a subset of centers  
@@ -96,7 +96,7 @@ As the network progresses towards deeper layers, the number of centers decreases
 In order to select the center points, PointNet++ uses Farthest Point Sampling (FPS). It iteratively selects points that maximize the distance from previously selected centers. This ensures that the sampled points are evenly distributed across the point cloud.
 
 
-### 2. Neighborhood grouping
+### 2. Neighborhood Grouping
 
 The grouping stage constructs local neighbourhoods around each center. The strategy used to select neighbors determines the **spatial support of the local patch**, which directly influences the type of geometric structures the network can capture. Two grouping strategies are compared:
 
@@ -141,12 +141,12 @@ The following comparison highlights how the choice of grouping strategy controls
 
 
 
-### 3. A **shared MLP + max pooling**
+### 3. A **Shared MLP + Max Pooling**
 
 After selecting the K neighbors for each center, each local region is processed by a mini-PointNet network, which learns a feature representation for the neighborhood. This consists of a shared multilayer perceptron (MLP) applied independently to each point followed by a symmetric aggregation function (max pooling) to obtain a single feature vector representing the region.
 
 
-## DECODER
+## Decoder
 
 While the encoder progressively reduces the number of points and extracts higher-level features, semantic segmentation requires a prediction for **every original input point**. Therefore, PointNet++ includes a decoder composed of successive **Feature Propagation (FP)** layers, which progressively upsample features from sparse point sets back to denser ones. Each Feature Propagation layer applies sequentially:
 
@@ -177,10 +177,10 @@ By stacking several Feature Propagation layers, the decoder progressively recons
 
 
 
-## CONFIGURATION
+## Network Architecture 
 
 
-### Encoder configuration (SA Layers)
+### Encoder Architecture (SA Layers)
 
 | Layer | # Centers (FPS) | Neighborhood | K | Radius | MLP |
 |:------:|:-----------------:|:-------------:|:---:|:-------:|:------|
@@ -209,7 +209,7 @@ where:
 - C: features/channels
 
 
-### Decoder configuration (FP layers)
+### Decoder Architecture (FP layers)
 
 | Layer | Interpolation | Skip connection | MLP |
 |:------:|:---------------:|:----------------:|:------|
@@ -252,7 +252,7 @@ where:
 
 
 
-## EXPERIMENTS
+## Experiments
 
 The idea behind this part of the report is to analyse the effect that some hyperparameters have on the PointNet++ newtwork.
 As a starting point, we take advantage of the experiments performed on PoinNet and keep the same already optimized choices: 
@@ -261,7 +261,7 @@ As a starting point, we take advantage of the experiments performed on PoinNet a
 - NLL loss
 - input channels `[xyz,return_number,number_of_returns]`
 
-### HYPOTHESIS
+### Hypothesis
 
 Then, we want to test four modifications of the baseline configuration: dropout rate, neighborhood size, grouping strategy, and input feature channels. Each experiment isolates one component while keeping the rest of the architecture unchanged.
 
@@ -292,9 +292,12 @@ Morover, unlike Pointnet which processes the entire point cloud using a single g
 - B. NLL unweighted (uniform weights: [1.0000, 1.0000, 1.0000, 1.0000, 1.0000])
 
 
-### RESULTS
+### Results
 
-### A. NLL loss + weighted (best config for PointNet)   
+Tables A and B summarize the performance of the evaluated PointNet++ configurations with a weighted and unweighted NLL loss. Overall, the different configurations produce relatively similar results, indicating that the baseline is already well tuned. However, several trends can be observed when modifying specific components of the architecture and remain largely consistent in both settings.
+
+
+#### A. NLL Weighted Loss (Best for PointNet)  
 
 | Metric<br>NLL weighted  | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|
@@ -318,7 +321,7 @@ Morover, unlike Pointnet which processes the entire point cloud using a single g
 
 
 
-### B. NLL loss + unweighted
+#### B. NLL Unweighted Loss
 
 | Metric<br>NLL unweighted | 1 - baseline | 2 - dropout | 3 - K-neighbors | 4 - ball_closest | 5 - ball_random | 6 - xyz only |   BEST (2+3) |
 |:------|:------:|:------:|:------:|:------:|:------:|:------:|:------:|
@@ -339,36 +342,29 @@ Morover, unlike Pointnet which processes the entire point cloud using a single g
 
 **Table B**. Comparison of PointNet++ configurations: NLL loss + uniform weights (i.e no weights). Last epoch values are reported as train / validation. Bold values indicate the best validation score. Classes are ordered by decreasing frequency in the dataset. Best validation values refer to the best value achieved during the entire training.
 
+### Discussion
 
-
-### A vs B comparison: NLL with moderate weights vs NLL (no weights) 
-
-The following figures show the learning curves for the baseline case for both the unweighted and weighted NLL loss.
-
+The following figures show the learning curves for the baseline case for both the unweighted and weighted NLL loss. Both configurations follow a very similar training behaviour: the training loss decreases in both cases and the validation curves stabilize after approximately 30 epochs. However, the unweighted case consistently achieves better validation performance, not only regarding the smaller oscilations it exhibits, but also in the smaller loss values.
 
 ![Baseline comparison](figs/pnpp_baseline_loss.png)
-The curves show that both configurations follow a very similar training behaviour. The training loss decreases in both cases and the validation curves stabilize after approximately 30 epochs. However, the unweighted case consistently achieves better validation performance, not only regarding the smaller oscilations it exhibits, but also in the smaller values.
+
 
 This behaviour can also be observed in the mIoU curves below, where the unweighted configuration converges to a slightly higher validation mIoU than the weighted version. 
 
 ![Baseline comparison](figs/pnpp_baseline_miou.png)
 ![Baseline comparison](figs/pnpp_baseline_classes.png)
 
-Regarding the class IoU, curves indicate that for frequent classes such as Ground, Vegetation, and Buildings, both configurations behave almost identically. However, for the rare classes Vehicle and Utility, the weighted loss does not provide the expected improvement. In fact, the unweighted configuration slightly outperforms the weighted one in the final epochs.
+Regarding class IoU, curves indicate that for frequent classes such as Ground, Vegetation, and Buildings, both configurations behave almost identically. However, for rare classes like Vehicle and Utility, the weighted loss does not provide the expected improvement. In fact, the unweighted configuration slightly outperforms the weighted one in the final epochs.
 
 These results suggest that PointNet++ already handles class imbalance reasonably well through its hierarchical architecture, which captures geometric structures at multiple spatial scales. In contrast to PointNet, where strong class weighting was beneficial, the same weighting scheme appears to slightly degrade performance in the PointNet++ setting, specially for rare classes such as Vehicle and Utility.
 
-### 6 experiments comparison
+Regarding the changes with respect to the baseline, frequent classes like Ground, Vegetation and Building behave similar for all experiments showing almost identical IoU values. Rares classes like Vehicle and Utility are the ones that show more variability. Although such variability is not uniform among experiments, their overall mIoU values indicate two clear benefitial modifications: dropout (experiment 2) and number of neighbours (experiment 3). 
 
-Tables A and B summarize the performance of the evaluated PointNet++ configurations. Overall, the different configurations produce relatively similar results, indicating that the baseline is already well tuned. However, several trends can be observed when modifying specific components of the architecture and remain largely consistent in both settings.
+#### Effect of Dropout
 
-Frequent classes like Ground, Vegetation and Building behave similar for all experiments showing almost identical IoU values. Rares classes like Vehicle and Utility are the ones that show more variability. Although such variability is not uniform among experiment, their overall mIoU values indicate two clear benefitial modifications/improvements: dropout (experiment 2) and number of neighbours (experiments 3). 
+Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU (0.816) and slightly better performance for several classes. This impacts in one of the best mIoU values.
 
-### Effect of dropout
-
-Reducing the dropout rate from 0.5 to 0.3 produces a small but consistent improvement across most metrics. In both weighted and unweighted settings, the dropout configuration achieves the best validation mIoU and slightly better performance for several classes. This impacts in one of the best mIoU values.
-
-### Effect of neighborhood size (K-neighbors)
+#### Effect of Neighborhood Size (K-neighbors)
 
 Experiment 3 increases the number of neighbors in the deeper abstraction layers from [32,32,32,32] to [32,32,64,64]. The resulting performance is slightly higher than the baseline across most metrics. 
 
@@ -376,19 +372,19 @@ One noticeable effect is a slight improvement of the IoU for the Vehicle class. 
 
 This variability indicates a strong tradeoff between the size of the structure to identify and the size of the neighbourhood providing context, what seems to provide useful semantinc context for one class, may hurt another. 
 
-### Effect of grouping strategy
+#### Effect of Grouping Strategy
 
-Knn strategy is robust in sparse areas because it guarantees enough number of points (fixed), which translates into a stable input to the network. However, the spatial size of the neighborhood varies depending on point density. In contrast, ball-based strategies select points within a fixed spatial radius r, which ensures that the neighbourhood always corresponds to the same physical scale. However, may contain very few points depending on the point density. This variability in the number of points can lead to unstable feature aggregation, particularly for small or sparsely sampled classes.
+The knn strategy is robust in sparse areas because it guarantees enough number of points (fixed), which translates into a stable input to the network. However, the spatial size of the neighborhood varies depending on point density. In contrast, ball-based strategies select points within a fixed spatial radius r, which ensures that the neighbourhood always corresponds to the same physical scale. However, may contain very few points depending on the point density. This variability in the number of points can lead to unstable feature aggregation, particularly for small or sparsely sampled classes.
 
-This behaviour is shown in our experiments, the ball-based grouping strategies slightly degrade performance compared to the KNN baseline, particularly for the Vehicle and Utility classes which contain relatively few points. 
+This behaviour is shown in our experiments, the ball-based grouping strategies slightly degrade performance compared to the knn baseline, particularly for the Vehicle and Utility classes which contain relatively few points. 
 
 
-### Effect of input feature channels
+#### Effect of Input Feature Channels
 
 Experiment 6 evaluates the impact of removing additional input features and using only the XYZ coordinates. As expected, this configuration consistently produces the lowest performance across all metrics, indicating the importance of includding non-geometric features if available. This effect is particularly visible for the Vehicle and Utility classes, which already contain relatively few points. Without the additional feature channels, the model has less information to separate these objects from surrounding structures.
 
 
-### FINAL MODEL (2+3)
+### Final Model
 
 Overall, the experiments suggest that the baseline PointNet++ configuration is already close to optimal for this dataset. Among the tested configurations, reducing the dropout rate (Experiment 2) and increasing the neighborhood size (Experiment 3) produced the most consistent improvements over the baseline. To evaluate whether both improvements could be combined, a final experiment was performed using both modifications simultaneously. This configuration achieved the highest overall performance, reaching a best validation mIoU of 0.818, slightly outperforming the individual experiments.
 
