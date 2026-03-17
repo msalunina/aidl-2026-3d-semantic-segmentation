@@ -1090,7 +1090,7 @@ where:
 | **FP1** | 3-NN (1024 → N) | input features (if any) | `[128,128]` |
 | **Classifier head** | – | – | `[128,128,num_classes]` |
 
-_NOTE: In the original PointNet++ semantic segmentation architecture, the final decoder FP layer is [128,128,128,128,num_classes].
+_NOTE_: In the original PointNet++ semantic segmentation architecture, the final decoder FP layer is [128,128,128,128,num_classes].
 In our implementation, instead, this last FP is split between the **FP1** block and a separate **classifier head** to allow dropout to be applied explicitly to the two final layers before the per-point class score prediction.
 
 
