@@ -1,8 +1,8 @@
-# 3D Semantic Segmentation
+# 3D Semantic Segmentation on LiDAR Data
 
 ## Table of Contents
 
-- [3D Semantic Segmentation](#3d-semantic-segmentation)
+- [3D Semantic Segmentation on LiDAR Data](#3d-semantic-segmentation-on-lidar-data)
   - [Table of Contents](#table-of-contents)
   - [Folder Structure](#folder-structure)
   - [How to Run the Code](#how-to-run-the-code)
@@ -31,6 +31,8 @@
     - [ShapeNet Part Segmentation Task](#shapenet-part-segmentation-task)
     - [Dataloader implementation](#dataloader-implementation)
     - [Experiments](#experiments)
+    - [Qualitative Resuls](#qualitative-resuls)
+    - [Quantitative Results](#quantitative-results)
     - [Conclusions](#conclusions)
   - [DALES Dataset](#dales-dataset)
     - [DALES Dataset Preprocessing](#dales-dataset-preprocessing)
@@ -68,6 +70,7 @@
     - [Experiment Setup](#experiment-setup-3)
     - [Results](#results-3)
     - [Conclusions](#conclusions-4)
+  - [PointNet on DALES - Incremental Improvements (Validation)](#pointnet-on-dales---incremental-improvements-validation)
   - [PointNet++](#pointnet)
     - [Encoder](#encoder)
       - [1. Farthest Point Sampling (FPS)](#1-farthest-point-sampling-fps)
@@ -95,6 +98,7 @@
     - [Results](#results-5)
     - [Key Insight](#key-insight)
     - [Conclusion](#conclusion)
+  - [Comparing Three Architectures (Test Sample Results)](#comparing-three-architectures-test-sample-results)
   - [Future Work](#future-work)
 
 ---
@@ -985,7 +989,24 @@ Dropout provides a clear improvement over the no-dropout augmentation baseline. 
 
 Dropout 0.5 (Run 17) performs nearly identically to 0.3 (val mIoU 0.658 vs. 0.660), indicating that the model is not very sensitive to the exact rate in this range. The marginal drop at 0.5 suggests that stronger dropout starts to under-fit slightly, but the difference is within noise.
 
-**Best overall configuration:** NLL + ENS 0.999999 + class-balanced sampler + augmentation + dropout 0.3 (Run 16), achieving validation mIoU of 0.660. This represents a cumulative improvement of +0.068 over the initial XYZ-only baseline (Run 1, val mIoU 0.592).
+## PointNet on DALES - Incremental Improvements (Validation)
+
+Each row adds one technique on top of the previous best. The Gap column shows train mIoU − validation mIoU (lower = better generalization).
+
+| Technique | mIoU | Gap | Ground | Vegetation | Buildings | Vehicle | Utility |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Baseline (XYZ only)** | 0.592 | 0.036 | 0.930 | 0.749 | 0.809 | 0.199 | 0.272 |
+| **+ Input features** | 0.637 ($\color{green}{+0.045}$) | 0.019 | 0.931 ($\color{green}{+0.001}$) | 0.771 ($\color{green}{+0.022}$) | 0.839 ($\color{green}{+0.030}$) | 0.300 ($\color{green}{+0.101}$) | 0.344 ($\color{green}{+0.072}$) |
+| **+ Class balancing** | 0.646 ($\color{green}{+0.009}$) | 0.034 | 0.930 ($\color{red}{−0.001}$) | 0.767 ($\color{red}{−0.004}$) | 0.836 ($\color{red}{−0.003}$) | 0.330 ($\color{green}{+0.030}$) | 0.365 ($\color{green}{+0.021}$) |
+| **+ Data augmentation** | 0.636 ($\color{red}{−0.010}$) | 0.002 ($\color{green}{-0.032}$) | 0.927 ($\color{red}{−0.003}$) | 0.755 ($\color{red}{−0.012}$) | 0.829 ($\color{red}{−0.007}$) | 0.313 ($\color{red}{−0.017}$) | 0.353 ($\color{red}{−0.012}$) |
+| **+ Dropout (0.3)** | 0.660 ($\color{green}{+0.024}$) | 0.004 | 0.932 ($\color{green}{+0.005}$) | 0.779 ($\color{green}{+0.024}$) | 0.852 ($\color{green}{+0.023}$) | 0.359 ($\color{green}{+0.046}$) | 0.378 ($\color{green}{+0.025}$) |
+
+<!-- $\color{green}{+0.025}$ -->
+<!-- $\color{red}{−0.012}$ -->
+
+*Cumulative improvement from baseline to best: **+0.068 mIoU** (0.592 → 0.660). Largest per-class gain: Vehicle +0.160, Utility +0.106.*
+
+***Best overall configuration:** NLL + ENS 0.999999 + class-balanced sampler + augmentation + dropout 0.3 (Run 16).*
 
 ---
 
@@ -1433,6 +1454,8 @@ As a result, each point receives contextual information corresponding to approxi
 
 ### IPointNet Architecture
 
+![IPN architecture](figs/ipointnet.jpg)
+
 The final IPointNet model extends the standard PointNet segmentation pipeline by incorporating BEV features.
 The implementation of both PointNet and IPointNet architectures can be found in [`pointnet.py`](./src/models/pointnet.py), specifically in the `IPointNetSegmentation` class.
 
@@ -1450,16 +1473,16 @@ These combined features are processed through shared multilayer perceptrons to p
 
 The integration of BEV features leads to a significant improvement in segmentation performance.
 
-PointNet baseline: ~0.64 mIoU  
-IPointNet: ~0.76 mIoU  
+PointNet baseline: 0.66 mIoU  
+IPointNet: 0.77 mIoU  
 
 This corresponds to:
 
-+0.11 – +0.12 absolute mIoU improvement  
-~19% relative improvement  
++0.11 absolute mIoU improvement  
+~17% relative improvement  
 
-![Results](figs/image_results1.png)
-![Results](figs/image_results2.png)
+![PN vs IPN](figs/pn_vs_ipn.png)
+![PN vs IPN for rare classes](figs/pn_vs_ipn_rare_classes.png)
 
 
 Training and validation curves showing stable convergence
@@ -1486,6 +1509,10 @@ Global fusion (single vector per image) does not provide useful information for 
 IPointNet demonstrates that combining 3D point-based learning with 2D BEV representations significantly improves semantic segmentation of aerial LiDAR data. The key enabler is the preservation of spatial correspondence between modalities and the use of local feature fusion.
 
 Future work may explore multi-scale BEV representations, attention-based fusion mechanisms, and integration with more advanced point-cloud architectures such as PointNet++.
+
+## Comparing Three Architectures (Test Sample Results)
+
+
 ## Future Work
 
 **1. GreenSegNet on DALES**
