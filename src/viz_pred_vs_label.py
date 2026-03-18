@@ -36,11 +36,11 @@ if __name__ == '__main__':
     if "src" in base_path.parts:
         base_path = base_path[:-1]
 
-    epoch = 0    
-    checkpoint_path = base_path / "snapshots" / "PointNet" / f"pointnet_{epoch}_epochs.pt"
-    
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)    # it loads more things that weights
-    config = checkpoint["config"]
+    config_parser = ConfigParser(
+        default_config_path="config/default.yaml",
+        parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
+    )
+    config = config_parser.load()
     COLOR_MAP = config.viz_2d['color_mapping']
 
     # set seed (here? config.dataset_seed?)
@@ -58,7 +58,8 @@ if __name__ == '__main__':
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
         use_all_files=config.dataset_test_use_all_files,
-        seed=config.dataset_seed
+        seed=config.dataset_seed,
+        use_images=config.model_name == "ipointnet",
     )
 
     print("\n" + "="*60)
@@ -78,15 +79,23 @@ if __name__ == '__main__':
     elif config.model_name == "pointnetplusplus":
         from models.pointnetplusplus import PointNetPlusPlusSegmentation
         model_trained = PointNetPlusPlusSegmentation(num_classes=config.num_classes,
-                                             extra_channels=config.num_channels - 3,
-                                             dropout=0.5,
-                                             grouping="ball",         # choose "knn" or "ball"
-                                             radius=[0.08, 0.1, 0.2, 0.4]).to(device)    
+                                                     extra_channels=config.num_channels - 3,
+                                                     dropout=config.dropout_rate,
+                                                     grouping=config.grouping,
+                                                     K=config.k_neighbors,
+                                                     radius=config.radius).to(device)      
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
 
+
+    epoch=0
+    load_dir= os.path.join(base_path, "model_objects", f"{config.test_name}.pt")
+    print(f"\nLoading model from: {load_dir}")
+    # checkpoint_path = os.path.join(load_dir, f"pointnet_{epoch}_epochs.pt")
+    checkpoint = torch.load(load_dir, map_location=device, weights_only=False)    # it loads more things that weights
+
     # UPDATE ARCHITECTURE
-    model_trained.load_state_dict(checkpoint["model_state_dict"])
+    model_trained.load_state_dict(checkpoint)
     model_trained.to(device)
     model_trained.eval()      # changes behaviour of some layers (e.g. dropout off, batchnorm), does not strop gradient
 
@@ -95,7 +104,7 @@ if __name__ == '__main__':
     print("="*60)
     # Choosing block and making it through the network
     block = 44  
-    points, labels, _ = test_dataset[block]
+    points, labels = test_dataset[block]
     points_BNC = points.unsqueeze(0)            # add batch dimension
     points_BNC = points_BNC.to(device)          # sent to same device as model
     labels = labels.cpu().numpy().astype(int)   # no need to be moved to device, but convert to numpy
