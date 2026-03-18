@@ -117,7 +117,9 @@ class DALESDataset(Dataset):
         labels = data['labels'].astype(np.int64)
         points = points[:, self.channel_indices]
 
-        image_name = data['bev_filename'].item()
+        image_name = ""
+        if self.use_images:
+            image_name = data['bev_filename'].item()
 
         xy_grid = None
         if 'xy_grid' in data.files:
