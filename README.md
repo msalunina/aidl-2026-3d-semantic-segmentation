@@ -1137,7 +1137,7 @@ Points near utilities capture vertical variation patterns
 
 This local sampling is implemented using PyTorch’s grid_sample operation inside the IPointNet architecture.
 
-![image_encoder](figs/image_encoder.jpg)
+![image_encoder](figs/image_encoder.png)
 
 ---
 
@@ -1154,7 +1154,7 @@ As a result, each point receives contextual information corresponding to approxi
 
 ### IPointNet Architecture
 
-![IPN architecture](figs/ipointnet.jpg)
+![IPN architecture](figs/ipointnet_2.jpg)
 
 The final IPointNet model extends the standard PointNet segmentation pipeline by incorporating BEV features.
 The implementation of both PointNet and IPointNet architectures can be found in [`pointnet.py`](./src/models/pointnet.py), specifically in the `IPointNetSegmentation` class.
