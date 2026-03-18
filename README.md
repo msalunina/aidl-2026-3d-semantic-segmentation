@@ -1175,7 +1175,7 @@ The integration of BEV features leads to a significant improvement in segmentati
 
 |  Architecture | mIoU | Ground | Vegetation | Buildings | Vehicle | Utility |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **PointNet** | 0.66 | 0.95  | 0.79 | 0.86 | 0.36 | 0.33 |
+| **PointNet** | 0.66 | 0.93  | 0.78 | 0.85 | 0.36 | 0.38 |
 | **IPointNet** | $\color{green}{0.77}$ | 0.94 | $\color{green}{0.84}$ | $\color{green}{0.92}$ | $\color{green}{0.56}$ | $\color{green}{0.58}$ |
 
 PointNet baseline: 0.66 mIoU  
