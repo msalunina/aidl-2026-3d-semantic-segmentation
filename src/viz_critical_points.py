@@ -49,9 +49,12 @@ if __name__ == '__main__':
         data_dir=f"{config.model_data_path}/train",
         images_dir=f"{config.image_data_path}/train",
         split='train',
+        use_images=False,
         use_features=config.dataset_use_features,
         num_points=config.train_num_points,
         normalize=config.dataset_normalize,
+        augmentation=config.dataset_augmentation,
+        rotation_deg_max=config.dataset_rotation_deg_max,
         train_ratio=config.dataset_train_ratio,
         val_ratio=config.dataset_val_ratio,
         seed=config.dataset_seed
@@ -70,7 +73,7 @@ if __name__ == '__main__':
     print("="*60)
     # Choosing block and making it through the network
     block = 44  
-    points, labels, _ = train_dataset[block]
+    points, labels = train_dataset[block]
     points_BNC = points.unsqueeze(0)            # add batch dimension
     points_BNC = points_BNC.to(device)          # sent to same device as model
     labels = labels.cpu().numpy().astype(int)   # no need to be moved to device, but convert to numpy
