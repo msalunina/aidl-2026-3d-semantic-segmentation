@@ -72,11 +72,11 @@
     - [Results](#results-3)
     - [Conclusions](#conclusions-4)
   - [PointNet on DALES - Incremental Improvements (Validation)](#pointnet-on-dales---incremental-improvements-validation)
-  - [IPointNet: BEV-Point Cloud Fusion](#ipointnet-bev-point-cloud-fusion)
+  - [IPointNet: BEV-Point + Point Cloud](#ipointnet-bev-point--point-cloud)
     - [Full-Density BEV Generation](#full-density-bev-generation)
     - [Point Cloud and BEV Alignment](#point-cloud-and-bev-alignment)
-    - [Image Encoder and Initial Global Fusion](#image-encoder-and-initial-global-fusion)
-    - [Local BEV Feature Fusion](#local-bev-feature-fusion)
+    - [Image Encoder and Initial Global Feature Vector](#image-encoder-and-initial-global-feature-vector)
+    - [Local Per-Point BEV Feature](#local-per-point-bev-feature)
     - [Implicit BEV Neighborhood](#implicit-bev-neighborhood)
     - [IPointNet Architecture](#ipointnet-architecture)
     - [Results](#results-4)
@@ -1176,7 +1176,7 @@ The integration of BEV features leads to a significant improvement in segmentati
 |  Architecture | mIoU | Ground | Vegetation | Buildings | Vehicle | Utility |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | **PointNet** | 0.66 | 0.95  | 0.79 | 0.86 | 0.36 | 0.33 |
-| **IPointNet** | $\color{green}{0.76}$ | 0.95 | $\color{green}{0.86}$ | $\color{green}{0.92}$ | $\color{green}{0.55}$ | $\color{green}{0.52}$ |
+| **IPointNet** | $\color{green}{0.77}$ | 0.94 | $\color{green}{0.84}$ | $\color{green}{0.92}$ | $\color{green}{0.56}$ | $\color{green}{0.58}$ |
 
 PointNet baseline: 0.66 mIoU  
 IPointNet: 0.77 mIoU  
