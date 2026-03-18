@@ -1587,6 +1587,24 @@ The val→test deltas are small and consistent across all three architectures, c
 
 ![Arch results comparison](figs/architecture_comparison_training.png)
 
+For computing the size of trainable parameters of each architecture the following python function has been used
+
+```python
+def count_parameters(model):
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    num_params_million = num_params / 1_000_000
+    print(f"Number of trainable parameters: {num_params_million:.3f}M")
+```
+
+The following table compares the number of trainable parameters for our implementation of each architecture
+
+| Architecture | Trainable parameters |
+|:---:|:---:|
+|PointNet| 3.553 M|
+|IPointNet| 3.880 M |
+|PointNet++| 0.963 M |
+
+
 ---
 
 ## Future Work
