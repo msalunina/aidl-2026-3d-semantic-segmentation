@@ -1139,6 +1139,31 @@ This local sampling is implemented using PyTorch’s grid_sample operation insid
 
 ![image_encoder](figs/image_encoder.png)
 
+The image encoder consist of 2 blocks of 2D convolutional filters, with a ReLU operation in between.
+
+Then a max pooling 2D is applied in the final tensor, for dimensional reduction.
+
+| Stage | Operation | Output shape |
+|:---:|:---:|:---:|
+|Input image| None | `[B, 4, 256, 256]` |
+| Block1 |  Conv2D | `[B, 64, 256, 256]` |
+| Block1 |  ReLU |   `[B, 64, 256, 256]` |
+| Block1 |  Conv2D | `[B, 64, 256, 256]` |
+| Block1 |  ReLU |   `[B, 64, 256, 256]` |
+| Block1 to Block2| MaxPool2D | `[B, 64, 128, 128]` |
+| Block2 | Conv2D | `[B, 128, 128, 128]` |
+| Block2 | ReLU | `[B, 128, 128, 128]` |
+| Block2 | Conv2D | `[B, 128, 128, 128]` |
+| Block2 | ReLU | `[B, 128, 128, 128]` |
+| Map 2 xy_grid| map2_xy_grid | `[B, n, 128]` |
+
+All the convolutions in the image encoder use the following configuration:
+
+```yaml
+Kernel_size: 3
+Padding: 1
+Stride: 1
+```
 ---
 
 ### Implicit BEV Neighborhood
