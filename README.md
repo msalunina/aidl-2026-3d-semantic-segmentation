@@ -1065,7 +1065,7 @@ Each row adds one technique on top of the previous best. The Gap column shows tr
 
 ---
 
-## IPointNet: BEV-Point Cloud Fusion
+## IPointNet: BEV-Point + Point Cloud 
 
 We now extend the baseline PointNet architecture by incorporating BEV-based spatial context through the proposed IPointNet model.
 
@@ -1113,7 +1113,7 @@ The xy_grid encodes the position of each point inside the BEV tile using normali
 
 ---
 
-### Image Encoder and Initial Global Fusion
+### Image Encoder and Initial Global Feature Vector
 
 Initially, we used a convolutional image encoder to extract a global feature vector (fvect) from the BEV image. This encoder progressively reduces spatial resolution through convolution and pooling layers, followed by global average pooling.
 
@@ -1123,7 +1123,7 @@ However, this approach did not improve performance. The reason is that global po
 
 ---
 
-### Local BEV Feature Fusion
+### Local Per-Point BEV Feature 
 
 To address this limitation, we implemented a local fusion strategy that preserves spatial alignment at the point level.
 

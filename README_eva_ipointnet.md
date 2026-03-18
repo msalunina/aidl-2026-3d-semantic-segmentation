@@ -46,7 +46,7 @@ The xy_grid encodes the position of each point inside the BEV tile using normali
 
 ---
 
-### IMAGE ENCODER AND INITIAL GLOBAL FUSION
+### IMAGE ENCODER AND INITIAL GLOBAL FEATURE VECTOR
 
 Initially, we used a convolutional image encoder to extract a global feature vector (fvect) from the BEV image. This encoder progressively reduces spatial resolution through convolution and pooling layers, followed by global average pooling.
 
@@ -56,7 +56,7 @@ However, this approach did not improve performance. The reason is that global po
 
 ---
 
-### LOCAL BEV FEATURE FUSION
+### LOCAL PER-POINT BEV FEATURE 
 
 To address this limitation, we implemented a local fusion strategy that preserves spatial alignment at the point level.
 
