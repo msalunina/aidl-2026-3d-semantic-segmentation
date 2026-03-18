@@ -1230,8 +1230,8 @@ The architecture consists of two main components:
 
 Next Figure shows the PointNet++ architecture 
 
-![PointNet++ architecture](figs/pnpp_architecture.png)
-(from "PointNet++: Deep Hierarchical Feature Learning on Point Sets in a Metric Space" (Qi et al., 2017).)
+![PointNet++ architecture](figs/pnpp_architecture_modified.png)
+(Adapted from "PointNet++: Deep Hierarchical Feature Learning on Point Sets in a Metric Space" (Qi et al., 2017).)
 
 
 ---
