@@ -63,6 +63,10 @@ if __name__ == '__main__':
     # Set device
     device = set_device()
 
+    use_images = False
+    if(config.model_name == "ipointnet" or config.model_name == "ipointnetplusplus"):
+        use_images = True
+
     print("\n" + "="*60)
     print("CREATING DATASETS AND DATALOADERS")
     print("="*60)
@@ -76,7 +80,7 @@ if __name__ == '__main__':
         normalize=config.dataset_normalize,
         use_all_files=config.dataset_test_use_all_files,
         seed=config.dataset_seed,
-        use_images=config.model_name == "ipointnet",
+        use_images=use_images,
     )
 
     # Create test DataLoader
@@ -104,6 +108,16 @@ if __name__ == '__main__':
                                                      grouping=config.grouping,
                                                      K=config.k_neighbors,
                                                      radius=config.radius).to(device)       
+    elif config.model_name == "ipointnetplusplus":
+        from models.pointnetplusplus import IPointNetPlusPlusSegmentation
+        model_trained = IPointNetPlusPlusSegmentation(
+            num_classes=config.num_classes,
+            extra_channels=config.num_channels - 3,
+            dropout=config.dropout_rate,
+            grouping=config.grouping,
+            K=config.k_neighbors,
+            radius=config.radius
+        ).to(device)
     else: 
         raise ValueError(f"Model name {config.model_name} does not exist")
     

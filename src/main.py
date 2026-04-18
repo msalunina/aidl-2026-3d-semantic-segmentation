@@ -43,14 +43,15 @@ if __name__ == '__main__':
         base_path = base_path[:-1]
 
     config_parser = ConfigParser(
-        default_config_path="config/default.yaml",
+        #default_config_path="config/default.yaml",
+        default_config_path="config/default_pnpp_final.yaml",
         parser=argparse.ArgumentParser(description='3D Semantic Segmentation on DALES Dataset')
     )
     config = config_parser.load()
     config_parser.display()
 
     use_image = False
-    if config.model_name == "ipointnet":
+    if config.model_name == "ipointnet" or config.model_name == "ipointnetplusplus":
         use_image = True
 
     # Initialize W&B
@@ -163,6 +164,16 @@ if __name__ == '__main__':
     elif config.model_name == "pointnetplusplus":
         from models.pointnetplusplus import PointNetPlusPlusSegmentation
         model = PointNetPlusPlusSegmentation(
+            num_classes=config.num_classes,
+            extra_channels=config.num_channels - 3,
+            dropout=config.dropout_rate,
+            grouping=config.grouping,
+            K=config.k_neighbors,
+            radius=config.radius
+        ).to(device)
+    elif config.model_name == "ipointnetplusplus":
+        from models.pointnetplusplus import IPointNetPlusPlusSegmentation
+        model = IPointNetPlusPlusSegmentation(
             num_classes=config.num_classes,
             extra_channels=config.num_channels - 3,
             dropout=config.dropout_rate,

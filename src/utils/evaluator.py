@@ -10,7 +10,7 @@ from tqdm import tqdm
 def test_model_segmentation(config, test_loader, network, criterion, device, base_path):
 
     use_image = False
-    if config.model_name == "ipointnet":
+    if (config.model_name == "ipointnet" or config.model_name == "ipointnetplusplus"):
         use_image = True
 
     metrics = {"test_loss": [],   

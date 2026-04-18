@@ -56,9 +56,9 @@ dataset:
     # - scan_angle_rank        # Scan angle rank (1 channel)
 
 training:
-  test_name: PointNet_cd6
+  test_name: pointnet_plusplus_cd6_final_cfg
   snap_interval: 5
-  model_name: pointnet
+  model_name: pointnetplusplus
   num_channels: auto  # Auto-calculated from use_features (xyz=3, return_number=1, number_of_returns=1)
   num_points: 4096
   batch_size: 32
@@ -69,7 +69,7 @@ training:
   loss_function: nll_loss # focal_loss / nll_loss
   use_sampler: true
   grouping: knn                     # knn | ball_closest | ball_random
-  k_neighbors: [32, 32, 32, 32]     # for knn: exact K | for ball_: max K 
+  k_neighbors: [32, 32, 64, 64]     # for knn: exact K | for ball_: max K 
   radius: [0.08, 0.1, 0.2, 0.4]     # ignored for knn
   
   # Learning rate scheduler
@@ -77,12 +77,18 @@ training:
   scheduler_min_lr: 0.00001  # minimum learning rate
   
   # Loss weights for each class (in order of class index: 0, 1, 2, 3, 4)
+  # loss_weights:
+  #   - 0.5272
+  #   - 0.5272
+  #   - 0.5276
+  #   - 1.5454
+  #   - 1.8727
   loss_weights:
-    - 0.5272
-    - 0.5272
-    - 0.5276
-    - 1.5454
-    - 1.8727
+    - 1.0000
+    - 1.0000
+    - 1.0000
+    - 1.0000
+    - 1.0000
 
 wandb:
   enabled: true

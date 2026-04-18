@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from models.img_encoder import ImageEncoder
 
 def gather_points_by_index(points, idx):
     """
@@ -722,6 +722,186 @@ class PointNetPlusPlusSegmentation(nn.Module):
         return log_probs
 
 
+# ----------------------------------------------------
+#               POINTNET++ SEGMENTATION + BEV
+# ----------------------------------------------------
+class IPointNetPlusPlusSegmentation(nn.Module):
+    """
+    PointNet++ semantic segmentation (single-scale grouping version). + BEV image encoder
+    """
+
+    def __init__(self, num_classes, extra_channels = 0, dropout = 0.5, grouping="knn", K = None, radius=None):
+        """
+        num_classes:     number of semantic classes
+        extra_channels:  D (extra input features per point besides xyz). If you only have xyz -> 0.
+        dropout:         dropout in the final classifier head
+        """
+        super().__init__()
+        self.num_classes = num_classes
+        self.extra_channels = extra_channels
+        self.grouping = grouping
+
+        self.img_encoder = ImageEncoder(channels=(4, 64, 128))
+
+        conv_size = 128 + 128
+
+        # Checks for radius
+        if radius is None:
+            radius = [None, None, None, None]
+
+        if len(radius) != 4:
+            raise ValueError(f"Expected 4 radius values, got {len(radius)}")
+        
+        # Checks for K
+        if K is None:
+            K = [32, 32, 32, 32]
+
+        if len(K) != 4:
+            raise ValueError(f"Expected 4 K values, got {len(K)}")
+        
+        self.K = K
+        self.radius = radius
+
+        # -----------------------
+        #        Encoder 
+        # -----------------------
+        # input:  xyz=[B,N,3],    feat=[B,N,C-3] or None
+        # output: xyz=[B,1024,3], feat=[B,1024,64]
+        self.sa1 = PointNetSetAbstraction(num_centers=1024, 
+                                          K=self.K[0], 
+                                          in_channels=3 + extra_channels, 
+                                          mlp_channels=[32, 32, 64],
+                                          grouping=self.grouping,
+                                          radius=self.radius[0])                  
+        # input:  xyz=[B,1024,3], feat=[B,1024,64]
+        # output: xyz=[B,256,3],  feat=[B,256,128]
+        self.sa2 = PointNetSetAbstraction(num_centers=256, 
+                                          K=self.K[1], 
+                                          in_channels=3 + 64, 
+                                          mlp_channels=[64, 64, 128],
+                                          grouping=self.grouping,
+                                          radius=self.radius[1]) 
+        # input:  xyz=[B,256,3], feat=[B,256,128]
+        # output: xyz=[B,64,3], feat=[B,64,256]
+        self.sa3 = PointNetSetAbstraction(num_centers=64, 
+                                          K=self.K[2], 
+                                          in_channels=3 + 128, 
+                                          mlp_channels=[128, 128, 256],
+                                          grouping=self.grouping,
+                                          radius=self.radius[2]) 
+        # input:  xyz=[B,64,3], feat=[B,64,256]
+        # output: xyz=[B,16,3], feat=[B,16,512]
+        self.sa4 = PointNetSetAbstraction(num_centers=16, 
+                                          K=self.K[3], 
+                                          in_channels=3 + 256, 
+                                          mlp_channels=[256, 256, 512],
+                                          grouping=self.grouping,
+                                          radius=self.radius[3]) 
+       
+        # -----------------------
+        #        Decoder 
+        # -----------------------
+        # 16 -> 64 : interpolated features gives 512 + skip has 256 = 768
+        self.fp4 = PointNetFeaturePropagation(in_channels=512 + 256, mlp_channels=[256, 256])
+        # 64 -> 256 : interpolated features gives 256 + skip has 128 = 384
+        self.fp3 = PointNetFeaturePropagation(in_channels=256 + 128, mlp_channels=[256, 256])
+        # 256 -> 1024 : interpolated features gives 256 + skip has 64 = 320
+        self.fp2 = PointNetFeaturePropagation(in_channels=256 + 64, mlp_channels=[256, 128])
+        # 1024 -> N : interpolated features gives 128 + skip has D (if any) = 128 + extra_channels
+        self.fp1 = PointNetFeaturePropagation(in_channels=128 + extra_channels, mlp_channels=[128, 128])
+
+        # -----------------------
+        # Per-point classifier head
+        # -----------------------
+        self.classifier = nn.Sequential(
+            nn.Conv1d(conv_size, 128, kernel_size=1, bias=False),
+            nn.BatchNorm1d(128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+
+            nn.Conv1d(128, 128, kernel_size=1, bias=False),
+            nn.BatchNorm1d(128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
+
+            nn.Conv1d(128, num_classes, kernel_size=1)
+        )
+
+
+    def _sample_bev_features(self, bev_feat_map, xy_grid):
+
+        grid = xy_grid.unsqueeze(2)
+
+        sampled = F.grid_sample(
+            bev_feat_map,
+            grid,
+            mode="bilinear",
+            padding_mode="border",
+            align_corners=True,
+        )
+
+        sampled = sampled.squeeze(-1)
+        return sampled
+
+    def forward(self, points, img, xy_grid):
+        """
+        Input:
+            points:    [B, N, C]  (xyz + optional features)
+        Ouput:
+            log_probs: [B, num_classes, N]
+        """
+        assert points.ndim == 3, f"Expected [B,N,C] tensor, got shape {points.shape}"
+        assert points.shape[2] == 3 + self.extra_channels, \
+            f"Expected {3 + self.extra_channels} channels (xyz + {self.extra_channels}), got {points.shape[2]}"
+
+        xyz0 = points[:, :, :3]
+
+        if points.shape[2] > 3:
+            feat0 = points[:, :, 3:]
+        else:
+            feat0 = None
+
+        _, image_feature_map = self.img_encoder(img)
+        image_feature_sampled = self._sample_bev_features(image_feature_map, xy_grid)
+
+
+        # -------- Encoder --------
+        xyz1, feat1 = self.sa1(xyz0, feat0)   # xyz1 [B,1024,3], feat1 [B,1024,64]
+        xyz2, feat2 = self.sa2(xyz1, feat1)   # xyz2 [B,256,3],  feat2 [B,256,128]
+        xyz3, feat3 = self.sa3(xyz2, feat2)   # xyz3 [B,64,3],   feat3 [B,64,256]
+        xyz4, feat4 = self.sa4(xyz3, feat3)   # xyz4 [B,16,3],   feat4 [B,16,512]
+
+        # -------- Decoder --------
+        # FP4: upsample from 16 -> 64
+        feat3_up = self.fp4(target_xyz=xyz3,
+                            source_xyz=xyz4,
+                            source_features=feat4,
+                            target_skip_features=feat3)  # [B,64,256]
+        # FP3: upsample from 64 -> 256
+        feat2_up = self.fp3(target_xyz=xyz2,
+                            source_xyz=xyz3,
+                            source_features=feat3_up,
+                            target_skip_features=feat2)  # [B,256,256]
+        # FP2: upsample from 256 -> 1024
+        feat1_up = self.fp2(target_xyz=xyz1,
+                            source_xyz=xyz2,
+                            source_features=feat2_up,
+                            target_skip_features=feat1)  # [B,1024,128]
+        # FP1: upsample from 1024 -> N
+        feat0_up = self.fp1(target_xyz=xyz0,
+                            source_xyz=xyz1,
+                            source_features=feat1_up,
+                            target_skip_features=feat0)  # [B,N,128]
+
+        # -------- Head --------
+        x = feat0_up.permute(0, 2, 1).contiguous()      # [B,128,N]
+
+        x = torch.cat([x, image_feature_sampled], dim=1)  # [B, 128+64, N]
+
+        logits = self.classifier(x)                     # [B,num_classes,N]
+        log_probs = F.log_softmax(logits, dim=1)        # [B,num_classes,N]
+        
+        return log_probs
 
 
 

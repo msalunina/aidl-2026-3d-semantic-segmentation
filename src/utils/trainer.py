@@ -440,7 +440,7 @@ def train_model_segmentation(config, train_loader, val_loader, network, optimize
     global wandb_pc_image_table
 
     use_image = False
-    if config.model_name == "ipointnet":
+    if config.model_name == "ipointnet" or config.model_name == "ipointnetplusplus":
         use_image = True
 
     # Reset W&B visualization table for each run
